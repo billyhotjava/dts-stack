@@ -1,0 +1,780 @@
+{
+  "version": "2026-04-30",
+  "description": "Audit button registry — externalized from AuditButtonRegistry.java to enable config-only updates.",
+  "entries": [
+    {
+      "buttonCode": "ADMIN_WORKFLOW_TEMPLATE_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "WORKFLOW_TEMPLATE_LIST",
+      "operationName": "查看审批工作流配置",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_WORKFLOW_TEMPLATE_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "WORKFLOW_TEMPLATE_VIEW",
+      "operationName": "查看审批工作流配置详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_WORKFLOW_TEMPLATE_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "WORKFLOW_TEMPLATE_CREATE",
+      "operationName": "新增审批工作流配置",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_WORKFLOW_TEMPLATE_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "WORKFLOW_TEMPLATE_UPDATE",
+      "operationName": "更新审批工作流配置",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_WORKFLOW_TEMPLATE_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "WORKFLOW_TEMPLATE_DELETE",
+      "operationName": "删除审批工作流配置",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_SYSTEM_CONFIG_SUBMIT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CONFIG_SUBMIT",
+      "operationName": "提交系统配置变更",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_SYSTEM_CONFIG_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CONFIG_VIEW",
+      "operationName": "查看系统配置",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_INTEGRATION_SETTINGS_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "INTEGRATION_SETTINGS_VIEW",
+      "operationName": "查看集成配置",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_INTEGRATION_SETTINGS_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "INTEGRATION_SETTINGS_UPDATE",
+      "operationName": "更新集成配置",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_MODEL_GOVERNANCE_POLICY_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "MODEL_GOVERNANCE_POLICY_UPDATE",
+      "operationName": "修改模型发布治理策略",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_INTEGRATION_SETTINGS_TEST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "INTEGRATION_SETTINGS_TEST",
+      "operationName": "测试集成配置",
+      "operationKind": "TEST",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "OPS_CONFIG_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "运维配置",
+      "operationCode": "OPS_CONFIG_VIEW",
+      "operationName": "查看运维配置",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "OPS_CONFIG_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "运维配置",
+      "operationCode": "OPS_CONFIG_UPDATE",
+      "operationName": "更新运维配置",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "OPS_TOGGLE_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "运维配置",
+      "operationCode": "OPS_TOGGLE_VIEW",
+      "operationName": "查看功能开关",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "OPS_TOGGLE_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "运维配置",
+      "operationCode": "OPS_TOGGLE_UPDATE",
+      "operationName": "更新功能开关",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_LIST",
+      "operationName": "查看数据源列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_CREATE",
+      "operationName": "新增数据源",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_UPDATE",
+      "operationName": "更新数据源",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_PUBLISH",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_PUBLISH",
+      "operationName": "发布 Inceptor 数据源",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_TEST",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_TEST",
+      "operationName": "测试数据源连接",
+      "operationKind": "TEST",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_UPLOAD_KRB5",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_UPLOAD_KRB5",
+      "operationName": "上传 krb5.conf",
+      "operationKind": "UPLOAD",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_UPLOAD_KEYTAB",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_UPLOAD_KEYTAB",
+      "operationName": "上传 Keytab 文件",
+      "operationKind": "UPLOAD",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_REFRESH",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_REFRESH",
+      "operationName": "刷新数据源注册信息",
+      "operationKind": "REFRESH",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATA_SOURCE_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "基础设施",
+      "operationCode": "ADMIN_DATA_SOURCE_DELETE",
+      "operationName": "删除数据源",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_SUBMIT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_SUBMIT",
+      "operationName": "提交变更申请",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_APPROVE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_APPROVE",
+      "operationName": "批准变更申请",
+      "operationKind": "APPROVE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_REJECT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_REJECT",
+      "operationName": "驳回变更申请",
+      "operationKind": "REJECT",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_VIEW",
+      "operationName": "查看变更详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_LIST",
+      "operationName": "查看用户列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_USER_SEARCH",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_SEARCH",
+      "operationName": "搜索用户",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_USER_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_VIEW",
+      "operationName": "查看用户详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_USER_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_CREATE",
+      "operationName": "新增用户",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_UPDATE",
+      "operationName": "修改用户",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_RESET_PASSWORD",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_RESET_PASSWORD",
+      "operationName": "重置用户密码",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_ENABLE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_ENABLE",
+      "operationName": "启用用户",
+      "operationKind": "ENABLE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_DISABLE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_DISABLE",
+      "operationName": "禁用用户",
+      "operationKind": "DISABLE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_SET_PERSON_LEVEL",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_SET_PERSON_LEVEL",
+      "operationName": "调整人员密级",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_ASSIGN_ROLES",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_ASSIGN_ROLES",
+      "operationName": "分配用户角色",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_REMOVE_ROLES",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_REMOVE_ROLES",
+      "operationName": "回收用户角色",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_USER_GROUP_MEMBERSHIPS_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "USER_GROUP_MEMBERSHIPS_VIEW",
+      "operationName": "查看用户所属用户组",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_LIST",
+      "operationName": "查看用户组列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_VIEW",
+      "operationName": "查看用户组详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_CREATE",
+      "operationName": "新增用户组",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_UPDATE",
+      "operationName": "修改用户组",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_DELETE",
+      "operationName": "删除用户组",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_MEMBERS_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_MEMBERS_VIEW",
+      "operationName": "查看用户组成员",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_USER_MEMBERS_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_USER_MEMBERS_VIEW",
+      "operationName": "查看用户所属用户组",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_ADD_MEMBER",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_ADD_MEMBER",
+      "operationName": "添加用户到用户组",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_GROUP_REMOVE_MEMBER",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "GROUP_REMOVE_MEMBER",
+      "operationName": "从用户组移除用户",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_PLATFORM_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_PLATFORM_LIST",
+      "operationName": "查看平台角色列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_LIST",
+      "operationName": "查看角色列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_VIEW",
+      "operationName": "查看角色详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_USERS_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_USERS_VIEW",
+      "operationName": "查看角色用户列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_CREATE",
+      "operationName": "新增角色",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_UPDATE",
+      "operationName": "修改角色",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_DELETE",
+      "operationName": "删除角色",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_APPROVAL_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "APPROVAL_LIST",
+      "operationName": "查看审批请求列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_APPROVAL_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "APPROVAL_VIEW",
+      "operationName": "查看审批请求详情",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_APPROVAL_APPROVE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "APPROVAL_APPROVE",
+      "operationName": "批准审批请求",
+      "operationKind": "APPROVE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_APPROVAL_REJECT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "APPROVAL_REJECT",
+      "operationName": "驳回审批请求",
+      "operationKind": "REJECT",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_APPROVAL_DELAY",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "APPROVAL_DELAY",
+      "operationName": "暂缓处理审批请求",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_AUTH_LOGIN",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUTH_ADMIN_LOGIN",
+      "operationName": "系统端登录",
+      "operationKind": "LOGIN",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_AUTH_LOGOUT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUTH_ADMIN_LOGOUT",
+      "operationName": "系统端登出",
+      "operationKind": "LOGOUT",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_AUTH_REFRESH",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUTH_ADMIN_REFRESH",
+      "operationName": "刷新系统端令牌",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_AUTH_PLATFORM_LOGIN",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUTH_PLATFORM_LOGIN",
+      "operationName": "业务端登录",
+      "operationKind": "LOGIN",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_AUDIT_LOG_QUERY",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUDIT_LOG_QUERY",
+      "operationName": "查询审计日志",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_AUDIT_LOG_EXPORT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "AUDIT_LOG_EXPORT",
+      "operationName": "导出审计日志",
+      "operationKind": "EXPORT",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_PORTAL_MENU_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "PORTAL_MENU_VIEW",
+      "operationName": "查看门户菜单",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_PORTAL_MENU_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "PORTAL_MENU_CREATE",
+      "operationName": "新增门户菜单",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_PORTAL_MENU_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "PORTAL_MENU_UPDATE",
+      "operationName": "修改门户菜单",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_PORTAL_MENU_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "PORTAL_MENU_DISABLE",
+      "operationName": "禁用门户菜单",
+      "operationKind": "DISABLE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ORG_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ORG_CREATE",
+      "operationName": "新增组织节点",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ORG_UPDATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ORG_UPDATE",
+      "operationName": "修改组织节点",
+      "operationKind": "UPDATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ORG_DELETE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ORG_DELETE",
+      "operationName": "删除组织节点",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_ORG_SYNC",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ORG_SYNC",
+      "operationName": "同步组织结构",
+      "operationKind": "EXECUTE",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ORG_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ORG_LIST",
+      "operationName": "查看组织结构",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_DATASET_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "DATASET_LIST",
+      "operationName": "查看数据集列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_ASSIGNMENT_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_ASSIGNMENT_LIST",
+      "operationName": "查看角色指派列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_ROLE_ASSIGNMENT_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "ROLE_ASSIGNMENT_CREATE",
+      "operationName": "提交角色指派申请",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CUSTOM_ROLE_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CUSTOM_ROLE_LIST",
+      "operationName": "查看自定义角色列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_CUSTOM_ROLE_CREATE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CUSTOM_ROLE_CREATE",
+      "operationName": "提交自定义角色申请",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_PERMISSION_CATALOG_VIEW",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "PERMISSION_CATALOG_VIEW",
+      "operationName": "查看权限目录",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_LIST",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_LIST",
+      "operationName": "查看变更请求列表",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_LIST_MINE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_LIST_MINE",
+      "operationName": "查看我的变更请求",
+      "operationKind": "QUERY",
+      "allowEmptyTargets": true
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_DRAFT",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_DRAFT",
+      "operationName": "创建变更草稿",
+      "operationKind": "CREATE",
+      "allowEmptyTargets": false
+    },
+    {
+      "buttonCode": "ADMIN_CHANGE_REQUEST_PURGE",
+      "moduleKey": "system-admin",
+      "moduleName": "系统管理",
+      "operationCode": "CHANGE_REQUEST_PURGE",
+      "operationName": "清理历史审批/变更数据",
+      "operationKind": "DELETE",
+      "allowEmptyTargets": true
+    }
+  ]
+}

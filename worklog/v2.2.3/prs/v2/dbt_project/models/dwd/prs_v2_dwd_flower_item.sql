@@ -1,0 +1,32 @@
+-- 报花业务行明细
+select
+    cast(s.id as bigint) as order_item_id,
+    cast(s.flower_biz_id as bigint) as order_id,
+    cast(s.position_id as bigint) as position_id,
+    cast(s.good_price_id as bigint) as goods_price_id,
+    cast(s.project_green_id as bigint) as project_green_id,
+    cast(s.biz_type as integer) as item_type,
+    cast(s.status as integer) as item_status,
+    cast(s.parent_id as bigint) as parent_id,
+    cast(s.plant_type as integer) as plant_type,
+    cast(s.green_name as text) as green_name,
+    cast(s.plant_number as integer) as requested_quantity,
+    cast(s.finish_number as integer) as finished_quantity,
+    cast(s.rent as numeric) as source_rent,
+    cast(s.cost as numeric) as source_cost,
+    cast(s.start_time as timestamp) as start_time,
+    cast(s.end_time as timestamp) as end_time,
+    cast(s.del_flag as text) as del_flag,
+    cast(o.tenant_id as bigint) as tenant_id,
+    cast(o.project_id as bigint) as project_id,
+    cast(o.customer_id as bigint) as customer_id,
+    cast(o.business_time as timestamp) as business_time,
+    cast(coalesce(s.del_flag = '0' and o.is_effective, false) as boolean) as is_effective,
+    cast(s._dts_source_system as text) as dts_source_system,
+    cast(s._dts_source_table as text) as dts_source_table,
+    cast(s._dts_import_time as timestamp) as dts_import_time,
+    cast(s._dts_batch_id as text) as dts_batch_id,
+    cast(s._dts_execution_id as text) as dts_execution_id,
+    cast(s._dts_task_id as text) as dts_task_id
+from {{ source('public', 'ods_prst_flower_biz_item') }} s
+left join {{ ref('prs_v2_dwd_flower_order') }} o on s.flower_biz_id = o.order_id

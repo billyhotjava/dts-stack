@@ -1,0 +1,21 @@
+Sprint-67 F6-T01 frontend model/metric anchor evidence
+Verified: 2026-07-20
+
+Implementation contract:
+- MetricWorkbenchPage lists only published canonical FACT/SUMMARY/APPLICATION models.
+- Atomic metric drafts anchor to modelSpecId + revision + measure field and carry the field measurementUnitId/version for user confirmation.
+- Indicator association accepts only a published exact owner version and writes through /api/modeling/model-specs/{id}/metric-refs with strong If-Match.
+- No business-object tree, objectId handoff or legacy semantic-metric fallback write exists in the flow.
+- returnTo is restricted to safe internal model routes.
+
+Verification:
+- MetricWorkbenchHandoff.source-contract.test.ts and MeasurementUnitsPage.source-contract.test.ts: 2/2 PASS.
+- Targeted Biome check: PASS.
+- pnpm build: PASS; Chrome95 legacy bundle, 10,587 modules, built in 2m05s.
+- Chrome 95 model-to-metric scenario: 1/1 PASS (mock API, 5.7s).
+- Chrome 95 model-field standard binding scenario: 1/1 PASS (mock API, 5.9s).
+
+Screenshots:
+- chrome95/model-detail-standards.png
+- chrome95/model-detail-standards-narrow.png
+- chrome95/f6-model-metric-handoff-chromium95.png

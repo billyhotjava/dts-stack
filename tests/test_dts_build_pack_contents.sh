@@ -1,0 +1,387 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+TMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TMP_DIR}"' EXIT
+
+TEST_REPO="${TMP_DIR}/repo"
+FAKE_BIN="${TMP_DIR}/bin"
+PACKAGE_PATH="${TMP_DIR}/dts-deploy.tar.gz"
+OPMANAGER_OUTPUT="${TMP_DIR}/opmanager-package"
+OPMANAGER_ARCHIVE="${OPMANAGER_OUTPUT}/dts-opmanager-upgrade-20260521.tar.gz"
+OPMANAGER_DEFAULT_ARCHIVE=""
+mkdir -p \
+  "${TEST_REPO}/builds" \
+  "${TEST_REPO}/builds/dist" \
+  "${TEST_REPO}/builds/legacy-dist" \
+  "${TEST_REPO}/bin/lib" \
+  "${TEST_REPO}/services/dts-dbt/models" \
+  "${TEST_REPO}/services/dts-dbt/dbt_model/models/stg" \
+  "${TEST_REPO}/services/dts-dbt/macros" \
+  "${TEST_REPO}/services/dts-dbt/profiles" \
+  "${TEST_REPO}/services/dts-airflow/config" \
+  "${TEST_REPO}/builds/airflow" \
+  "${TEST_REPO}/config" \
+  "${TEST_REPO}/docs/release/v2.2.3" \
+  "${TEST_REPO}/tools" \
+  "${FAKE_BIN}"
+
+cp "${REPO_ROOT}/builds/dts-build.sh" "${TEST_REPO}/builds/dts-build.sh"
+cp "${REPO_ROOT}/builds/write-release-metadata.py" "${TEST_REPO}/builds/write-release-metadata.py"
+mkdir -p "${TEST_REPO}/services/dts-airflow/dags"
+printf '%s\n' '# site-generated DAG must not ship' > \
+  "${TEST_REPO}/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+cp "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" "${TEST_REPO}/services/dts-dbt/"
+mkdir -p "${TEST_REPO}/services/dts-airflow/extra/dts_runtime"
+cp "${REPO_ROOT}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py" \
+  "${TEST_REPO}/services/dts-airflow/extra/dts_runtime/dbt_task_factory.py"
+cp "${REPO_ROOT}/bin/lib/dts-runtime-files.sh" "${TEST_REPO}/bin/lib/dts-runtime-files.sh"
+chmod +x "${TEST_REPO}/builds/dts-build.sh"
+
+cat > "${TEST_REPO}/init.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+EOF_FILE
+chmod +x "${TEST_REPO}/init.sh"
+
+cat > "${TEST_REPO}/start.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+EOF_FILE
+chmod +x "${TEST_REPO}/start.sh"
+
+cat > "${TEST_REPO}/stop.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+EOF_FILE
+chmod +x "${TEST_REPO}/stop.sh"
+
+cat > "${TEST_REPO}/encry.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+EOF_FILE
+chmod +x "${TEST_REPO}/encry.sh"
+
+cat > "${TEST_REPO}/docker-compose-app.yml" <<'EOF_FILE'
+services: {}
+EOF_FILE
+
+cat > "${TEST_REPO}/docker-compose.dev.yml" <<'EOF_FILE'
+services: {}
+EOF_FILE
+
+cat > "${TEST_REPO}/docker-compose.legacy.yml" <<'EOF_FILE'
+services: {}
+EOF_FILE
+
+cat > "${TEST_REPO}/imgversion.conf" <<'EOF_FILE'
+DTS_PRODUCT_VERSION=2.2.3
+IMAGE_DTS_ADMIN=dts-admin:2.2.3-local
+EOF_FILE
+
+cat > "${TEST_REPO}/imgversion.dts-source.conf" <<'EOF_FILE'
+IMAGE_DTS_PLATFORM=dts-platform:test
+EOF_FILE
+
+cat > "${TEST_REPO}/.dockerignore" <<'EOF_FILE'
+target
+EOF_FILE
+
+cat > "${TEST_REPO}/builds/dist/dts-admin_test.tar" <<'EOF_FILE'
+normal image
+EOF_FILE
+
+cat > "${TEST_REPO}/builds/legacy-dist/dts-platform_test.tar" <<'EOF_FILE'
+legacy image
+EOF_FILE
+
+cat > "${TEST_REPO}/services/dts-dbt/dbt_project.yml" <<'EOF_FILE'
+name: dts
+version: 1.0.0
+model-paths: ["models", "dbt_model/models"]
+EOF_FILE
+
+cat > "${TEST_REPO}/services/dts-dbt/dbt_model/models/stg/reference_project.sql" <<'EOF_FILE'
+select 1 as project_id
+EOF_FILE
+
+cat > "${TEST_REPO}/services/dts-dbt/profiles/profiles.yml" <<'EOF_FILE'
+dts:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      password: local-secret-must-not-be-packaged
+EOF_FILE
+
+cat > "${TEST_REPO}/services/dts-dbt/profiles/.user.yml" <<'EOF_FILE'
+password: local-user-secret-must-not-be-packaged
+EOF_FILE
+
+cat > "${TEST_REPO}/bin/test-helper.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo helper
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/test-helper.sh"
+
+cat > "${TEST_REPO}/bin/lib/shared.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo shared
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/lib/shared.sh"
+
+cat > "${TEST_REPO}/bin/dts-upgrade" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo upgrade
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade"
+
+cat > "${TEST_REPO}/bin/dts-upgrade-lite" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo upgrade-lite
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade-lite"
+
+cat > "${TEST_REPO}/bin/dts-upgrade-rollback" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo rollback
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/dts-upgrade-rollback"
+
+cat > "${TEST_REPO}/bin/lib/dts-upgrade-common.sh" <<'EOF_FILE'
+#!/usr/bin/env bash
+echo common
+EOF_FILE
+chmod +x "${TEST_REPO}/bin/lib/dts-upgrade-common.sh"
+
+cat > "${TEST_REPO}/docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md" <<'EOF_FILE'
+# ops
+EOF_FILE
+
+cat > "${TEST_REPO}/docs/release/v2.2.3/offline-upgrade-checklist-kylin-kunpeng.md" <<'EOF_FILE'
+# checklist
+EOF_FILE
+
+cat > "${TEST_REPO}/docs/release/v2.2.3/offline-upgrade-guide-kylin-kunpeng.md" <<'EOF_FILE'
+# guide
+EOF_FILE
+
+cat > "${FAKE_BIN}/docker" <<'EOF_DOCKER'
+#!/usr/bin/env bash
+case "${1:-}" in
+  build)
+    if [[ "${2:-}" == "--help" ]]; then
+      echo "--progress"
+    fi
+    exit 0
+    ;;
+  version)
+    echo "1.41"
+    exit 0
+    ;;
+  image|builder)
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
+EOF_DOCKER
+chmod +x "${FAKE_BIN}/docker"
+
+cat > "${FAKE_BIN}/free" <<'EOF_FREE'
+#!/usr/bin/env bash
+cat <<'EOF_MEM'
+              total        used        free      shared  buff/cache   available
+Mem:          65536       16384       32768           0       16384       32768
+Swap:             0           0           0
+EOF_MEM
+EOF_FREE
+chmod +x "${FAKE_BIN}/free"
+
+cat > "${FAKE_BIN}/df" <<'EOF_DF'
+#!/usr/bin/env bash
+cat <<'EOF_DISK'
+Filesystem     1G-blocks  Used Available Use% Mounted on
+/dev/vda2            295   200        95  68% /
+EOF_DISK
+EOF_DF
+chmod +x "${FAKE_BIN}/df"
+
+# Metadata must inspect actual Docker-save manifests, not placeholder text files.
+python3 - "${TEST_REPO}" <<'PY'
+import io, json, sys, tarfile
+from pathlib import Path
+for path in Path(sys.argv[1]).glob('builds/*dist/*.tar'):
+    with tarfile.open(path, 'w') as archive:
+        for name, value in {
+            'manifest.json': [{'Config': 'config.json', 'RepoTags': [path.stem.replace('_', ':', 1)], 'Layers': []}],
+            'config.json': {'architecture': 'amd64', 'os': 'linux', 'config': {'Labels': {}}},
+        }.items():
+            raw = json.dumps(value).encode()
+            entry = tarfile.TarInfo(name)
+            entry.size = len(raw)
+            archive.addfile(entry, io.BytesIO(raw))
+PY
+git -C "${TEST_REPO}" init -q
+git -C "${TEST_REPO}" add .
+git -C "${TEST_REPO}" -c core.hooksPath=/dev/null -c user.name=Fixture -c user.email=fixture@example.invalid commit -qm fixture
+
+PATH="${FAKE_BIN}:${PATH}" DTS_BUILD_TIMESTAMP=20260829210503 \
+  "${TEST_REPO}/builds/dts-build.sh" --pack --no-images --output "${PACKAGE_PATH}" >/dev/null
+ARCHIVE_CONTENTS="$(tar -tzf "${PACKAGE_PATH}")"
+
+PACKAGE_EXTRACT="${TMP_DIR}/package-extract"
+mkdir -p "${PACKAGE_EXTRACT}"
+tar -xzf "${PACKAGE_PATH}" -C "${PACKAGE_EXTRACT}"
+
+if ! grep -Fqx 'DTS_IMAGE_VERSION=2.2.3-20260829210503' "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf"; then
+  echo "expected packaged imgversion.conf to record the immutable release version" >&2
+  cat "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf" >&2
+  exit 1
+fi
+
+if ! grep -Fqx 'IMAGE_DTS_ADMIN=dts-admin:2.2.3-20260829210503' "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf"; then
+  echo "expected packaged DTS image reference to use the immutable release version" >&2
+  cat "${PACKAGE_EXTRACT}/dts-stack/imgversion.conf" >&2
+  exit 1
+fi
+
+python3 - "${PACKAGE_EXTRACT}/extra/release-manifest.json" "$(git -C "${TEST_REPO}" rev-parse HEAD)" <<'PY'
+import json, sys
+manifest = json.load(open(sys.argv[1]))
+assert manifest['sourceCommit'] == sys.argv[2]
+assert manifest['runtimeFilesRequired'] is True
+assert manifest['imagesIncluded'] is False
+PY
+(cd "${PACKAGE_EXTRACT}" && sha256sum -c extra/files-checksums.txt >/dev/null)
+test ! -e "${PACKAGE_EXTRACT}/dts-stack/services/dts-airflow/dags/dts_release_build_postgres_primary.py"
+cmp "${REPO_ROOT}/services/dts-dbt/run-model-build.sh" \
+  "${PACKAGE_EXTRACT}/dts-stack/services/dts-dbt/run-model-build.sh"
+mv "${TEST_REPO}/services/dts-dbt/run-model-build.sh" "${TMP_DIR}/run-model-build.sh"
+if PATH="${FAKE_BIN}:${PATH}" "${TEST_REPO}/builds/dts-build.sh" --pack --no-images \
+  --output "${TMP_DIR}/missing-launcher.tar.gz" >"${TMP_DIR}/missing-launcher.log" 2>&1; then
+  echo "package unexpectedly succeeded without the dbt runtime launcher" >&2
+  exit 1
+fi
+grep -q 'required dbt runtime launcher is missing' "${TMP_DIR}/missing-launcher.log"
+mv "${TMP_DIR}/run-model-build.sh" "${TEST_REPO}/services/dts-dbt/run-model-build.sh"
+
+if grep -qx 'dts-stack/services/dts-dbt/profiles/profiles.yml' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "deployment package leaked the local dbt profiles.yml" >&2
+  exit 1
+fi
+
+if grep -qx 'dts-stack/services/dts-dbt/profiles/.user.yml' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "deployment package leaked the local dbt profiles/.user.yml" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/services/dts-dbt/dbt_model/models/stg/reference_project.sql' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include every configured dbt model path" >&2
+  exit 1
+fi
+
+if ! grep -Fqx 'select 1 as project_id' "${PACKAGE_EXTRACT}/dts-stack/services/dts-dbt/dbt_model/models/stg/reference_project.sql"; then
+  echo "expected packaged dbt dependency content to remain intact" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/test-helper.sh' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/test-helper.sh" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/lib/shared.sh' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include nested bin/lib/shared.sh" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade-lite' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade-lite" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade-rollback' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/dts-upgrade-rollback" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/lib/dts-upgrade-common.sh' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include bin/lib/dts-upgrade-common.sh" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/docs/release/v2.2.3/upgrade-lite-operations-kylin-kunpeng.md' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include upgrade lite operation guide" >&2
+  exit 1
+fi
+
+if ! grep -qx 'images/' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include top-level images/ directory" >&2
+  exit 1
+fi
+
+if ! grep -qx 'extra/' <<<"${ARCHIVE_CONTENTS}"; then
+  echo "expected packaged archive to include top-level extra/ directory" >&2
+  exit 1
+fi
+
+for metadata_file in \
+  extra/release-manifest.json \
+  extra/merge-rules.yml \
+  extra/files-checksums.txt \
+  extra/rollback-manifest.json
+do
+  if ! grep -qx "${metadata_file}" <<<"${ARCHIVE_CONTENTS}"; then
+    echo "expected packaged archive to include ${metadata_file}" >&2
+    exit 1
+  fi
+done
+
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260521 "${TEST_REPO}/builds/dts-build.sh" --opmanager-output "${OPMANAGER_OUTPUT}" >/dev/null
+
+if [[ ! -f "${OPMANAGER_ARCHIVE}" ]]; then
+  echo "expected --opmanager-output to create an opmanager tar.gz package" >&2
+  find "${OPMANAGER_OUTPUT}" -maxdepth 2 -type f -print >&2
+  exit 1
+fi
+
+OPMANAGER_CONTENTS="$(tar -tzf "${OPMANAGER_ARCHIVE}")"
+if ! grep -qx 'images/dts-admin_test.tar' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include normal image tar" >&2
+  exit 1
+fi
+
+if ! grep -qx 'images/dts-platform_test.tar' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include legacy image tar" >&2
+  exit 1
+fi
+
+if ! grep -qx 'dts-stack/bin/dts-upgrade-lite' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to include stripped dts-stack tree" >&2
+  exit 1
+fi
+
+if ! grep -qx 'misc/merge-rules.yml' <<<"${OPMANAGER_CONTENTS}"; then
+  echo "expected opmanager archive to move extra metadata into misc" >&2
+  exit 1
+fi
+
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260522 "${TEST_REPO}/builds/dts-build.sh" --opmanager-package >/dev/null
+OPMANAGER_DEFAULT_ARCHIVE="${TEST_REPO}/builds/opmanager-dist/dts-opmanager-upgrade-20260522.tar.gz"
+
+if [[ ! -f "${OPMANAGER_DEFAULT_ARCHIVE}" ]]; then
+  echo "expected --opmanager-package to create a default tar.gz under builds/opmanager-dist" >&2
+  exit 1
+fi
+
+PATH="${FAKE_BIN}:${PATH}" BUILD_TS=20260523 "${TEST_REPO}/builds/dts-build.sh" --legacy --opmanager-package >/dev/null
+OPMANAGER_LEGACY_DEFAULT_ARCHIVE="${TEST_REPO}/builds/opmanager-legacy-dist/dts-opmanager-upgrade-20260523.tar.gz"
+
+if [[ ! -f "${OPMANAGER_LEGACY_DEFAULT_ARCHIVE}" ]]; then
+  echo "expected --legacy --opmanager-package to create a default tar.gz under builds/opmanager-legacy-dist" >&2
+  exit 1
+fi

@@ -1,0 +1,10 @@
+{
+  "enabled" : true,
+  "projectDir" : "/opt/dts/dbt",
+  "profilesDir" : "/opt/dts/dbt-profiles",
+  "profileName" : "dts",
+  "targetName" : "dev",
+  "targetDataSourceId" : "a0000000-0000-0000-0000-000000000001",
+  "database" : "biadmin",
+  "schema" : "public"
+}

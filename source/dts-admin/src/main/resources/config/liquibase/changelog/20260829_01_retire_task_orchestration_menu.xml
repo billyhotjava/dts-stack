@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260829-01-retire-task-orchestration-menu" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="name"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+        <comment>
+            Retire the standalone task-orchestration business entry. Data integration remains the canonical
+            ingestion workflow; the frontend keeps a compatibility redirect while role bindings stay recoverable.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            UPDATE portal_menu
+               SET deleted = TRUE,
+                   last_modified_by = '20260829-retire-task-orchestration-menu',
+                   last_modified_date = now()
+             WHERE deleted = FALSE
+               AND (
+                   name = 'sys.nav.portal.studioOrchestration'
+                   OR COALESCE(metadata, '') ~ '"titleKey"[[:space:]]*:[[:space:]]*"sys.nav.portal.studioOrchestration"'
+                   OR COALESCE(metadata, '') ~ '"externalLink"[[:space:]]*:[[:space:]]*"/explore/etl/orchestration"'
+               );
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                UPDATE portal_menu
+                   SET deleted = FALSE,
+                       last_modified_by = '20260829-retire-task-orchestration-menu-rollback',
+                       last_modified_date = now()
+                 WHERE deleted = TRUE
+                   AND last_modified_by = '20260829-retire-task-orchestration-menu';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,22 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/standard-binding-a89427a5e.tar.gz",
+  "sha256": "69ba274b8fcf110a680435cb9803c73e2b69ff807f1923b99147cd85601c297b",
+  "sourceCommit": "a89427a5ed6a5e8a1923e4b52ea8f2325b363127",
+  "archiveChecksumsVerified": {
+    "dts-platform-webapp_s104-a89427a5e-20260908-153834.tar": "3b23dcd1b35f03e61571605a180730be2c5a554d2a2cfa6253b2961cd8fc996f"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-a89427a5e",
+      "localImageId": "sha256:e5b69629bdf2375f7744dfd512d2340492a4d89bf07774224e5cbf84a3d493b2",
+      "configImageId": "sha256:e5b69629bdf2375f7744dfd512d2340492a4d89bf07774224e5cbf84a3d493b2",
+      "sourceRevision": "a89427a5ed6a5e8a1923e4b52ea8f2325b363127"
+    }
+  ],
+  "runtime": {
+    "container": "/deploy-dts-platform-webapp-1",
+    "image": "dts-platform-webapp:s104-a89427a5e",
+    "imageId": "sha256:e5b69629bdf2375f7744dfd512d2340492a4d89bf07774224e5cbf84a3d493b2",
+    "status": "running"
+  }
+}

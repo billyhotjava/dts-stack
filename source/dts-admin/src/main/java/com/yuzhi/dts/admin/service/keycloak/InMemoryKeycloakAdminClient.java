@@ -1,0 +1,462 @@
+package com.yuzhi.dts.admin.service.keycloak;
+
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakGroupDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakRoleDTO;
+import com.yuzhi.dts.admin.service.dto.keycloak.KeycloakUserDTO;
+import com.yuzhi.dts.admin.service.inmemory.InMemoryStores;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang3.StringUtils;
+import org.springframework.stereotype.Service;
+
+@Service
+public class InMemoryKeycloakAdminClient implements KeycloakAdminClient {
+
+    private final InMemoryStores stores;
+
+    public InMemoryKeycloakAdminClient(InMemoryStores stores) {
+        this.stores = stores;
+    }
+
+    @Override
+    public List<KeycloakUserDTO> listUsers(int first, int max, String accessToken) {
+        return stores.listUsers(first, max);
+    }
+
+    @Override
+    public List<KeycloakUserDTO> searchUsers(String keyword, String accessToken) {
+        String query = keyword == null ? "" : keyword.trim();
+        if (query.isEmpty()) {
+            return List.of();
+        }
+        String lower = query.toLowerCase();
+        return stores
+            .users
+            .values()
+            .stream()
+            .filter(user -> user != null && matches(user, lower))
+            .toList();
+    }
+
+    @Override
+    public Optional<KeycloakUserDTO> findByUsername(String username, String accessToken) {
+        return stores.findUserByUsername(username);
+    }
+
+    @Override
+    public Optional<KeycloakUserDTO> findByUsernameStrict(String username, String accessToken) {
+        return findByUsername(username, accessToken);
+    }
+
+    @Override
+    public Optional<KeycloakUserDTO> findById(String userId, String accessToken) {
+        return Optional.ofNullable(stores.findUserById(userId));
+    }
+
+    @Override
+    public KeycloakUserDTO createUser(KeycloakUserDTO payload, String accessToken) {
+        ensureUniqueUsername(payload.getUsername());
+        return stores.createUser(copyUser(payload));
+    }
+
+    @Override
+    public KeycloakUserDTO updateUser(String userId, KeycloakUserDTO payload, String accessToken) {
+        KeycloakUserDTO existing = stores.findUserById(userId);
+        if (existing == null) {
+            throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        }
+        if (payload.getUsername() != null && !payload.getUsername().equalsIgnoreCase(existing.getUsername())) {
+            ensureUniqueUsername(payload.getUsername());
+        }
+        merge(existing, payload);
+        stores.users.put(existing.getId(), existing);
+        return existing;
+    }
+
+    @Override
+    public void deleteUser(String userId, String accessToken) {
+        if (stores.users.remove(userId) == null) {
+            throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        }
+    }
+
+    @Override
+    public void resetPassword(String userId, String newPassword, boolean temporary, String accessToken) {
+        if (!stores.users.containsKey(userId)) {
+            throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        }
+        // In-memory stub does not store password; nothing to do.
+    }
+
+    @Override
+    public List<KeycloakGroupDTO> listGroups(String accessToken) {
+        List<KeycloakGroupDTO> roots = new ArrayList<>();
+        for (KeycloakGroupDTO group : stores.groups.values()) {
+            if (!stores.groupParents.containsKey(group.getId())) {
+                roots.add(copyGroupTree(group));
+            }
+        }
+        return roots;
+    }
+
+    @Override
+    public Optional<KeycloakGroupDTO> findGroup(String groupId, String accessToken) {
+        KeycloakGroupDTO group = stores.groups.get(groupId);
+        return group == null ? Optional.empty() : Optional.of(copyGroupTree(group));
+    }
+
+    @Override
+    public KeycloakGroupDTO createGroup(KeycloakGroupDTO payload, String parentGroupId, String accessToken) {
+        KeycloakGroupDTO group = new KeycloakGroupDTO();
+        group.setId(UUID.randomUUID().toString());
+        group.setName(payload.getName());
+        group.setAttributes(copyAttributes(payload.getAttributes()));
+        group.setRealmRoles(
+            payload.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(payload.getRealmRoles())
+        );
+        group.setClientRoles(copyAttributes(payload.getClientRoles()));
+        stores.groups.put(group.getId(), group);
+        if (StringUtils.isNotBlank(parentGroupId)) {
+            stores.groupParents.put(group.getId(), parentGroupId);
+            KeycloakGroupDTO parent = stores.groups.get(parentGroupId);
+            if (parent != null) {
+                parent.getSubGroups().add(group);
+            }
+        } else {
+            stores.groupParents.remove(group.getId());
+        }
+        return copyGroupTree(group);
+    }
+
+    @Override
+    public KeycloakGroupDTO updateGroup(String groupId, KeycloakGroupDTO payload, String accessToken) {
+        KeycloakGroupDTO existing = stores.groups.get(groupId);
+        if (existing == null) {
+            throw new IllegalArgumentException("Keycloak group not found: " + groupId);
+        }
+        if (payload.getName() != null) {
+            existing.setName(payload.getName());
+        }
+        if (payload.getAttributes() != null && !payload.getAttributes().isEmpty()) {
+            existing.setAttributes(copyAttributes(payload.getAttributes()));
+        }
+        return copyGroupTree(existing);
+    }
+
+    @Override
+    public void moveGroup(String groupId, String groupName, String parentGroupId, String accessToken) {
+        KeycloakGroupDTO existing = stores.groups.get(groupId);
+        if (existing == null) {
+            throw new IllegalArgumentException("Keycloak group not found: " + groupId);
+        }
+        String previousParentId = stores.groupParents.remove(groupId);
+        if (previousParentId != null) {
+            KeycloakGroupDTO previousParent = stores.groups.get(previousParentId);
+            if (previousParent != null) {
+                previousParent.getSubGroups().removeIf(g -> groupId.equals(g.getId()));
+            }
+        }
+        if (StringUtils.isNotBlank(parentGroupId)) {
+            KeycloakGroupDTO parent = stores.groups.get(parentGroupId);
+            if (parent == null) {
+                throw new IllegalArgumentException("Parent Keycloak group not found: " + parentGroupId);
+            }
+            parent.getSubGroups().add(existing);
+            stores.groupParents.put(groupId, parentGroupId);
+        } else {
+            stores.groupParents.remove(groupId);
+        }
+    }
+
+    @Override
+    public void deleteGroup(String groupId, String accessToken) {
+        KeycloakGroupDTO existing = stores.groups.get(groupId);
+        if (existing == null) {
+            throw new IllegalArgumentException("Keycloak group not found: " + groupId);
+        }
+        List<KeycloakGroupDTO> children = new ArrayList<>(existing.getSubGroups());
+        for (KeycloakGroupDTO child : children) {
+            deleteGroup(child.getId(), accessToken);
+        }
+        String parentId = stores.groupParents.remove(groupId);
+        stores.groups.remove(groupId);
+        if (parentId != null) {
+            KeycloakGroupDTO parent = stores.groups.get(parentId);
+            if (parent != null) {
+                parent.getSubGroups().removeIf(group -> groupId.equals(group.getId()));
+            }
+        }
+    }
+
+    @Override
+    public Optional<KeycloakRoleDTO> findRealmRole(String roleName, String accessToken) {
+        if (roleName == null || roleName.isBlank()) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(stores.roles.get(roleName));
+    }
+
+    @Override
+    public KeycloakRoleDTO upsertRealmRole(KeycloakRoleDTO role, String accessToken) {
+        if (role == null || role.getName() == null || role.getName().isBlank()) {
+            throw new IllegalArgumentException("角色名称不能为空");
+        }
+        return stores.upsertRole(role);
+    }
+
+    @Override
+    public List<KeycloakRoleDTO> listRealmRoles(String accessToken) {
+        return stores.listRoles();
+    }
+
+    @Override
+    public Optional<KeycloakGroupDTO> findGroupByPath(String path, String accessToken) {
+        if (StringUtils.isBlank(path)) return Optional.empty();
+        for (KeycloakGroupDTO g : stores.groups.values()) {
+            if (path.equalsIgnoreCase(g.getPath())) return Optional.of(copyGroupTree(g));
+        }
+        // Fallback: match by last segment name
+        String name = path.contains("/") ? path.substring(path.lastIndexOf('/') + 1) : path;
+        for (KeycloakGroupDTO g : stores.groups.values()) {
+            if (name.equalsIgnoreCase(g.getName())) return Optional.of(copyGroupTree(g));
+        }
+        return Optional.empty();
+    }
+
+    @Override
+    public List<KeycloakGroupDTO> listUserGroups(String userId, String accessToken) {
+        // In-memory stub does not track membership; return empty list
+        return List.of();
+    }
+
+    @Override
+    public List<KeycloakUserDTO> listGroupMembers(String groupId, int first, int max, String accessToken) {
+        // In-memory stub does not track membership; return empty list
+        return List.of();
+    }
+
+    @Override
+    public void addUserToGroup(String userId, String groupId, String accessToken) {
+        // no-op in memory
+    }
+
+    @Override
+    public void removeUserFromGroup(String userId, String groupId, String accessToken) {
+        // no-op in memory
+    }
+
+    @Override
+    public void addRealmRolesToUser(String userId, List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        List<String> roles = user.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(user.getRealmRoles());
+        if (roleNames != null) {
+            for (String r : roleNames) if (r != null && !roles.contains(r)) roles.add(r);
+        }
+        user.setRealmRoles(roles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public void removeRealmRolesFromUser(String userId, List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        List<String> roles = user.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(user.getRealmRoles());
+        if (roleNames != null) {
+            roles.removeIf(r -> roleNames.stream().anyMatch(x -> x != null && x.equalsIgnoreCase(r)));
+        }
+        user.setRealmRoles(roles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public List<String> listUserRealmRoles(String userId, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null || user.getRealmRoles() == null) return List.of();
+        return new ArrayList<>(user.getRealmRoles());
+    }
+
+    @Override
+    public List<KeycloakUserDTO> listUsersByRealmRole(String roleName, String accessToken) {
+        return List.of();
+    }
+
+    @Override
+    public void deleteRealmRole(String roleName, String accessToken) {
+        if (StringUtils.isBlank(roleName)) return;
+        stores.roles.remove(roleName);
+    }
+
+    // ---- Client roles (in-memory minimal simulation) ----
+
+    @Override
+    public java.util.Optional<String> resolveClientUuid(String clientId, String accessToken) {
+        return java.util.Optional.ofNullable(clientId);
+    }
+
+    @Override
+    public java.util.Optional<KeycloakRoleDTO> findClientRole(String clientId, String roleName, String accessToken) {
+        if (clientId == null || roleName == null) return java.util.Optional.empty();
+        String key = clientId + ":" + roleName;
+        KeycloakRoleDTO dto = stores.roles.get(key);
+        return java.util.Optional.ofNullable(dto);
+    }
+
+    @Override
+    public KeycloakRoleDTO upsertClientRole(String clientId, KeycloakRoleDTO role, String accessToken) {
+        String name = role.getName();
+        if (clientId == null || name == null || name.isBlank()) {
+            throw new IllegalArgumentException("clientId/roleName 不能为空");
+        }
+        KeycloakRoleDTO dto = new KeycloakRoleDTO();
+        dto.setId(java.util.UUID.randomUUID().toString());
+        dto.setName(name);
+        stores.roles.put(clientId + ":" + name, dto);
+        return dto;
+    }
+
+    @Override
+    public void addClientRolesToUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        Map<String, java.util.List<String>> clientRoles = user.getClientRoles();
+        if (clientRoles == null) clientRoles = new java.util.LinkedHashMap<>();
+        java.util.List<String> list = clientRoles.getOrDefault(clientId, new java.util.ArrayList<>());
+        for (String r : roleNames) {
+            if (r != null && !list.contains(r)) list.add(r);
+        }
+        clientRoles.put(clientId, list);
+        user.setClientRoles(clientRoles);
+        stores.users.put(user.getId(), user);
+    }
+
+    @Override
+    public void removeClientRolesFromUser(String userId, String clientId, java.util.List<String> roleNames, String accessToken) {
+        KeycloakUserDTO user = stores.findUserById(userId);
+        if (user == null) throw new IllegalArgumentException("Keycloak user not found: " + userId);
+        Map<String, java.util.List<String>> clientRoles = user.getClientRoles();
+        if (clientRoles == null) return;
+        java.util.List<String> list = clientRoles.getOrDefault(clientId, new java.util.ArrayList<>());
+        list.removeIf(r -> roleNames.stream().anyMatch(x -> x != null && x.equalsIgnoreCase(r)));
+        clientRoles.put(clientId, list);
+        user.setClientRoles(clientRoles);
+        stores.users.put(user.getId(), user);
+    }
+
+    private void ensureUniqueUsername(String username) {
+        if (username == null) {
+            return;
+        }
+        stores
+            .findUserByUsername(username)
+            .ifPresent(u -> {
+                throw new IllegalStateException("用户名已存在: " + username);
+            });
+    }
+
+    private boolean matches(KeycloakUserDTO user, String lower) {
+        if (user == null || lower == null || lower.isBlank()) {
+            return false;
+        }
+        return contains(user.getUsername(), lower)
+            || contains(user.getFullName(), lower)
+            || contains(user.getFirstName(), lower)
+            || contains(user.getLastName(), lower)
+            || contains(firstAttribute(user.getAttributes(), "fullName", "fullname", "displayName", "display_name"), lower);
+    }
+
+    private boolean contains(String value, String needle) {
+        if (value == null || needle == null || needle.isBlank()) {
+            return false;
+        }
+        return value.toLowerCase().contains(needle);
+    }
+
+    private String firstAttribute(Map<String, List<String>> attributes, String... keys) {
+        if (attributes == null || keys == null || keys.length == 0) {
+            return null;
+        }
+        for (String key : keys) {
+            List<String> values = attributes.get(key);
+            if (values == null || values.isEmpty()) {
+                continue;
+            }
+            for (String v : values) {
+                if (v != null && !v.isBlank()) {
+                    return v.trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private KeycloakUserDTO copyUser(KeycloakUserDTO source) {
+        KeycloakUserDTO copy = new KeycloakUserDTO();
+        merge(copy, source);
+        return copy;
+    }
+
+    private void merge(KeycloakUserDTO target, KeycloakUserDTO source) {
+        if (source.getUsername() != null) target.setUsername(source.getUsername());
+        if (source.getEmail() != null) target.setEmail(source.getEmail());
+        if (source.getFirstName() != null) target.setFirstName(source.getFirstName());
+        if (source.getLastName() != null) target.setLastName(source.getLastName());
+        if (source.getEnabled() != null) target.setEnabled(source.getEnabled());
+        if (source.getEmailVerified() != null) target.setEmailVerified(source.getEmailVerified());
+        if (source.getAttributes() != null && !source.getAttributes().isEmpty()) {
+            Map<String, List<String>> attrs = new ConcurrentHashMap<>(source.getAttributes());
+            target.setAttributes(attrs);
+        }
+        if (source.getGroups() != null && !source.getGroups().isEmpty()) {
+            target.setGroups(List.copyOf(source.getGroups()));
+        }
+        if (source.getRealmRoles() != null && !source.getRealmRoles().isEmpty()) {
+            target.setRealmRoles(List.copyOf(source.getRealmRoles()));
+        }
+        if (source.getClientRoles() != null && !source.getClientRoles().isEmpty()) {
+            target.setClientRoles(new ConcurrentHashMap<>(source.getClientRoles()));
+        }
+        if (source.getCreatedTimestamp() != null) {
+            target.setCreatedTimestamp(source.getCreatedTimestamp());
+        }
+        if (target.getCreatedTimestamp() == null) {
+            target.setCreatedTimestamp(System.currentTimeMillis());
+        }
+        if (target.getEnabled() == null) {
+            target.setEnabled(Boolean.TRUE);
+        }
+    }
+
+    private Map<String, List<String>> copyAttributes(Map<String, List<String>> source) {
+        Map<String, List<String>> attributes = new LinkedHashMap<>();
+        if (source != null) {
+            source.forEach((key, value) -> attributes.put(key, value == null ? new ArrayList<>() : new ArrayList<>(value)));
+        }
+        return attributes;
+    }
+
+    private KeycloakGroupDTO copyGroupTree(KeycloakGroupDTO source) {
+        KeycloakGroupDTO copy = new KeycloakGroupDTO();
+        copy.setId(source.getId());
+        copy.setName(source.getName());
+        copy.setPath(source.getPath());
+        copy.setAttributes(copyAttributes(source.getAttributes()));
+        copy.setRealmRoles(
+            source.getRealmRoles() == null ? new ArrayList<>() : new ArrayList<>(source.getRealmRoles())
+        );
+        copy.setClientRoles(copyAttributes(source.getClientRoles()));
+        List<KeycloakGroupDTO> children = new ArrayList<>();
+        if (source.getSubGroups() != null) {
+            for (KeycloakGroupDTO child : source.getSubGroups()) {
+                children.add(copyGroupTree(child));
+            }
+        }
+        copy.setSubGroups(children);
+        return copy;
+    }
+}

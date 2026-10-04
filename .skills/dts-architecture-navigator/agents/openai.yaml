@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Architecture Navigator"
+  short_description: "Route DTS changes to the right module"
+  default_prompt: "Use $dts-architecture-navigator to decide where this DTS change belongs before editing."

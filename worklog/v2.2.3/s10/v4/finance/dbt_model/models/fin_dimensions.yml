@@ -1,0 +1,300 @@
+version: 2
+
+models:
+  - name: dim_fund_source
+    description: "基金来源维度：以稳定 ASCII code 承载年初、预计增加和预计使用口径。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: fund_source_id
+        description: "基金来源维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定基金来源编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['OPENING', 'PLANNED_INCREASE', 'PLANNED_USAGE']
+              config:
+                severity: error
+      - name: raw_value
+        description: "ODS 基金来源原值"
+        data_type: text
+      - name: label
+        description: "基金来源中文名称"
+        data_type: text
+      - name: is_opening
+        description: "是否年初余额"
+        data_type: boolean
+      - name: is_increase
+        description: "是否预计增加"
+        data_type: boolean
+      - name: is_usage
+        description: "是否预计使用"
+        data_type: boolean
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_fund_category
+    description: "基金类别维度：以稳定 ASCII code 承载事业、职工福利和安全生产基金口径。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: fund_category_id
+        description: "基金类别维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定基金类别编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['PUBLIC_INSTITUTION_FUND', 'EMPLOYEE_WELFARE_FUND', 'SAFETY_PRODUCTION_FUND']
+              config:
+                severity: error
+      - name: raw_value
+        description: "ODS 基金类别原值"
+        data_type: text
+      - name: label
+        description: "基金类别中文名称"
+        data_type: text
+      - name: is_career
+        description: "是否事业基金"
+        data_type: boolean
+      - name: is_welfare
+        description: "是否职工福利基金"
+        data_type: boolean
+      - name: is_safety
+        description: "是否安全生产基金"
+        data_type: boolean
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_project_status
+    description: "项目状态维度：以稳定 ASCII code 承载项目执行和收款状态。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: project_status_id
+        description: "项目状态维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定项目状态编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['IN_PROGRESS', 'PENDING_EXPENSE', 'COMPLETED_PENDING_COLLECTION', 'COMPLETED_AUDIT']
+              config:
+                severity: error
+      - name: raw_value
+        description: "ODS 项目状态原值"
+        data_type: text
+      - name: label
+        description: "项目状态中文名称"
+        data_type: text
+      - name: is_active
+        description: "是否仍处于活跃执行阶段"
+        data_type: boolean
+      - name: is_completed
+        description: "是否已完成"
+        data_type: boolean
+      - name: is_pending_collection
+        description: "是否已完成待收款"
+        data_type: boolean
+      - name: is_audited
+        description: "是否已完成审计"
+        data_type: boolean
+      - name: is_pending_expense
+        description: "是否支出待处理"
+        data_type: boolean
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_expense_category
+    description: "合同辅助核算费用类别维度。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: expense_category_id
+        description: "费用类别维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定费用类别编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['MATERIAL_EQUIPMENT', 'OUTSOURCING_SERVICE', 'DEPRECIATION', 'TESTING', 'DESIGN_CONSULTING', 'RENTAL', 'TRAINING', 'OTHER']
+              config:
+                severity: error
+      - name: raw_value
+        description: "费用类别原始中文值"
+        data_type: text
+      - name: label
+        description: "费用类别中文名称"
+        data_type: text
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_balance_direction
+    description: "个人辅助核算借贷方向维度。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: balance_direction_id
+        description: "借贷方向维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定借贷方向编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['debit', 'credit', 'zero']
+              config:
+                severity: error
+      - name: label
+        description: "借贷方向中文名称"
+        data_type: text
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_personal_subject_category
+    description: "个人辅助核算科目类别维度。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: subject_category_id
+        description: "科目类别维度键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: code
+        description: "稳定科目类别编码"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['RECEIVABLE_LOAN', 'PAYROLL_PAYABLE', 'OTHER']
+              config:
+                severity: error
+      - name: raw_value
+        description: "科目类别原始中文值"
+        data_type: text
+      - name: label
+        description: "科目类别中文名称"
+        data_type: text
+      - name: sort_order
+        description: "展示顺序"
+        data_type: integer
+
+  - name: dim_expense_code_prefix
+    description: "会计科目编号前缀到费用类别稳定编码的映射。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: prefix
+        description: "科目编号前四位"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: expense_category_code
+        description: "费用类别稳定编码"
+        data_type: text
+
+  - name: dim_personal_subject_code_prefix
+    description: "会计科目编号前缀到个人科目类别稳定编码的映射。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: prefix
+        description: "科目编号前四位"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: subject_category_code
+        description: "个人科目类别稳定编码"
+        data_type: text

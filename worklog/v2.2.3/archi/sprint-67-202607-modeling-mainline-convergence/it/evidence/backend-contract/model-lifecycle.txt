@@ -1,0 +1,34 @@
+Sprint-67 F6-T02 ModelSpec lifecycle verification
+Verified: 2026-07-20 +08:00
+
+1. Focused backend contract batch
+Command:
+  ./mvnw -Dtest=DbtModelingContractTest,ModelingDbtManifestImporterTest,ModelLifecycleLiquibaseTest,ModelingLifecycleSourceContractTest,ModelLifecyclePublicationServiceTest,DbtRunLifecycleTestEvidenceAdapterTest,ModelLifecycleServiceTest,ModelLifecycleResourceTest,ModelSpecStageGateServiceTest,ModelingVNextResourceTest test
+Result:
+  PASS — Tests run: 32, Failures: 0, Errors: 0, Skipped: 0
+  BUILD SUCCESS — 35.247 s
+
+2. PostgreSQL lifecycle integration
+Command:
+  ./mvnw -Dtest=ModelingVNextApplicationServiceIT test
+Result:
+  PASS — Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+  BUILD SUCCESS — 01:15 min
+  Database: PostgreSQL 17.4 Testcontainers
+
+Verified invariants:
+- manifest import, artifact, compile/test evidence, review, publish, registration and run keep the same modelSpecId/revision/checksum;
+- DBT_MANAGED ownership does not create a second ModelSpec;
+- registration persists step-level ATTEMPTING/SUCCESS/FAILED audit state and supports idempotent retry;
+- Catalog dataset, BI dataset and lineage registration use persisted adapters;
+- failed DBT_RUN keeps the canonical ModelSpec repair reference;
+- lifecycle Liquibase XML parses successfully and the PostgreSQL migration path executes in the integration test.
+
+Defect found by the integration gate:
+- PostgreSQL rejected a target-table alias referenced inside a JOIN ON clause in the lifecycle repair SQL.
+- The migration was corrected to join model/revision through the WHERE predicates, then the full integration test passed.
+
+Boundary:
+- This evidence proves the service contract against a real PostgreSQL container.
+- It does not claim a deployed environment, external dbt/Airflow execution, real authentication, or remote Catalog/BI service E2E; those remain F6-T03 scope.
+- Maven warnings were pre-existing dependency/plugin warnings and did not fail the gate.

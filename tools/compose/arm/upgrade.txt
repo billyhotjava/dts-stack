@@ -1,0 +1,8 @@
+# 1) 解包到 /opt
+tar -C /opt -xzf /root/docker-compose-venv-arm64-1.29.2.tgz
+
+# 2) 建软链
+ln -sf /opt/dcenv/bin/docker-compose /usr/local/bin/docker-compose
+
+# 3) 验证
+docker-compose version

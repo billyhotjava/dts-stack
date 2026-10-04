@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260310-01-audit-operation-group-slug-fix" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_operation_mapping"/>
+        </preConditions>
+        <comment>Normalize audit operation group keys so each module yields a stable ASCII identifier</comment>
+
+        <sql>
+            UPDATE audit_operation_mapping
+            SET group_display_name = module_name
+            WHERE module_name IS NOT NULL
+              AND (group_display_name IS NULL OR trim(group_display_name) = '');
+        </sql>
+
+        <sql>
+            UPDATE audit_operation_mapping
+            SET operation_group = concat(
+                    coalesce(nullif(lower(trim(source_system)), ''), 'general'),
+                    '_',
+                    substring(
+                        md5(
+                            coalesce(
+                                nullif(group_display_name, ''),
+                                module_name,
+                                '通用'
+                            )
+                        ),
+                        1,
+                        12
+                    )
+                )
+            WHERE TRUE;
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260310-02-audit-event-operation-group-backfill" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="audit_event"/>
+        </preConditions>
+        <comment>Align historical audit_event.operation_group values with normalized rule keys</comment>
+
+        <sql>
+            WITH event_group AS (
+                SELECT
+                    e.id,
+                    concat(
+                        coalesce(nullif(lower(trim(e.source_system)), ''), 'general'),
+                        '_',
+                        substring(
+                            md5(
+                                coalesce(
+                                    (
+                                        SELECT m.group_display_name
+                                        FROM audit_operation_mapping m
+                                        WHERE m.enabled IS TRUE
+                                          AND coalesce(nullif(lower(trim(m.source_system)), ''), 'general')
+                                                = coalesce(nullif(lower(trim(e.source_system)), ''), 'general')
+                                          AND m.module_name = e.module
+                                        ORDER BY m.order_value NULLS LAST, m.id
+                                        LIMIT 1
+                                    ),
+                                    coalesce(e.module, '通用')
+                                )
+                            ),
+                            1,
+                            12
+                        )
+                    ) AS new_group
+                FROM audit_event e
+            )
+            UPDATE audit_event e
+            SET operation_group = eg.new_group
+            FROM event_group eg
+            WHERE e.id = eg.id;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

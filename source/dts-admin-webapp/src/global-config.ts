@@ -1,0 +1,153 @@
+import packageJson from "../package.json";
+
+/**
+ * Global application configuration type definition
+ */
+declare global {
+	interface Window {
+		__RUNTIME_CONFIG__?: {
+			koalPkiEndpoints?: string[];
+			showClassifiedLoginBadge?: string | boolean;
+		};
+	}
+}
+
+export type GlobalConfig = {
+	/** Application name */
+	appName: string;
+	/** Application version number */
+	appVersion: string;
+	/** Default route path for the application */
+	defaultRoute: string;
+	/** Public path for static assets */
+	publicPath: string;
+	/** Base URL for API endpoints */
+	apiBaseUrl: string;
+	/** Routing mode: frontend routing or backend routing */
+	routerMode: "frontend" | "backend";
+	/** Allowed roles to sign in; empty means allow all authenticated users */
+	allowedLoginRoles: string[];
+	/** Hide vendor branding in UI texts */
+	hideKeycloakBranding: boolean;
+	/** Hide built-in IAM roles (default-roles-*, offline_access, uma_authorization, realm-management, etc.) in selectors */
+	hideBuiltinRoles: boolean;
+	/** Hide default-roles-* from role catalogs/tables */
+	hideDefaultRoles: boolean;
+	/** Local Koal middleware endpoints, used for PKI login */
+	koalPkiEndpoints: string[];
+	/** Show the classified login mark: red star + 机密 text */
+	showClassifiedLoginBadge: boolean;
+};
+
+/**
+ * Global configuration constants
+ * Reads configuration from environment variables and package.json
+ *
+ * @warning
+ * Please don't use the import.meta.env to get the configuration, use the GLOBAL_CONFIG instead
+ */
+const isAbsoluteUrl = (value: string) => {
+	const normalized = value.trim();
+	if (!normalized) return false;
+	return normalized.startsWith("//") || /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(normalized);
+};
+
+const ensureLeadingSlash = (path: string, fallback: string) => {
+	const normalized = path.trim();
+	if (!normalized) return fallback;
+	if (isAbsoluteUrl(normalized)) return normalized;
+	return normalized.startsWith("/") ? normalized : `/${normalized}`;
+};
+
+const removeTrailingSlash = (path: string) => {
+	if (path === "/") {
+		return "/";
+	}
+	const trimmed = path.replace(/\/+$/, "");
+	return trimmed || "/";
+};
+
+const resolveDefaultRoute = () => {
+	const fallback = "/admin/my-changes";
+	const rawDefaultRoute = import.meta.env.VITE_APP_DEFAULT_ROUTE || fallback;
+	return ensureLeadingSlash(rawDefaultRoute, fallback);
+};
+
+const resolveApiBaseUrl = () => {
+	const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+	const normalized = rawApiBaseUrl.trim();
+	if (!normalized) return "/api";
+	if (isAbsoluteUrl(normalized)) {
+		return normalized.replace(/\/+$/, "");
+	}
+	return ensureLeadingSlash(normalized, "/api");
+};
+
+const resolvePublicPath = () => {
+	const rawPublicPath = import.meta.env.VITE_PUBLIC_PATH || import.meta.env.VITE_APP_PUBLIC_PATH || "/";
+	if (isAbsoluteUrl(rawPublicPath)) {
+		return removeTrailingSlash(rawPublicPath);
+	}
+	const withLeadingSlash = ensureLeadingSlash(rawPublicPath, "/");
+	return removeTrailingSlash(withLeadingSlash);
+};
+
+const resolveAllowedLoginRoles = (): string[] => {
+	const raw = (import.meta.env.VITE_ALLOWED_LOGIN_ROLES ||
+		// default to admin-console super roles only
+		"ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR") as string;
+	return String(raw)
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+};
+
+const resolveKoalPkiEndpoints = (): string[] => {
+	// Prefer runtime-injected unified config
+	try {
+		const arr = (typeof window !== "undefined" && (window.__RUNTIME_CONFIG__?.koalPkiEndpoints)) || [];
+		if (Array.isArray(arr) && arr.length > 0) return arr.map((s) => String(s).trim()).filter(Boolean);
+	} catch {}
+	// Fallback to build-time env
+	const raw = (import.meta.env.VITE_KOAL_PKI_ENDPOINTS || "") as string | string[];
+	if (Array.isArray(raw)) return raw.map((s) => String(s).trim()).filter(Boolean);
+	if (!raw) return [];
+	return String(raw)
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+};
+
+const parseBooleanFlag = (value: unknown): boolean | undefined => {
+	if (typeof value === "boolean") return value;
+	if (typeof value !== "string") return undefined;
+	const normalized = value.trim().toLowerCase();
+	if (["true", "1", "yes", "y", "on"].includes(normalized)) return true;
+	if (["false", "0", "no", "n", "off"].includes(normalized)) return false;
+	return undefined;
+};
+
+const resolveShowClassifiedLoginBadge = (): boolean => {
+	try {
+		const runtimeValue = typeof window !== "undefined" ? window.__RUNTIME_CONFIG__?.showClassifiedLoginBadge : undefined;
+		const parsed = parseBooleanFlag(runtimeValue);
+		if (typeof parsed === "boolean") return parsed;
+	} catch {}
+	const env = import.meta.env as Record<string, string | boolean | undefined>;
+	return parseBooleanFlag(env.WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? env.VITE_SHOW_CLASSIFIED_LOGIN_BADGE) ?? true;
+};
+
+export const GLOBAL_CONFIG: GlobalConfig = {
+	appName: import.meta.env.VITE_APP_NAME || "BI数智平台(机密)",
+	appVersion: packageJson.version,
+	defaultRoute: resolveDefaultRoute(),
+	publicPath: resolvePublicPath(),
+	apiBaseUrl: resolveApiBaseUrl(),
+	routerMode: import.meta.env.VITE_APP_ROUTER_MODE || "frontend",
+	allowedLoginRoles: resolveAllowedLoginRoles(),
+	hideKeycloakBranding: String(import.meta.env.VITE_HIDE_KEYCLOAK_BRANDING ?? "true").toLowerCase() === "true",
+	hideBuiltinRoles: String(import.meta.env.VITE_HIDE_BUILTIN_ROLES ?? "true").toLowerCase() === "true",
+	hideDefaultRoles: String(import.meta.env.VITE_HIDE_DEFAULT_ROLES ?? "true").toLowerCase() === "true",
+	koalPkiEndpoints: resolveKoalPkiEndpoints(),
+	showClassifiedLoginBadge: resolveShowClassifiedLoginBadge(),
+};

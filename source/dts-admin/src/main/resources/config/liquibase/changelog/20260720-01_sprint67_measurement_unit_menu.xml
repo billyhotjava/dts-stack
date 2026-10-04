@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260720-01-sprint67-measurement-unit-menu" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+        </preConditions>
+        <comment>Add the versioned measurement-unit owner under the existing data-standard menu and preserve role visibility.</comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                standards_id BIGINT;
+                units_id BIGINT;
+                visibility_source_id BIGINT;
+            BEGIN
+                SELECT id INTO standards_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.dataStandards' OR metadata LIKE '%"key":"standards"%')
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF standards_id IS NULL THEN
+                    RETURN;
+                END IF;
+
+                SELECT id INTO units_id
+                  FROM portal_menu
+                 WHERE name = 'sys.nav.portal.governanceMeasurementUnits'
+                    OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceMeasurementUnits"%'
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF units_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.governanceMeasurementUnits',
+                        'studio/modeling/standards/units',
+                        NULL,
+                        5,
+                        '{"key":"units","sectionKey":"studio","entryKey":"units","titleKey":"sys.nav.portal.governanceMeasurementUnits","title":"计量单位","icon":"solar:ruler-cross-pen-bold-duotone","externalLink":"/governance/standards/units"}',
+                        standards_id,
+                        'solar:ruler-cross-pen-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'system', now(), 'system', now()
+                    ) RETURNING id INTO units_id;
+                ELSE
+                    UPDATE portal_menu
+                       SET parent_id = standards_id,
+                           path = 'studio/modeling/standards/units',
+                           component = NULL,
+                           sort_order = 5,
+                           metadata = '{"key":"units","sectionKey":"studio","entryKey":"units","titleKey":"sys.nav.portal.governanceMeasurementUnits","title":"计量单位","icon":"solar:ruler-cross-pen-bold-duotone","externalLink":"/governance/standards/units"}',
+                           icon = 'solar:ruler-cross-pen-bold-duotone',
+                           deleted = FALSE,
+                           last_modified_by = 'system',
+                           last_modified_date = now()
+                     WHERE id = units_id;
+                END IF;
+
+                SELECT id INTO visibility_source_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id = standards_id
+                   AND name = 'sys.nav.portal.governanceGlossary'
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF visibility_source_id IS NOT NULL THEN
+                    INSERT INTO portal_menu_visibility (
+                        id, menu_id, role_code, permission_code, data_level,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    )
+                    SELECT nextval('portal_menu_visibility_seq'), units_id, source.role_code,
+                           source.permission_code, source.data_level, 'system', now(), 'system', now()
+                      FROM portal_menu_visibility source
+                     WHERE source.menu_id = visibility_source_id
+                       AND NOT EXISTS (
+                           SELECT 1
+                             FROM portal_menu_visibility target
+                            WHERE target.menu_id = units_id
+                              AND target.role_code = source.role_code
+                              AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                       );
+                END IF;
+            END;
+            $do$;
+        ]]></sql>
+        <rollback>
+            UPDATE portal_menu
+               SET deleted = TRUE, last_modified_by = 'system', last_modified_date = now()
+             WHERE name = 'sys.nav.portal.governanceMeasurementUnits';
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

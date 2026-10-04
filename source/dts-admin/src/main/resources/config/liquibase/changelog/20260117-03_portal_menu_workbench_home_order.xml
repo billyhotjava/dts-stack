@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260117-03-portal-menu-workbench-home-order" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+
+        <comment>Ensure Workbench Home appears above Workflow Center under the Workbench section.</comment>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                root_id BIGINT;
+            BEGIN
+                SELECT id INTO root_id
+                FROM portal_menu
+                WHERE deleted = false
+                  AND parent_id IS NULL
+                  AND (
+                    name = 'sys.nav.portal.workbench'
+                    OR path = 'workbench'
+                    OR metadata ILIKE '%"sectionKey":"workbench"%'
+                  )
+                LIMIT 1;
+
+                IF root_id IS NULL THEN
+                    RETURN;
+                END IF;
+
+                UPDATE portal_menu
+                SET sort_order = 0
+                WHERE parent_id = root_id
+                  AND (
+                    name = 'sys.nav.portal.workbenchHome'
+                    OR path = 'home'
+                    OR metadata ILIKE '%"entryKey":"home"%'
+                  );
+
+                UPDATE portal_menu
+                SET sort_order = 10
+                WHERE parent_id = root_id
+                  AND (
+                    path IN ('workflow-center', 'workflowcenter')
+                    OR metadata ILIKE '%workflow-center%'
+                    OR metadata ILIKE '%workflowcenter%'
+                    OR name ILIKE '%workflow%'
+                  );
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+</databaseChangeLog>

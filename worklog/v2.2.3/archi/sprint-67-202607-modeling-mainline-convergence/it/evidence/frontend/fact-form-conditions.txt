@@ -1,0 +1,9 @@
+Sprint-67 F3-T03 FACT 条件表单证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+- FACT 表单以“一行代表什么”、粒度键、来源、事实形态和业务时间为主输入；
+- businessActivityRef 位于可选输入，不参与最小草稿校验；
+- workbench 测试证明表单值投影到唯一 ModelSpec grain/sourceRefs/factShape/timeSemantics；
+- modelSpecV2Contract 与生产构建共同约束 FACT 专属字段不会泄漏到其他类型；
+- 本批 TypeScript 聚焦测试 33/33、Chrome95 legacy production build PASS。

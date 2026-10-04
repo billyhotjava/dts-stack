@@ -1,0 +1,41 @@
+# T05: Metric artifact preview / RLS enforcement
+
+**优先级**: P0
+**状态**: IN_PROGRESS
+**依赖**: T01, T02
+
+## 目标
+
+把 metric-pack 的 `security.apply_rls=true` 从 manifest 声明推进到运行时 enforcement：预览、导入、发布和生成 SQL 都必须通过 platform 统一权限与安全策略。
+
+## 已完成
+
+- [x] `source_model` 必须绑定到 `dependencies.platform_assets` 中的可授权资产，不能直接绕过 platform asset。
+- [x] inline `term_ids` 必须在 `dependencies.platform_assets` 中声明为 `GLOSSARY_TERM`。
+- [x] artifact preview / import 前通过 platform internal API 校验 glossary term 存在且处于 `ACTIVE`。
+- [x] glossary resolver 对别名冲突返回 `ambiguous`，不依赖 repository 返回顺序。
+- [x] dts-metrics client 对 glossary resolve 自动按 200 条分批，避免行业包撞平台端批量上限。
+- [x] platform contract 不可达时返回可读预览错误，不向界面透出底层 RestClient 异常。
+- [x] artifact preview 阶段调用 `/api/internal/asset-permission/check`，无权访问 source asset 时拒绝生成，错误不暴露资产名称。
+- [x] metrics internal service principal 通过 `dts.metrics.service-name` 配置判断，不再在 endpoint SpEL 中硬编码。
+- [x] artifact preview / import 前通过 platform internal resolver 校验数据域引用，`domains.yml` 只作为行业包映射，不作为数据域事实源。
+- [x] artifact preview / import 前通过 platform internal resolver 校验数据标准引用，缺失、歧义或非 `ACTIVE` 均阻断候选 artifact 生成。
+- [x] platform 新增 `/api/internal/asset-permission/policy` 只读策略接口，metrics service principal 可访问。
+- [x] dts-metrics artifact preview 调用 platform policy contract，生成 SQL 时注入 platform row-filter predicate。
+- [x] platform policy contract 返回 dataset masking columns，metrics preview 将 masking policy 写入候选 artifact。
+- [x] dts-metrics 生成 `securityPolicyJson`，让后续 platform/dbt release gate 可复核 preview 阶段解析出的 RLS/masking 策略。
+
+## 待完成范围
+
+- [x] SQL 生成器根据 platform policy 注入 RLS predicate。
+- [ ] platform/dbt publish gate 运行时二次调用 policy contract，并与 `securityPolicyJson` 比对，禁止 preview 与 publish 口径不同。
+- [x] manifest 的 `security.apply_rls=true` 降级为声明，不再被视作已经生效。
+- [ ] live IT 覆盖无授权 asset 无法 preview/publish，且错误不泄露资产详情。
+
+## 验收建议
+
+- `MetricArtifactGenerationServiceTest` 覆盖无授权 preview、platform outage、glossary ambiguous、domain missing、data-standard inactive、source model suffix 边界。
+- `PlatformContractClientTest` 覆盖 glossary/domain/data-standard resolver、glossary batch split 和 transport exception wrap。
+- `MetricArtifactGenerationServiceTest.injectsPlatformRlsPredicateIntoGeneratedDbtSql` 验证生成 SQL 包含 platform policy 输出的 predicate。
+- `MetricArtifactGenerationServiceTest.includesPlatformSecurityPolicyArtifactForReleaseGate` 验证候选 artifact 携带 `securityPolicyJson`。
+- 后续补充 platform/dbt gate 二次比对与 live IT，验证发布阶段复用同一策略。

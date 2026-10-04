@@ -1,0 +1,184 @@
+{
+  "templateMeta": {
+    "name": "项目进度总览",
+    "description": "基于已发布 DWS 项目进度汇总资产 23b1d236-55f5-3af2-8b33-9506b8e3b2ef 的 PRJDEMO 验收大屏",
+    "category": "project-management",
+    "tags": ["PRJDEMO", "项目管理", "DWS", "验收"]
+  },
+  "screenSpec": {
+    "schemaVersion": 1,
+    "id": "prjdemo-project-progress-overview",
+    "name": "项目进度总览",
+    "description": "数据集 23b1d236-55f5-3af2-8b33-9506b8e3b2ef；数据资产 semantic-model:eea4953d-fa27-42cf-89cf-380aaaec1098；物理表 biadmin.public.prjdemo_dws_project_progress；静态数据快照经质量规则 PRJDEMO_DWS_PROGRESS_INTEGRITY 验证通过。",
+    "width": 1920,
+    "height": 1080,
+    "backgroundColor": "#eaf2fb",
+    "theme": "glacier",
+    "classification": "CONFIDENTIAL",
+    "globalVariables": [
+      {
+        "key": "dateFrom",
+        "label": "开始日期",
+        "type": "date",
+        "defaultValue": "2026-09-01"
+      },
+      {
+        "key": "dateTo",
+        "label": "结束日期",
+        "type": "date",
+        "defaultValue": "2026-09-01"
+      }
+    ],
+    "components": [
+      {
+        "id": "prjdemo-title",
+        "type": "title",
+        "name": "项目进度总览",
+        "x": 120,
+        "y": 35,
+        "width": 1680,
+        "height": 64,
+        "zIndex": 20,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "text": "项目进度总览",
+          "fontSize": 38,
+          "fontWeight": "700",
+          "color": "#0f172a",
+          "textAlign": "center"
+        }
+      },
+      {
+        "id": "prjdemo-snapshot-filter",
+        "type": "filter-date-range",
+        "name": "快照日期",
+        "x": 120,
+        "y": 120,
+        "width": 420,
+        "height": 76,
+        "zIndex": 15,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "label": "快照日期",
+          "startKey": "dateFrom",
+          "endKey": "dateTo",
+          "defaultStartValue": "2026-09-01",
+          "defaultEndValue": "2026-09-01",
+          "scopeHint": "验收快照：2026-09-01",
+          "labelColor": "#334155",
+          "inputBackground": "#ffffff",
+          "inputBorderColor": "#94a3b8",
+          "inputTextColor": "#0f172a"
+        }
+      },
+      {
+        "id": "prjdemo-project-count",
+        "type": "number-card",
+        "name": "项目数",
+        "x": 600,
+        "y": 120,
+        "width": 420,
+        "height": 150,
+        "zIndex": 10,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "title": "项目数",
+          "value": 2,
+          "suffix": "个",
+          "precision": 0,
+          "titleColor": "#334155",
+          "valueColor": "#044b8c",
+          "backgroundColor": "#ffffff",
+          "header": ["value"],
+          "data": [["2"]]
+        }
+      },
+      {
+        "id": "prjdemo-task-count",
+        "type": "number-card",
+        "name": "任务总数",
+        "x": 1080,
+        "y": 120,
+        "width": 420,
+        "height": 150,
+        "zIndex": 10,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "title": "任务总数",
+          "value": 8,
+          "suffix": "项",
+          "precision": 0,
+          "titleColor": "#334155",
+          "valueColor": "#044b8c",
+          "backgroundColor": "#ffffff",
+          "header": ["value"],
+          "data": [["8"]]
+        }
+      },
+      {
+        "id": "prjdemo-progress-bar",
+        "type": "bar-chart",
+        "name": "项目平均完成进度",
+        "x": 120,
+        "y": 310,
+        "width": 800,
+        "height": 650,
+        "zIndex": 10,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "title": "项目平均完成进度（%）",
+          "header": ["项目名称", "平均完成进度"],
+          "data": [
+            ["数据治理平台升级", "72.50"],
+            ["经营分析看板建设", "53.75"]
+          ],
+          "showLegend": false,
+          "showLabel": true,
+          "seriesColors": ["#044b8c"],
+          "_useFieldMapping": true,
+          "_fieldMapping": {
+            "dimension": "项目名称",
+            "measures": ["平均完成进度"]
+          }
+        }
+      },
+      {
+        "id": "prjdemo-progress-table",
+        "type": "table",
+        "name": "项目进度明细",
+        "x": 960,
+        "y": 310,
+        "width": 840,
+        "height": 650,
+        "zIndex": 10,
+        "locked": false,
+        "visible": true,
+        "config": {
+          "title": "项目进度明细",
+          "header": ["项目编码", "项目名称", "快照日期", "任务总数", "平均完成进度", "实际成本金额"],
+          "data": [
+            ["PRJ-A", "数据治理平台升级", "2026-09-01", "4", "72.50", "91000.00"],
+            ["PRJ-B", "经营分析看板建设", "2026-09-01", "4", "53.75", "51000.00"]
+          ],
+          "enableSort": true,
+          "enablePagination": false,
+          "freezeHeader": true,
+          "freezeFirstColumn": true,
+          "fontSize": 16,
+          "headerFontSize": 16,
+          "headerBackground": "#044b8c",
+          "headerColor": "#ffffff",
+          "bodyColor": "#0f172a",
+          "oddRowBackground": "#ffffff",
+          "evenRowBackground": "#f5f9fd",
+          "borderColor": "#cbd5e1"
+        }
+      }
+    ]
+  }
+}

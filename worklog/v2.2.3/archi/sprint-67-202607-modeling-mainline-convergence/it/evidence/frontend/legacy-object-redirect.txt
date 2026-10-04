@@ -1,0 +1,8 @@
+F5 legacy route compatibility evidence
+
+- /modeling/semantic/objects is resolved only to ModelingCompatibilityPage.
+- Compatibility page performs read-only ModelSpec lookup and never renders an object create/edit action.
+- Mapped LEGACY_READONLY refs can navigate to the canonical model target.
+- Unmapped refs show NEEDS_CLASSIFICATION and the safe modeling-workbench repair path.
+- External returnTo is rejected; canonical planId/modelSpecId context is preserved.
+- Source-contract tests are included in the 35/35 passing frontend retirement suite.

@@ -1,0 +1,11 @@
+F5 old-write freeze evidence
+Captured: 2026-07-20 +08:00
+
+Real request: POST /api/semantic/business-objects
+Result: HTTP 410
+Body code: BUSINESS_OBJECT_RETIRED
+Repair path: /modeling/workbench
+Headers: Deprecation=true; Sunset=Thu, 31 Dec 2026 23:59:59 GMT; Link successor=/api/modeling/model-specs
+Persistence check: semantic_business_object where name='must-not-persist' = 0
+
+Focused backend contract tests: 15/15 PASS, including SemanticModelingRetirementResourceTest and ModelingVNextResourceTest.

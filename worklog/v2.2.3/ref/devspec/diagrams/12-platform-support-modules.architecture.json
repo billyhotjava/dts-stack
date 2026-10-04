@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dts-platform 支撑模块关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      600
+    ]
+  },
+  "components": [
+    {
+      "id": "rollback",
+      "type": "backend",
+      "label": "回滚失效",
+      "sublabel": "service/rollback",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "internal",
+      "type": "security",
+      "label": "内部接口",
+      "sublabel": "web/rest/internal",
+      "pos": [
+        377,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "visualization",
+      "type": "backend",
+      "label": "报表登记",
+      "sublabel": "service/visualization",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "workbench",
+      "type": "frontend",
+      "label": "个人工作台",
+      "sublabel": "service/workbench",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "event",
+      "type": "messagebus",
+      "label": "平台事件",
+      "sublabel": "service/event · Kafka",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "核心业务模块",
+      "sublabel": "modeling · sql · governance",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "资产目录与分类",
+      "sublabel": "service/catalog",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "openmetadata",
+      "type": "external",
+      "label": "元数据同步",
+      "sublabel": "service/openmetadata",
+      "pos": [
+        1058,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "audit",
+      "type": "security",
+      "label": "审计采集与转发",
+      "sublabel": "service/audit",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "query",
+      "type": "backend",
+      "label": "查询网关",
+      "sublabel": "service/query",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "infra",
+      "type": "backend",
+      "label": "数据源与连接",
+      "sublabel": "service/infra",
+      "pos": [
+        718,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "admin_gw",
+      "type": "external",
+      "label": "管理端网关",
+      "sublabel": "service/admin/gateway",
+      "pos": [
+        1058,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    {
+      "id": "internal-rollback",
+      "from": "internal",
+      "to": "rollback",
+      "label": "回滚完成回执"
+    },
+    {
+      "id": "internal-visualization",
+      "from": "internal",
+      "to": "visualization",
+      "label": "报表登记"
+    },
+    {
+      "id": "visualization-catalog",
+      "from": "visualization",
+      "to": "catalog",
+      "label": "报表资产",
+      "labelAt": [
+        818,
+        179
+      ]
+    },
+    {
+      "id": "workbench-catalog",
+      "from": "workbench",
+      "to": "catalog",
+      "label": "资产概览"
+    },
+    {
+      "id": "core-event",
+      "from": "core",
+      "to": "event",
+      "label": "投影事件 outbox"
+    },
+    {
+      "id": "core-catalog",
+      "from": "core",
+      "to": "catalog",
+      "label": "资产 · 分类",
+      "variant": "emphasis"
+    },
+    {
+      "id": "catalog-openmetadata",
+      "from": "catalog",
+      "to": "openmetadata",
+      "label": "元数据同步",
+      "labelAt": [
+        1024,
+        290
+      ]
+    },
+    {
+      "id": "core-query",
+      "from": "core",
+      "to": "query",
+      "label": "SQL 执行",
+      "variant": "emphasis",
+      "labelAt": [
+        477,
+        349
+      ]
+    },
+    {
+      "id": "core-audit",
+      "from": "core",
+      "to": "audit",
+      "label": "操作审计"
+    },
+    {
+      "id": "query-infra",
+      "from": "query",
+      "to": "infra",
+      "label": "数据源连接"
+    },
+    {
+      "id": "infra-catalog",
+      "from": "infra",
+      "to": "catalog",
+      "label": "数据源资产同步"
+    },
+    {
+      "id": "infra-admin_gw",
+      "from": "infra",
+      "to": "admin_gw",
+      "label": "基础设施同步"
+    },
+    {
+      "id": "audit-admin_gw",
+      "from": "audit",
+      "to": "admin_gw",
+      "label": "审计上报 HTTP",
+      "fromSide": "bottom",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "未画出的次要依赖",
+      "items": [
+        "rollback → dts-ingestion：失效分派（IngestionServiceClient）",
+        "workbench / visualization → permission：访问校验",
+        "menu / workflow / directory → 管理端网关"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "核心业务模块详见上一张 dts-platform 模块图",
+        "箭头 = import / 注入方向",
+        "Kafka 投递受开关控制，需核对配置"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260901-02-consumption-bi-hierarchy-bootstrap" author="xiezm">
+        <preConditions onFail="HALT" onError="HALT">
+            <and>
+                <dbms type="postgresql"/>
+                <tableExists tableName="portal_menu"/>
+                <tableExists tableName="portal_menu_visibility"/>
+                <columnExists tableName="portal_menu" columnName="metadata"/>
+                <columnExists tableName="portal_menu" columnName="parent_id"/>
+                <columnExists tableName="portal_menu" columnName="deleted"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Bootstrap the BI grouping hierarchy required by the historical screen/data-portal separation
+            migration. Fresh databases reach Liquibase before the Spring menu seeder can create these two
+            seed-managed parents. Existing BI-like rows fail closed to protect customized hierarchies.
+        </comment>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT TEXT := 'consumption-bi-hierarchy-bootstrap';
+                consumption_id BIGINT;
+                consumption_count INTEGER;
+                bi_apps_id BIGINT;
+                bi_apps_count INTEGER;
+                bi_analysis_id BIGINT;
+                bi_analysis_count INTEGER;
+                unsafe_candidate_count INTEGER;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:consumption-bi-hierarchy:20260901-02', 0));
+
+                SELECT COUNT(*), MIN(id)
+                  INTO consumption_count, consumption_id
+                  FROM portal_menu
+                 WHERE parent_id IS NULL
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.dataConsumption'
+                       OR path = 'consumption'
+                       OR (
+                           metadata IS NOT NULL
+                           AND metadata::jsonb ->> 'key' = 'consumption'
+                       )
+                   );
+
+                IF consumption_count <> 1 THEN
+                    RAISE EXCEPTION 'consumption BI hierarchy bootstrap requires exactly one active consumption root; found %',
+                        consumption_count;
+                END IF;
+
+                SELECT COUNT(*), MIN(id)
+                  INTO bi_apps_count, bi_apps_id
+                  FROM portal_menu
+                 WHERE parent_id = consumption_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.businessIntelligenceApps'
+                       OR path = 'consumption/bi-apps'
+                       OR (
+                           metadata IS NOT NULL
+                           AND metadata::jsonb ->> 'key' = 'bi-apps'
+                       )
+                   );
+
+                IF bi_apps_count > 1 THEN
+                    RAISE EXCEPTION 'consumption BI hierarchy bootstrap found % active bi-apps rows', bi_apps_count;
+                END IF;
+
+                IF bi_apps_count = 0 THEN
+                    SELECT COUNT(*)
+                      INTO unsafe_candidate_count
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.businessIntelligenceApps'
+                        OR path IN ('bi-apps', 'consumption/bi-apps')
+                        OR (
+                            metadata IS NOT NULL
+                            AND (
+                                metadata::jsonb ->> 'key' = 'bi-apps'
+                                OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.businessIntelligenceApps'
+                            )
+                        );
+
+                    IF unsafe_candidate_count > 0 THEN
+                        RAISE EXCEPTION 'bi-apps parent is missing but % BI-apps-like rows require manual reconciliation',
+                            unsafe_candidate_count;
+                    END IF;
+
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.businessIntelligenceApps',
+                        'consumption/bi-apps',
+                        NULL,
+                        1,
+                        '{"key":"bi-apps","sectionKey":"consumption","entryKey":"bi-apps","titleKey":"sys.nav.portal.businessIntelligenceApps","title":"商业智能应用","icon":"solar:chart-2-bold-duotone"}',
+                        consumption_id,
+                        'solar:chart-2-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        actor, now(), actor, now()
+                    ) RETURNING id INTO bi_apps_id;
+                END IF;
+
+                SELECT COUNT(*), MIN(id)
+                  INTO bi_analysis_count, bi_analysis_id
+                  FROM portal_menu
+                 WHERE parent_id = bi_apps_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.bi'
+                       OR path = 'consumption/bi-apps/bi'
+                       OR (
+                           metadata IS NOT NULL
+                           AND (
+                               metadata::jsonb ->> 'key' = 'bi'
+                               OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.bi'
+                           )
+                       )
+                   );
+
+                IF bi_analysis_count > 1 THEN
+                    RAISE EXCEPTION 'consumption BI hierarchy bootstrap found % active BI-analysis rows', bi_analysis_count;
+                END IF;
+
+                IF bi_analysis_count = 0 THEN
+                    SELECT COUNT(*)
+                      INTO unsafe_candidate_count
+                      FROM portal_menu
+                     WHERE name = 'sys.nav.portal.bi'
+                        OR path IN ('bi', 'consumption/bi-apps/bi')
+                        OR (
+                            metadata IS NOT NULL
+                            AND (
+                                metadata::jsonb ->> 'key' = 'bi'
+                                OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.bi'
+                            )
+                        );
+
+                    IF unsafe_candidate_count > 0 THEN
+                        RAISE EXCEPTION 'BI-analysis parent is missing but % BI-like rows require manual reconciliation',
+                            unsafe_candidate_count;
+                    END IF;
+
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.bi',
+                        'consumption/bi-apps/bi',
+                        NULL,
+                        1,
+                        '{"key":"bi","sectionKey":"consumption","entryKey":"bi","titleKey":"sys.nav.portal.bi","title":"BI 分析","icon":"solar:widget-3-bold-duotone"}',
+                        bi_apps_id,
+                        'solar:widget-3-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        actor, now(), actor, now()
+                    );
+                END IF;
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT TEXT := 'consumption-bi-hierarchy-bootstrap';
+                    target_id BIGINT;
+                    target_count INTEGER;
+                    dependent_count INTEGER;
+                BEGIN
+                    SELECT COUNT(*), MIN(id)
+                      INTO target_count, target_id
+                      FROM portal_menu
+                     WHERE created_by = actor
+                       AND name = 'sys.nav.portal.bi';
+
+                    IF target_count > 1 THEN
+                        RAISE EXCEPTION 'migration-owned BI-analysis rows are ambiguous during rollback: % rows', target_count;
+                    END IF;
+                    IF target_count = 1 THEN
+                        SELECT
+                            (SELECT COUNT(*) FROM portal_menu WHERE parent_id = target_id) +
+                            (SELECT COUNT(*) FROM portal_menu_visibility WHERE menu_id = target_id)
+                          INTO dependent_count;
+                        IF dependent_count > 0 THEN
+                            RAISE EXCEPTION 'BI hierarchy bootstrap rollback found % dependent rows under BI analysis',
+                                dependent_count;
+                        END IF;
+                        DELETE FROM portal_menu WHERE id = target_id AND created_by = actor;
+                    END IF;
+
+                    SELECT COUNT(*), MIN(id)
+                      INTO target_count, target_id
+                      FROM portal_menu
+                     WHERE created_by = actor
+                       AND name = 'sys.nav.portal.businessIntelligenceApps';
+
+                    IF target_count > 1 THEN
+                        RAISE EXCEPTION 'migration-owned BI-apps rows are ambiguous during rollback: % rows', target_count;
+                    END IF;
+                    IF target_count = 1 THEN
+                        SELECT
+                            (SELECT COUNT(*) FROM portal_menu WHERE parent_id = target_id) +
+                            (SELECT COUNT(*) FROM portal_menu_visibility WHERE menu_id = target_id)
+                          INTO dependent_count;
+                        IF dependent_count > 0 THEN
+                            RAISE EXCEPTION 'BI hierarchy bootstrap rollback found % dependent rows under BI apps',
+                                dependent_count;
+                        END IF;
+                        DELETE FROM portal_menu WHERE id = target_id AND created_by = actor;
+                    END IF;
+                END
+                $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

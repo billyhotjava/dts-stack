@@ -1,0 +1,4 @@
+entity_type,entity_key,entity_name,row_count,signature
+plan,275715d7-c890-4af2-b197-8927a998c43a,pritest1,0,2edf2958166561c5c08cd228e53bbcdc
+ods_mapping,ALL,infra_ods_table_mapping,7,87e3935ea03a6e89cf81acd1fa45372f
+bi_link,ALL,bi_report_link,3,8c973138f831a0bcd11c13daf2c0a4ce

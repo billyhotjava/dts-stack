@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20260413_02_saved_query_folder" author="platform">
+        <addColumn tableName="saved_query">
+            <column name="folder" type="varchar(200)"/>
+        </addColumn>
+        <createIndex tableName="saved_query" indexName="idx_saved_query_folder">
+            <column name="folder"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="saved_query" indexName="idx_saved_query_folder"/>
+            <dropColumn tableName="saved_query" columnName="folder"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

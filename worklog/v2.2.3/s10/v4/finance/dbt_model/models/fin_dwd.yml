@@ -1,0 +1,408 @@
+version: 2
+
+models:
+  - name: biz_dwd_own_fund
+    description: "自有资金核算明细事实：每行代表年度×基金来源×基金类别的金额。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: own_fund_id
+        description: "自有资金事实键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_row_id
+        description: "ODS 行指纹"
+        data_type: text
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: year_num
+        description: "会计年度"
+        data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: fund_source_raw
+        description: "基金来源原始值"
+        data_type: text
+      - name: fund_source
+        description: "清洗后基金来源原值"
+        data_type: text
+      - name: fund_source_id
+        description: "基金来源维度键"
+        data_type: text
+      - name: fund_source_code
+        description: "稳定基金来源编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['OPENING', 'PLANNED_INCREASE', 'PLANNED_USAGE']
+              config:
+                severity: error
+      - name: fund_source_label
+        description: "基金来源中文名称"
+        data_type: text
+      - name: fund_source_sort
+        description: "基金来源展示顺序"
+        data_type: integer
+      - name: is_opening
+        description: "是否年初余额"
+        data_type: boolean
+      - name: is_increase
+        description: "是否预计增加"
+        data_type: boolean
+      - name: is_usage
+        description: "是否预计使用"
+        data_type: boolean
+      - name: fund_category_raw
+        description: "基金类别原始值"
+        data_type: text
+      - name: fund_category
+        description: "清洗后基金类别原值"
+        data_type: text
+      - name: fund_category_id
+        description: "基金类别维度键"
+        data_type: text
+      - name: fund_category_code
+        description: "稳定基金类别编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['PUBLIC_INSTITUTION_FUND', 'EMPLOYEE_WELFARE_FUND', 'SAFETY_PRODUCTION_FUND']
+              config:
+                severity: error
+      - name: fund_category_label
+        description: "基金类别中文名称"
+        data_type: text
+      - name: fund_category_sort
+        description: "基金类别展示顺序"
+        data_type: integer
+      - name: is_career
+        description: "是否事业基金"
+        data_type: boolean
+      - name: is_welfare
+        description: "是否职工福利基金"
+        data_type: boolean
+      - name: is_safety
+        description: "是否安全生产基金"
+        data_type: boolean
+      - name: amount
+        description: "基金金额（万元）"
+        data_type: numeric(15,2)
+      - name: note
+        description: "备注"
+        data_type: text
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_dwd_project_fund
+    description: "项目经费核算明细事实：每行代表一个项目在一个研制周期的经费记录。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: project_fund_id
+        description: "项目经费事实键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_row_id
+        description: "ODS 行指纹"
+        data_type: text
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: row_no
+        description: "源数据行号"
+        data_type: integer
+      - name: project_id
+        description: "项目编号"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: cycle_raw
+        description: "研制周期原始值"
+        data_type: text
+      - name: cycle
+        description: "清洗后研制周期"
+        data_type: text
+      - name: cycle_start_date
+        description: "研制周期开始日期"
+        data_type: date
+      - name: cycle_end_date
+        description: "研制周期结束日期"
+        data_type: date
+      - name: cycle_start_month
+        description: "研制周期开始月"
+        data_type: text
+      - name: cycle_end_month
+        description: "研制周期结束月"
+        data_type: text
+      - name: cycle_month_span
+        description: "研制周期月数"
+        data_type: integer
+      - name: total_fund
+        description: "项目总经费（万元）"
+        data_type: numeric(15,2)
+      - name: is_major_project
+        description: "是否重大项目"
+        data_type: boolean
+      - name: research_dept
+        description: "承担研究室"
+        data_type: text
+      - name: project_status_raw
+        description: "项目状态原始值"
+        data_type: text
+      - name: project_status
+        description: "清洗后项目状态原值"
+        data_type: text
+      - name: project_status_id
+        description: "项目状态维度键"
+        data_type: text
+      - name: project_status_code
+        description: "稳定项目状态编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['IN_PROGRESS', 'PENDING_EXPENSE', 'COMPLETED_PENDING_COLLECTION', 'COMPLETED_AUDIT']
+              config:
+                severity: error
+      - name: project_status_label
+        description: "项目状态中文名称"
+        data_type: text
+      - name: project_is_active
+        description: "项目是否活跃"
+        data_type: boolean
+      - name: project_is_completed
+        description: "项目是否已完成"
+        data_type: boolean
+      - name: project_is_pending_collection
+        description: "项目是否已完成待收款"
+        data_type: boolean
+      - name: project_is_audited
+        description: "项目是否已完成审计"
+        data_type: boolean
+      - name: project_is_pending_expense
+        description: "项目是否支出待处理"
+        data_type: boolean
+      - name: direct_ctrl
+        description: "直接成本控制数（万元）"
+        data_type: numeric(15,2)
+      - name: reserve_indirect
+        description: "预留间接费用和收益（万元）"
+        data_type: numeric(15,2)
+      - name: direct_spent
+        description: "直接成本账面支出（万元）"
+        data_type: numeric(15,2)
+      - name: direct_rate
+        description: "源直接成本执行率"
+        data_type: numeric(8,2)
+      - name: indirect_spent
+        description: "间接费用支出和收益总额（万元）"
+        data_type: numeric(15,2)
+      - name: total_spent
+        description: "直接与间接支出合计（万元）"
+        data_type: numeric(15,2)
+      - name: remaining_fund
+        description: "项目剩余经费，负值表示超支（万元）"
+        data_type: numeric(15,2)
+      - name: total_rate
+        description: "总经费执行率"
+        data_type: numeric
+      - name: indirect_rate
+        description: "间接费用执行率"
+        data_type: numeric
+      - name: received_fund
+        description: "已收款（万元）"
+        data_type: numeric(15,2)
+      - name: receivable_fund
+        description: "待收经费（万元）"
+        data_type: numeric(15,2)
+      - name: received_rate
+        description: "已收款占总经费比例"
+        data_type: numeric
+      - name: is_direct_rate_over_100
+        description: "直接成本执行率是否超过 100%"
+        data_type: boolean
+      - name: is_total_rate_over_100
+        description: "总经费执行率是否超过 100%"
+        data_type: boolean
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_dwd_aux_balance
+    description: "合同辅助核算余额明细事实：每行代表科目×部门×合同的余额记录。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: aux_balance_id
+        description: "合同辅助余额事实键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_row_id
+        description: "ODS 行指纹"
+        data_type: text
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: subject_code
+        description: "会计科目编号"
+        data_type: text
+      - name: subject_code_prefix
+        description: "会计科目编号前四位"
+        data_type: text
+      - name: subject_name
+        description: "会计科目名称"
+        data_type: text
+      - name: dept_name
+        description: "部门名称"
+        data_type: text
+      - name: contract_name_raw
+        description: "合同名称原始值"
+        data_type: text
+      - name: contract_name
+        description: "清洗后合同名称"
+        data_type: text
+      - name: contract_name_norm
+        description: "合同名称标准值"
+        data_type: text
+      - name: has_contract
+        description: "是否关联合同"
+        data_type: boolean
+      - name: balance
+        description: "辅助核算净余额（元）"
+        data_type: numeric(15,2)
+      - name: abs_balance
+        description: "辅助核算余额绝对值（元）"
+        data_type: numeric(15,2)
+      - name: balance_sign
+        description: "余额正负方向"
+        data_type: text
+      - name: expense_category_code
+        description: "稳定费用类别编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['MATERIAL_EQUIPMENT', 'OUTSOURCING_SERVICE', 'DEPRECIATION', 'TESTING', 'DESIGN_CONSULTING', 'RENTAL', 'TRAINING', 'OTHER']
+              config:
+                severity: error
+      - name: expense_category_id
+        description: "费用类别维度键"
+        data_type: text
+      - name: expense_category_label
+        description: "费用类别中文名称"
+        data_type: text
+      - name: expense_category_sort
+        description: "费用类别展示顺序"
+        data_type: integer
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_dwd_aux_balance_personal
+    description: "个人辅助核算余额明细事实：每行代表科目×部门×职工的余额记录。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: personal_balance_id
+        description: "个人辅助余额事实键"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_row_id
+        description: "ODS 行指纹"
+        data_type: text
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: subject_code
+        description: "会计科目编号"
+        data_type: text
+      - name: subject_code_prefix
+        description: "会计科目编号前四位"
+        data_type: text
+      - name: subject_name
+        description: "会计科目名称"
+        data_type: text
+      - name: employee_dept
+        description: "职工部门"
+        data_type: text
+      - name: employee_name
+        description: "职工名称"
+        data_type: text
+      - name: balance
+        description: "个人辅助核算净余额（元）"
+        data_type: numeric(15,2)
+      - name: abs_balance
+        description: "个人辅助核算余额绝对值（元）"
+        data_type: numeric(15,2)
+      - name: balance_direction
+        description: "借贷方向稳定编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['debit', 'credit', 'zero']
+              config:
+                severity: error
+      - name: balance_direction_id
+        description: "借贷方向维度键"
+        data_type: text
+      - name: balance_direction_label
+        description: "借贷方向中文名称"
+        data_type: text
+      - name: subject_category_code
+        description: "个人科目类别稳定编码"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['RECEIVABLE_LOAN', 'PAYROLL_PAYABLE', 'OTHER']
+              config:
+                severity: error
+      - name: subject_category_id
+        description: "个人科目类别维度键"
+        data_type: text
+      - name: subject_category_label
+        description: "个人科目类别中文名称"
+        data_type: text
+      - name: subject_category_sort
+        description: "个人科目类别展示顺序"
+        data_type: integer
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone

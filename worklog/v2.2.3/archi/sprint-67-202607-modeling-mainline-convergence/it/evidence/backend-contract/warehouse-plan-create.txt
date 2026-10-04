@@ -1,0 +1,31 @@
+Sprint-67 F2-T01 warehouse plan create backend verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Actual GREEN command:
+  cd source/dts-platform
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=WarehousePlanContractTest,WarehousePlanResourceTest \
+    -Dit.test=WarehousePlanApplicationServiceIT verify
+
+Surefire/Failsafe distribution (27 tests total):
+- WarehousePlanContractTest: 9 tests, 0 failures, 0 errors, 0 skipped;
+- WarehousePlanResourceTest: 10 tests, 0 failures, 0 errors, 0 skipped;
+- WarehousePlanApplicationServiceIT: 8 tests, 0 failures, 0 errors, 0 skipped.
+
+Covered behavior:
+- create request has no client code and validates the dual-start conditional fields;
+- authenticated actor is authoritative and forged owner/department is rejected;
+- response contains planId, plan, version, etag, initialSourceBindings, nextAction and replayed;
+- identical tenant/key/request replays the immutable version-1 create aggregate even after header/source edits;
+- conflicting payload returns WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT;
+- concurrent PostgreSQL inserts use distinct backend PIDs/transactions and produce one plan and one initial-source set;
+- source identifiers/versions are rejected before persistence at their 256/128 database boundaries;
+- a test-only real database CHECK failure on the initial-source INSERT rolls back the already-inserted plan header.
+
+Permission evidence boundary:
+- WarehousePlanResourceTest is a WebMvc slice with `@AutoConfigureMockMvc(addFilters = false)`.
+- It proves REST request/response mapping, stable 400/409 behavior and actor-field validation at the resource boundary.
+- It does NOT prove Spring Security filter-chain authorization or a live unauthorized browser journey. Those claims are intentionally excluded from this evidence and remain part of the later authenticated E2E/permission gate.
+
+Observed final command exit code: 0

@@ -1,0 +1,29 @@
+{
+  "httpStatus": "200",
+  "apply": {
+    "status": 200,
+    "message": "OK",
+    "data": {
+      "runId": "9afbd809-d556-4ad1-a3e2-33ba5c219b4e",
+      "status": "APPLIED",
+      "created": {
+        "TERM": 1,
+        "CODE_DIRECTORY": 1,
+        "CODE_VALUE": 2,
+        "ELEMENT": 1,
+        "CODE_MAPPING": 1
+      },
+      "updated": {},
+      "totalCreated": 6,
+      "totalUpdated": 0
+    }
+  },
+  "sqlCounts": [
+    "terms=1",
+    "elements=1",
+    "directories=1",
+    "values=2",
+    "mappings=1",
+    "run_items=6"
+  ]
+}

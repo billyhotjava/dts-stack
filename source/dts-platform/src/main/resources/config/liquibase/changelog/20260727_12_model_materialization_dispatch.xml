@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260727-12-model-materialization-dispatch" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <tableExists tableName="modeling_pipeline_run"/>
+            <tableExists tableName="modeling_dbt_runtime_profile_lease"/>
+            <not>
+                <tableExists tableName="modeling_materialization_dispatch"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add one durable dispatch outbox/runtime-spec identity per candidate build group.
+            Raw runtime tokens, project paths and warehouse credentials are never persisted.
+        </comment>
+
+        <createTable tableName="modeling_materialization_dispatch">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" primaryKeyName="pk_modeling_materialization_dispatch" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="candidate_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="candidate_version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempt" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_target_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="airflow_dag_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="airflow_run_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_bundle_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scoped_bundle_checksum" type="varchar(64)"/>
+            <column name="runtime_token_digest" type="varchar(71)"/>
+            <column name="runtime_token_expires_at" type="${datetimeType}"/>
+            <column name="profile_lease_id" type="${uuidType}"/>
+            <column name="runtime_consumed_at" type="${datetimeType}"/>
+            <column name="status" type="varchar(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dispatch_attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="claimed_at" type="${datetimeType}"/>
+            <column name="next_attempt_at" type="${datetimeType}"/>
+            <column name="recovered" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error_code" type="varchar(128)"/>
+            <column name="created_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_materialization_dispatch"
+            baseColumnNames="tenant_id, candidate_id"
+            constraintName="fk_materialization_dispatch_candidate"
+            referencedTableName="modeling_model_release_candidate"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_materialization_dispatch"
+            baseColumnNames="profile_lease_id"
+            constraintName="fk_materialization_dispatch_profile_lease"
+            referencedTableName="modeling_dbt_runtime_profile_lease"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_materialization_dispatch
+                ADD CONSTRAINT ck_modeling_materialization_dispatch
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND candidate_version > 0
+                    AND attempt > 0
+                    AND btrim(execution_target_key) <> ''
+                    AND btrim(airflow_dag_id) <> ''
+                    AND btrim(airflow_run_id) <> ''
+                    AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    AND (
+                        scoped_bundle_checksum IS NULL
+                        OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    )
+                    AND (
+                        (
+                            runtime_token_digest IS NULL
+                            AND runtime_token_expires_at IS NULL
+                        )
+                        OR (
+                            runtime_token_digest ~ '^sha256:[0-9a-f]{64}$'
+                            AND runtime_token_expires_at IS NOT NULL
+                        )
+                    )
+                    AND status IN (
+                        'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN', 'BLOCKED',
+                        'COMPLETED', 'FAILED'
+                    )
+                    AND dispatch_attempts >= 0
+                    AND (
+                        (profile_lease_id IS NULL AND runtime_consumed_at IS NULL)
+                        OR (profile_lease_id IS NOT NULL AND runtime_consumed_at IS NOT NULL)
+                    )
+                );
+
+            CREATE UNIQUE INDEX uk_materialization_dispatch_candidate_attempt
+                ON modeling_materialization_dispatch (
+                    tenant_id, candidate_id, candidate_version, attempt
+                );
+
+            CREATE UNIQUE INDEX uk_materialization_dispatch_runtime_token
+                ON modeling_materialization_dispatch (runtime_token_digest)
+                WHERE runtime_token_digest IS NOT NULL;
+
+            CREATE INDEX idx_materialization_dispatch_ready
+                ON modeling_materialization_dispatch (
+                    status, next_attempt_at, created_at, id
+                )
+                WHERE status IN ('PENDING', 'CLAIMED', 'UNKNOWN');
+
+            INSERT INTO modeling_materialization_dispatch (
+                id, tenant_id, candidate_id, candidate_version, attempt,
+                execution_target_key, airflow_dag_id, airflow_run_id,
+                artifact_bundle_checksum, scoped_bundle_checksum,
+                status, dispatch_attempts, next_attempt_at, recovered,
+                created_at, last_modified_at
+            )
+            SELECT
+                pr.pipeline_run_group_id,
+                pr.tenant_id,
+                pr.release_candidate_id,
+                pr.release_candidate_version,
+                pr.attempt,
+                c.execution_target_key,
+                min(pr.airflow_dag_id),
+                min(pr.airflow_run_id),
+                min(pr.artifact_bundle_checksum),
+                min(pr.scoped_bundle_checksum),
+                CASE
+                    WHEN bool_and(pr.status = 'QUEUED') THEN 'PENDING'
+                    ELSE 'SUBMITTED'
+                END,
+                0,
+                coalesce(min(pr.created_date), current_timestamp),
+                false,
+                coalesce(min(pr.created_date), current_timestamp),
+                coalesce(max(pr.last_modified_date), current_timestamp)
+              FROM modeling_pipeline_run pr
+              JOIN modeling_model_release_candidate c
+                ON c.tenant_id = pr.tenant_id
+               AND c.id = pr.release_candidate_id
+             WHERE pr.run_purpose = 'RELEASE_BUILD'
+               AND pr.pipeline_run_group_id IS NOT NULL
+             GROUP BY
+                pr.pipeline_run_group_id,
+                pr.tenant_id,
+                pr.release_candidate_id,
+                pr.release_candidate_version,
+                pr.attempt,
+                c.execution_target_key
+            ON CONFLICT (id) DO NOTHING;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_materialization_dispatch
+                         WHERE status IN (
+                            'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN'
+                         )
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_ACTIVE_MATERIALIZATION_DISPATCH_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_materialization_dispatch"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

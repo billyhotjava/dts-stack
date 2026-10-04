@@ -1,0 +1,15 @@
+{
+  "capturedAt": "2026-07-20T00:04:13+08:00",
+  "usageRows": 2,
+  "calls": [
+    {
+      "route": "/api/semantic/business-objects",
+      "httpMethod": "POST",
+      "result": "BUSINESS_OBJECT_RETIRED",
+      "count": 2,
+      "source": "intentional live acceptance calls"
+    }
+  ],
+  "payloadCaptured": false,
+  "consumerZero": false
+}

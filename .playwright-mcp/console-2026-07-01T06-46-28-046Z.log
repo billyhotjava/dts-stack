@@ -1,0 +1,4 @@
+[   44086ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ chrome-error://chromewebdata/:0
+[   44092ms] SecurityError: Failed to read the 'localStorage' property from 'Window': Access is denied for this document.
+    at <anonymous>:10:5
+    at <anonymous>:11:7

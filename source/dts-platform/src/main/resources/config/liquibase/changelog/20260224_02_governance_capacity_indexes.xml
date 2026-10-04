@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260224_02_governance_capacity_indexes_01" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="gov_indicator_version" indexName="idx_gov_indicator_version_pub_lookup"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="gov_indicator_version" indexName="idx_gov_indicator_version_pub_lookup">
+            <column name="indicator_id"/>
+            <column name="status"/>
+            <column name="released_at"/>
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260224_02_governance_capacity_indexes_02" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="gov_reference_import_run" indexName="idx_gov_reference_import_run_lookup"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="gov_reference_import_run" indexName="idx_gov_reference_import_run_lookup">
+            <column name="code_type_id"/>
+            <column name="status"/>
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

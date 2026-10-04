@@ -1,0 +1,27 @@
+# Offline runtime-only image for dts-analytics
+# - No apt usage
+# - Expects a prebuilt JAR at build context path: builds/dts-analytics/dts-analytics.jar
+# - Base image pinned by version (choose digest pinning in your pipeline if needed)
+
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21.0.9_10-jre-noble
+FROM ${RUNTIME_BASE_IMAGE}
+
+ENV TZ=Asia/Shanghai \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0 -Duser.timezone=Asia/Shanghai"
+
+WORKDIR /app
+# Copy prebuilt jar from repository path: builds/dts-analytics/dts-analytics.jar
+COPY builds/dts-analytics/dts-analytics.jar /app/app.jar
+COPY builds/dts-analytics/docker-entrypoint.sh /docker-entrypoint.sh
+RUN set -eux; \
+    grep -aFq "com/yuzhi/dts/analytics/DtsAnalyticsApp.class" /app/app.jar; \
+    if grep -aFq "com/yuzhi/dts/ingestion/DtsIngestionApp.class" /app/app.jar; then \
+      echo >&2 "[build] ERROR: detected ingestion main class inside dts-analytics artifact"; \
+      exit 1; \
+    fi
+RUN chmod +x /docker-entrypoint.sh
+
+EXPOSE 3000
+ENTRYPOINT ["/docker-entrypoint.sh"]

@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260724-07-model-artifact-identity" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_dbt_artifact"/>
+            <not>
+                <columnExists tableName="modeling_dbt_artifact" columnName="artifact_key"/>
+            </not>
+        </preConditions>
+
+        <addColumn tableName="modeling_dbt_artifact">
+            <column name="artifact_key" type="varchar(1024)"/>
+        </addColumn>
+        <sql>
+            UPDATE modeling_dbt_artifact
+               SET artifact_key =
+                   left(
+                       artifact_type || ':' ||
+                       COALESCE(NULLIF(btrim(path), ''), '__legacy__/' || id::text),
+                       990
+                   ) ||
+                   CASE
+                       WHEN char_length(
+                           artifact_type || ':' ||
+                           COALESCE(NULLIF(btrim(path), ''), '__legacy__/' || id::text)
+                       ) > 990
+                       THEN '#' || md5(
+                           artifact_type || ':' ||
+                           COALESCE(NULLIF(btrim(path), ''), '__legacy__/' || id::text)
+                       )
+                       ELSE ''
+                   END;
+        </sql>
+        <addNotNullConstraint
+            tableName="modeling_dbt_artifact"
+            columnName="artifact_key"
+            columnDataType="varchar(1024)"/>
+
+        <dropUniqueConstraint
+            tableName="modeling_dbt_artifact"
+            constraintName="uk_modeling_dbt_artifact_owner_revision"/>
+        <sql>
+            UPDATE modeling_dbt_artifact a
+               SET dbt_unique_id = CASE
+                   WHEN a.node_kind = 'STG'
+                       THEN regexp_replace(i.dbt_unique_id, '([^.]+)$', 'stg_\1')
+                   ELSE i.dbt_unique_id
+               END
+              FROM modeling_model_implementation i
+             WHERE i.model_spec_id = a.model_spec_id
+               AND i.plan_id = a.plan_id;
+        </sql>
+        <addUniqueConstraint
+            tableName="modeling_dbt_artifact"
+            columnNames="model_spec_id,revision,artifact_key"
+            constraintName="uk_modeling_dbt_artifact_revision_key"/>
+
+        <rollback>
+            <dropUniqueConstraint
+                tableName="modeling_dbt_artifact"
+                constraintName="uk_modeling_dbt_artifact_revision_key"/>
+            <sql>
+                UPDATE modeling_dbt_artifact
+                   SET dbt_unique_id = dbt_unique_id || '.' || lower(artifact_type);
+            </sql>
+            <addUniqueConstraint
+                tableName="modeling_dbt_artifact"
+                columnNames="model_spec_id,revision,dbt_unique_id"
+                constraintName="uk_modeling_dbt_artifact_owner_revision"/>
+            <dropColumn tableName="modeling_dbt_artifact" columnName="artifact_key"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

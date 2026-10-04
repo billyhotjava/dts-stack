@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- ============================================================ -->
+    <!-- asset_ownership: 资产归属（部门 → 资产映射）                     -->
+    <!-- ============================================================ -->
+    <changeSet id="20260328-01-create-asset-ownership" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="asset_ownership"/></not>
+        </preConditions>
+        <createTable tableName="asset_ownership">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_id" type="varchar(128)"/>
+            <column name="assigned_by" type="varchar(128)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="asset_ownership"
+                             columnNames="asset_type, asset_id"
+                             constraintName="uq_asset_ownership_type_id"/>
+
+        <createIndex tableName="asset_ownership" indexName="idx_asset_ownership_dept">
+            <column name="owner_dept_code"/>
+        </createIndex>
+        <createIndex tableName="asset_ownership" indexName="idx_asset_ownership_type">
+            <column name="asset_type"/>
+        </createIndex>
+        <createIndex tableName="asset_ownership" indexName="idx_asset_ownership_source">
+            <column name="source_id"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- ============================================================ -->
+    <!-- asset_grant: 资产授权                                         -->
+    <!-- ============================================================ -->
+    <changeSet id="20260328-02-create-asset-grant" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="asset_grant"/></not>
+        </preConditions>
+        <createTable tableName="asset_grant">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_type" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="permission" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_from" type="timestamp"/>
+            <column name="valid_to" type="timestamp"/>
+            <column name="granted_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grant_reason" type="varchar(512)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="asset_grant"
+                             columnNames="asset_type, asset_id, grantee_type, grantee_id, permission"
+                             constraintName="uq_asset_grant_asset_grantee_perm"/>
+
+        <createIndex tableName="asset_grant" indexName="idx_asset_grant_asset">
+            <column name="asset_type"/>
+            <column name="asset_id"/>
+        </createIndex>
+        <createIndex tableName="asset_grant" indexName="idx_asset_grant_grantee">
+            <column name="grantee_type"/>
+            <column name="grantee_id"/>
+        </createIndex>
+        <createIndex tableName="asset_grant" indexName="idx_asset_grant_valid_to">
+            <column name="valid_to"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- ============================================================ -->
+    <!-- asset_permission_audit: 权限审计日志                           -->
+    <!-- ============================================================ -->
+    <changeSet id="20260328-03-create-asset-permission-audit" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="asset_permission_audit"/></not>
+        </preConditions>
+        <createTable tableName="asset_permission_audit">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="action" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)"/>
+            <column name="asset_id" type="varchar(128)"/>
+            <column name="target_user" type="varchar(128)"/>
+            <column name="permission" type="varchar(16)"/>
+            <column name="operator" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="oa_reference" type="varchar(128)"/>
+            <column name="detail" type="${clobType}"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+
+        <createIndex tableName="asset_permission_audit" indexName="idx_asset_perm_audit_action">
+            <column name="action"/>
+        </createIndex>
+        <createIndex tableName="asset_permission_audit" indexName="idx_asset_perm_audit_operator">
+            <column name="operator"/>
+        </createIndex>
+        <createIndex tableName="asset_permission_audit" indexName="idx_asset_perm_audit_target">
+            <column name="target_user"/>
+        </createIndex>
+        <createIndex tableName="asset_permission_audit" indexName="idx_asset_perm_audit_date">
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

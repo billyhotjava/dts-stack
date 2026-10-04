@@ -1,0 +1,56 @@
+dts:
+  mdm:
+    gateway:
+      enabled: ${DTS_MDM_GATEWAY_ENABLED:true}
+      auto-provision-users: ${DTS_MDM_GATEWAY_AUTO_PROVISION_USERS:true}
+      auto-provision-roles: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES:EMPLOYEE}
+      auto-provision-enable-login: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN:true}
+      # 本地组织根节点代码，缺失 parentCode 时会挂到该根下
+      root-code: ${DTS_MDM_GATEWAY_ROOT_CODE:90}
+      # 文件落盘目录（默认在 .env 同级的 data/mdm）
+      storage-path: ${DTS_MDM_GATEWAY_STORAGE_PATH:${DATA_ROOT:-../../data}/mdm}
+      # 专用日志文件路径（默认 logs/dts-admin/mdm-gateway.log）
+      log-path: ${DTS_MDM_GATEWAY_LOG_PATH:${LOG_ROOT:-../../logs}/dts-admin/mdm-gateway.log}
+      # 基本字段（院方示例）
+      registry:
+        sysCode: ${DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE:10XT}
+        dataRange: ${DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE:9010}
+        areaSecurity: ${DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY:9001}
+        areaBusiness: ${DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS:B}
+        dataType: ${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:sync-demand}
+      upstream:
+        # 院方握手/拉取地址 = base-url + pull-path
+        base-url: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:http://localhost:28080}
+        pull-path: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:/api/mdm/pull}
+        auth-token: ${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:}
+        use-multipart: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:true}
+        file-part-name: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:file}
+        file-prefix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:orgItDemand}
+        file-suffix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:.txt}
+        connect-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:5s}
+        read-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:30s}
+        # multipart 附带的表单参数（院方示例）
+        form-params:
+          targetNodeCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_NODE_CODE:9000}
+          targetDomainCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_DOMAIN_CODE:B}
+          targetServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_SERVICE_ID:orgit}
+          sourceServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_SOURCE_SERVICE_ID:WXXXXXDDD}
+          approval: ${DTS_MDM_GATEWAY_UPSTREAM_APPROVAL:1}
+          title: ${DTS_MDM_GATEWAY_UPSTREAM_TITLE:9000}
+          dataType: ${DTS_MDM_GATEWAY_UPSTREAM_DATA_TYPE:9000}
+          securityLevel: ${DTS_MDM_GATEWAY_UPSTREAM_SECURITY_LEVEL:9000}
+          filedType: ${DTS_MDM_GATEWAY_UPSTREAM_FILED_TYPE:9000}
+          version: ${DTS_MDM_GATEWAY_UPSTREAM_VERSION:9000}
+        # JSON 内容（随文件发送），可按需补充或覆盖
+        payload-template:
+          pushMode: ${DTS_MDM_GATEWAY_UPSTREAM_PUSH_MODE:FULL}
+          # 其他字段按需添加
+      callback:
+        url: ${DTS_MDM_GATEWAY_CALLBACK_URL:http://dts-admin:8081/api/mdm/receive}
+        auth-token: ${DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN:}
+        signature-header: ${DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER:X-Signature}
+        allowed-ips: ${DTS_MDM_GATEWAY_CALLBACK_ALLOWED_IPS:}
+      required-fields: ${DTS_MDM_GATEWAY_REQUIRED_FIELDS:orgCode,deptCode,status}
+      required:
+        users: ${DTS_MDM_GATEWAY_REQUIRED_USERS:userCode,userName,deptCode}
+        depts: ${DTS_MDM_GATEWAY_REQUIRED_DEPTS:deptCode,deptName}

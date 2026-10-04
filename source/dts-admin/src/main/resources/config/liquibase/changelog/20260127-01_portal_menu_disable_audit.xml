@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260127-01-portal-menu-disable-audit" author="codex">
+        <comment>Align portal menu disable audit semantics with new DISABLE workflow</comment>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单：{targetRef|未知}"/>
+            <where>url_pattern = '/api/admin/portal/menus/{id}' AND http_method = 'DELETE' AND description_template LIKE '%{targetRef%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单: {path.id}"/>
+            <where>url_pattern = '/api/admin/portal/menus/{id}' AND http_method = 'DELETE' AND description_template LIKE '%{path.id%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单"/>
+            <where>url_pattern = '/api/admin/portal/menus/{id}' AND http_method = 'DELETE' AND description_template NOT LIKE '%{targetRef%' AND description_template NOT LIKE '%{path.id%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;path.id&quot;}"/>
+            <where>url_pattern = '/api/admin/portal/menus/{id}' AND http_method = 'DELETE'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单：{targetRef|未知}"/>
+            <where>url_pattern = '/api/admin/portal-menus/{id}' AND http_method = 'DELETE' AND description_template LIKE '%{targetRef%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单: {path.id}"/>
+            <where>url_pattern = '/api/admin/portal-menus/{id}' AND http_method = 'DELETE' AND description_template LIKE '%{path.id%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="禁用门户菜单"/>
+            <where>url_pattern = '/api/admin/portal-menus/{id}' AND http_method = 'DELETE' AND description_template NOT LIKE '%{targetRef%' AND description_template NOT LIKE '%{path.id%'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="param_extractors" value="{&quot;targetRef&quot;:&quot;path.id&quot;}"/>
+            <where>url_pattern = '/api/admin/portal-menus/{id}' AND http_method = 'DELETE'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

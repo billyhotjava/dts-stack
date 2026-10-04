@@ -1,0 +1,191 @@
+{
+  "checkedAt": "2026-07-04T07:47:08.459Z",
+  "classificationMapping": {
+    "beforeCount": 0,
+    "validate": {
+      "httpStatus": 200,
+      "requestPayload": [
+        {
+          "source": "SPRINT57_IT",
+          "sourceLevel": "L1783151228081",
+          "platformLevel": "INTERNAL"
+        }
+      ],
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "valid": true,
+          "normalizedCount": 1,
+          "conflicts": [],
+          "warnings": []
+        }
+      }
+    },
+    "import": {
+      "httpStatus": 200,
+      "requestPayload": [
+        {
+          "source": "SPRINT57_IT",
+          "sourceLevel": "L1783151228081",
+          "platformLevel": "INTERNAL"
+        }
+      ],
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "imported": 1
+        }
+      }
+    },
+    "exportAfterImport": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": [
+          {
+            "createdBy": "sprint57_it",
+            "createdDate": "2026-07-04T07:47:08.173193Z",
+            "lastModifiedBy": "sprint57_it",
+            "lastModifiedDate": "2026-07-04T07:47:08.173193Z",
+            "id": "a923e152-b627-46eb-9097-02b3f9e4610f",
+            "source": "SPRINT57_IT",
+            "sourceLevel": "L1783151228081",
+            "platformLevel": "INTERNAL"
+          }
+        ]
+      }
+    },
+    "restore": {
+      "httpStatus": 200,
+      "requestPayload": [],
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": []
+      }
+    },
+    "exportAfterRestore": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": []
+      }
+    }
+  },
+  "datasetSecurityMapping": {
+    "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+    "cleanupContext": {
+      "hadResidualMappingBeforeRun": true,
+      "note": "Previous restore attempt failed before CatalogSecurityResource null response fix; this run verifies cleanup now succeeds."
+    },
+    "before": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "dataLevelField": "tenant_id",
+          "deptField": "source_system"
+        }
+      }
+    },
+    "save": {
+      "httpStatus": 200,
+      "requestPayload": {
+        "dataLevelField": "tenant_id",
+        "deptField": "source_system"
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "dataLevelField": "tenant_id",
+          "deptField": "source_system"
+        }
+      }
+    },
+    "after": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "dataLevelField": "tenant_id",
+          "deptField": "source_system"
+        }
+      }
+    },
+    "linkage": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "datasetName": "xycyl_dwd_flowerbiz_main",
+          "classification": "INTERNAL",
+          "requiresMasking": false,
+          "maskingRuleCount": 0,
+          "effectiveRules": [],
+          "mappingMatches": [],
+          "conflict": false,
+          "suggestions": [
+            "当前密级在分类映射中无对应关系，请在“分类映射”中新增来源级别映射。"
+          ]
+        }
+      }
+    },
+    "restore": {
+      "httpStatus": 200,
+      "requestPayload": {
+        "dataLevelField": null,
+        "deptField": null
+      },
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "dataLevelField": null,
+          "deptField": null
+        }
+      }
+    },
+    "final": {
+      "httpStatus": 200,
+      "response": {
+        "status": 200,
+        "message": "OK",
+        "code": null,
+        "data": {
+          "datasetId": "c7217544-ef43-4ff7-bbcc-636f230e39db",
+          "dataLevelField": null,
+          "deptField": null
+        }
+      }
+    },
+    "databaseVerification": {
+      "table": "catalog_dataset_security_mapping",
+      "query": "select dataset_id, data_level_field, dept_field from catalog_dataset_security_mapping where dataset_id = :datasetId",
+      "rowCount": 0,
+      "rows": []
+    }
+  }
+}

@@ -1,0 +1,148 @@
+{
+  "sourceCommit": "30538c203386d8bb5123e6781af77909a075141e",
+  "backend": [
+    {
+      "class": "com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationPostgresTest",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "coldStartWaiterRecoversAfterTheFirstTransactionRollsBack",
+        "tenantsDoNotShareContextsAndLegacyAutomaticContextIsReused",
+        "explicitMalformedOrPartialContextsRemainForStrictDecodersWithoutInitialization",
+        "firstSaveCreatesTheRealPlanAndPolicyAndRetryReusesThem",
+        "failedSaveRollsBackModelContextAndPolicyBeforeRetry",
+        "concurrentDifferentActorsShareOneContext",
+        "defaultReadOnlyContextIsNotReplacedAndAnonymousOrForgedActorsCannotInitialize"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessAdapterTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "preservesBackgroundPlanOwnerFallbackAndFailsClosedForMissingContext",
+        "authenticatedRoleCannotBeBorrowedForAnotherActor",
+        "ordinaryMenuUserCanMaintainPlansAcrossDepartments",
+        "instituteDataOwnerCanMaintainAnyExistingPlan",
+        "deniesCrossTenantAndAnonymousOwnerAccess"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.service.modeling.ModelSpecDomainWriteAccessAdapterTest",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "delegatesReadChecksOnlyForPersistedDomains",
+        "suppliesOnlyPersistedVisibleDomainIdsForRepositoryFiltering",
+        "modelReferenceRequiresDomainVisibilityInsteadOfDomainMaintenance"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuardTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "departmentSuffixCollisionCannotAuthorizeOwnershipTransfer",
+        "departmentMaintainerMayKeepOrTransferOwnershipOnlyInsideTheAuthenticatedDepartment",
+        "instituteMaintainerMayTransferOnlyToARealDirectoryIdentityWithMatchingDepartment",
+        "fakeOwnerIsRejectedButMenuUserMayMaintainAcrossDepartments",
+        "menuAccessDoesNotRequireOwnershipOrDepartmentButRequiresTheAuthenticatedActor",
+        "unchangedOwnerWithoutDepartmentDoesNotRequireDirectoryLookup"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.web.rest.ModelDraftOperationResourceTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "savesTheWholeInitialDraftThroughOneApplicationCommand",
+        "anonymousCannotEnterTheInitializationBoundary",
+        "rejectsImplementationInDefinitionModeBeforeDecoding",
+        "rejectsAnUnsupportedSaveModeBeforeDecodingCommands",
+        "rejectsReservedDefinitionKeysFromExternalRequests",
+        "savesDefinitionOnlyWithoutAnImplementation"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.web.rest.DimensionModelResourceTest",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "failsClosedWhenFailureAuditCannotBePersisted",
+        "createsTheCompleteAtomicCommandWithServerTenantActorAndNoStoreResponse",
+        "requiresAuthenticationForMenuAuthorizedCreationAndRecovery",
+        "writesStrictSanitizedFailureAuditForRejectedCreateCommands",
+        "recoversByCanonicalLowercaseOperationIdAndReturnsFixedAndCurrentRevisions"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.web.rest.ModelSpecResourceTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "returnsRevisionPinnedDependencyGraph",
+        "rejectsInvalidPinnedRevisionPathValuesWithoutResolvingARevision",
+        "previewsAndAppliesExplicitDraftReclassificationWithTheStrongModelEtag",
+        "appliesRevisionPinnedStandardBindingsWithAStrongCurrentEtag",
+        "returnsServerOwnedStageGateDecisions",
+        "returnsTheExactReadablePinnedRevisionWithItsOwnEtag",
+        "deletesDraftsOnlyWithAStrongCurrentEtag",
+        "rejectsUnknownCreateFieldsAndMissingPutPreconditionAtTheBoundary",
+        "savesAnExistingDraftDefinitionWithTheCanonicalEtagAndNoImplementationCommand",
+        "mapsHiddenAndMissingPinnedRevisionsToTheSameNotFoundContract",
+        "archivesActiveModelsWithAStrongCurrentEtag",
+        "postsGetsAndPutsUsingServerTenantAndStrongEtags",
+        "mapsStaleCasTo409WithCurrentVersionDetails"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.web.rest.ModelSpecReservedIdempotencyBoundaryTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "rejectsTheInternalCompositeIdempotencyNamespaceBeforeCallingThePublicService"
+      ]
+    },
+    {
+      "class": "com.yuzhi.dts.platform.service.modeling.ModelDraftSaveApplicationServiceTest",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        "savesDefinitionOnlyThroughTheSameTransactionWithoutStartingLifecycle",
+        "definitionReplayReturnsOriginalDefinitionWithoutStartingLifecycle",
+        "definitionReplayDoesNotInvokeLifecycleAndRejectsChangedDefinition",
+        "commitsTheCompleteDefinitionWithoutAVisualImplementationForDbtManagedModels",
+        "rejectsAReplayWhoseFullModelDefinitionDiffersFromTheRecordedOperation",
+        "commitsCreateFullDefinitionAndFirstImplementationThroughOneTransactionalBoundary",
+        "withImplementationModeStillRejectsAHandAuthoredModelWithoutImplementation",
+        "resumesAnExactCreateReplayFromTheCurrentModelRevision",
+        "rejectsMixedModelContextsBeforeCreatingAnything"
+      ]
+    }
+  ],
+  "frontend": {
+    "tests": 81,
+    "files": 4,
+    "failures": 0,
+    "log": "/tmp/f7-frontend-tests-final.log"
+  },
+  "frontendBuild": "PASS: TypeScript and Chrome95 target; no runtime browser acceptance"
+}

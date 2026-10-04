@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20260912-01-f9-permission-expand" author="codex">
+        <addColumn tableName="portal_sessions"><column name="directory_user_id" type="varchar(128)"/></addColumn>
+        <addColumn tableName="modeling_model_spec">
+            <column name="owner_id" type="varchar(128)"/>
+            <column name="owner_display_name" type="varchar(256)"/>
+        </addColumn>
+        <addColumn tableName="modeling_operational_run_dispatch"><column name="initiator_id" type="varchar(128)"/></addColumn>
+        <sql><![CDATA[
+            CREATE TABLE modeling_model_access (
+                id uuid PRIMARY KEY,
+                tenant_id varchar(128) NOT NULL,
+                model_spec_id uuid NOT NULL,
+                grantee_type varchar(8) NOT NULL CHECK(grantee_type IN ('USER','ROLE')),
+                grantee_id varchar(128) NOT NULL CHECK(btrim(grantee_id) <> ''),
+                grantee_name varchar(256),
+                permission varchar(16) NOT NULL CHECK(permission = 'EDITOR'),
+                granted_by varchar(128) NOT NULL,
+                granted_at timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                revoked_by varchar(128),
+                revoked_at timestamptz,
+                CONSTRAINT fk_modeling_access_model FOREIGN KEY (tenant_id, model_spec_id) REFERENCES modeling_model_spec(tenant_id,id),
+                CONSTRAINT ck_modeling_access_revoke CHECK((revoked_by IS NULL) = (revoked_at IS NULL)),
+                CONSTRAINT ck_modeling_access_role CHECK(grantee_type <> 'ROLE' OR grantee_id IN ('ROLE_DEPT_DATA_OWNER','ROLE_DEPT_LEADER'))
+            );
+            CREATE UNIQUE INDEX uk_modeling_access_active ON modeling_model_access(tenant_id,model_spec_id,grantee_type,grantee_id) WHERE revoked_at IS NULL;
+            CREATE INDEX ix_modeling_access_grantee ON modeling_model_access(tenant_id,grantee_type,grantee_id,model_spec_id) WHERE revoked_at IS NULL;
+            CREATE INDEX ix_modeling_plan_department ON modeling_warehouse_plan(tenant_id,owner_department_id,id);
+        ]]></sql>
+        <rollback><sql>SELECT 1 /* Security expansion is retained on binary rollback; disable modeling until compatible code is restored. */</sql></rollback>
+    </changeSet>
+    <changeSet id="20260912-02-f9-department-default" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_warehouse_plan WHERE owner_department_id IS NULL OR btrim(owner_department_id) = '' OR owner_department_id !~ '^[A-Za-z0-9_:-]+$'</sqlCheck>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM (SELECT tenant_id,owner_department_id FROM modeling_warehouse_plan GROUP BY tenant_id,owner_department_id HAVING count(*) > 1) conflicts</sqlCheck>
+            <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_warehouse_plan WHERE lifecycle_status IN ('PUBLISHED','ARCHIVED')</sqlCheck>
+        </preConditions>
+        <comment>Run F9 directory preflight first. Ambiguous plans require an audited stable-ID mapping; no username guessing. Historical ADS owners no longer block this DDL: they are reviewed via f9-permission-preflight.py (HISTORICAL_ADS_OWNER_REQUIRES_STABLE_DIRECTORY_ID_REVIEW) and resolved through runtime ownership claim or the audited mapping, see changeset 20260912-03-f9-ads-owner-review.</comment>
+        <sql><![CDATA[
+            UPDATE modeling_warehouse_plan SET idempotency_key='modeling-context:dept:' || owner_department_id || ':v1';
+            CREATE UNIQUE INDEX uk_modeling_department_context ON modeling_warehouse_plan(tenant_id,owner_department_id)
+                WHERE idempotency_key LIKE 'modeling-context:dept:%:v1';
+
+        ]]></sql>
+        <rollback><sql>SELECT 1 /* Canonical department identities and ownership are not undone during binary rollback. */</sql></rollback>
+    </changeSet>
+    <changeSet id="20260912-03-f9-ads-owner-review" author="codex">
+        <preConditions onFail="WARN" onError="HALT">
+            <sqlCheck expectedResult="0">SELECT count(*) FROM modeling_model_spec WHERE model_type='APPLICATION' AND (owner_id IS NULL OR btrim(owner_id)='')</sqlCheck>
+        </preConditions>
+        <comment>Review-only check. Historical APPLICATION models created before the owner_id column may stay unresolved at startup: runtime access still falls back to department leader and institute managers, and ownership is claimed on create/reclassify. F9 preflight (f9-permission-preflight.py) keeps reporting HISTORICAL_ADS_OWNER_REQUIRES_STABLE_DIRECTORY_ID_REVIEW until the audited stable-directory-ID mapping is applied. This precondition must not block startup for legacy rows.</comment>
+        <sql>SELECT 1 /* review-only precondition; no schema or data change */</sql>
+        <rollback><sql>SELECT 1 /* review-only precondition; nothing to undo */</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

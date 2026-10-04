@@ -1,0 +1,330 @@
+/* react-grid-layout required styles — DO NOT migrate to Tailwind */
+
+.react-grid-layout {
+  position: relative;
+  transition: height var(--transition-normal);
+}
+
+.react-grid-item {
+  transition: all var(--transition-normal);
+  transition-property: left, top, width, height;
+}
+
+.react-grid-item.cssTransforms {
+  transition-property: transform, width, height;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+}
+
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: var(--color-brand);
+  opacity: 0.2;
+  border-radius: var(--radius-md);
+  transition-duration: var(--transition-fast);
+  z-index: 2;
+  user-select: none;
+}
+
+/* Resize handles */
+.react-grid-item > .react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-repeat: no-repeat;
+  background-origin: content-box;
+  box-sizing: border-box;
+  background-position: bottom right;
+  padding: 0 3px 3px 0;
+}
+
+.react-grid-item > .react-resizable-handle::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 5px;
+  height: 5px;
+  border-right: 2px solid var(--color-text-tertiary);
+  border-bottom: 2px solid var(--color-text-tertiary);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-se {
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-sw {
+  bottom: 0;
+  left: 0;
+  cursor: sw-resize;
+  transform: rotate(90deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-ne {
+  top: 0;
+  right: 0;
+  cursor: ne-resize;
+  transform: rotate(-90deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-nw {
+  top: 0;
+  left: 0;
+  cursor: nw-resize;
+  transform: rotate(180deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-n,
+.react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  left: 50%;
+  margin-left: -10px;
+  cursor: ns-resize;
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-n {
+  top: 0;
+  transform: rotate(225deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-s {
+  bottom: 0;
+  transform: rotate(45deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-e,
+.react-grid-item > .react-resizable-handle.react-resizable-handle-w {
+  top: 50%;
+  margin-top: -10px;
+  cursor: ew-resize;
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-e {
+  right: 0;
+  transform: rotate(-45deg);
+}
+
+.react-grid-item > .react-resizable-handle.react-resizable-handle-w {
+  left: 0;
+  transform: rotate(135deg);
+}
+
+/* Editing grid background */
+.mb-dashboard-grid--editing {
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  border-radius: var(--radius-md);
+}
+
+.mb-dashboard-card {
+  border-color: var(--color-border);
+}
+
+.mb-dashboard-card--selected {
+  border-color: var(--color-brand);
+  box-shadow: 0 0 0 2px rgba(47, 109, 246, .18);
+}
+
+.mb-dashboard-composer {
+  display: grid;
+  grid-template-columns: minmax(210px, 240px) minmax(560px, 1fr) minmax(210px, 240px);
+  gap: 12px;
+  align-items: start;
+}
+
+.mb-dashboard-composer__panel {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--surface-card, #fff);
+}
+
+.mb-dashboard-composer__panel-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.mb-dashboard-composer__panel-caption {
+  margin-top: 2px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: normal;
+}
+
+.mb-dashboard-analysis-library__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 330px);
+  min-height: 260px;
+  margin-top: 12px;
+  overflow-y: auto;
+  margin-bottom: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.mb-dashboard-analysis-library__item {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 28px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 8px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-card, #fff);
+  cursor: grab;
+}
+
+.mb-dashboard-analysis-library__item:hover {
+  border-color: var(--color-brand);
+  background: var(--color-primary-bg, #eaf3ff);
+}
+
+.mb-dashboard-analysis-library__item.is-added {
+  opacity: .58;
+  cursor: default;
+}
+
+.mb-dashboard-analysis-library__icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--color-brand);
+  background: var(--color-primary-bg, #eaf3ff);
+}
+
+.mb-dashboard-analysis-library__meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.mb-dashboard-analysis-library__meta strong,
+.mb-dashboard-analysis-library__meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mb-dashboard-analysis-library__meta span {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.mb-dashboard-component-inspector__name {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mb-dashboard-component-inspector__layout {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.mb-dashboard-component-inspector__layout-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-text-secondary);
+  font-size: 12px;
+}
+
+.mb-dashboard-component-inspector__layout .ant-input-number {
+  width: 100%;
+}
+
+@media (max-width: 1280px) {
+  .mb-dashboard-composer {
+    grid-template-columns: 220px minmax(520px, 1fr);
+  }
+
+  .mb-dashboard-component-inspector {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 900px) {
+  .mb-dashboard-composer {
+    display: block;
+  }
+
+  .mb-dashboard-analysis-library,
+  .mb-dashboard-component-inspector {
+    margin-bottom: 12px;
+  }
+
+  .mb-dashboard-analysis-library__list {
+    max-height: 240px;
+    min-height: 0;
+  }
+}
+
+.mb-simple-grid--editing {
+  background-image:
+    linear-gradient(var(--color-border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  border-radius: var(--radius-md);
+}
+
+/* Hide resize handles when not editing — use parent-level class */
+.relative:not(.mb-dashboard-grid--editing) .react-resizable-handle {
+  display: none;
+}
+
+/* CardGrid responsive fallbacks for 5+ columns (no native Tailwind class) */
+.mb-card-grid--cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.mb-card-grid--cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+@media (max-width: 1200px) {
+  .mb-card-grid--cols-5,
+  .mb-card-grid--cols-6 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 996px) {
+  .mb-card-grid--cols-5,
+  .mb-card-grid--cols-6 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .mb-card-grid--cols-5,
+  .mb-card-grid--cols-6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .mb-card-grid--cols-5,
+  .mb-card-grid--cols-6 {
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+  }
+}

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260517-01-catalog-column-lineage-time-window" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="catalog_column_lineage"/>
+                <not>
+                    <columnExists tableName="catalog_column_lineage" columnName="valid_from"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="catalog_column_lineage">
+            <column name="valid_from" type="timestamp"/>
+            <column name="valid_to" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260517-02-backfill-catalog-column-lineage-valid-from" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="catalog_column_lineage" columnName="valid_from"/>
+        </preConditions>
+        <sql>
+            update catalog_column_lineage
+               set valid_from = coalesce(created_date, last_observed_at, now())
+             where valid_from is null
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260517-03-index-catalog-column-lineage-time-window" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <columnExists tableName="catalog_column_lineage" columnName="valid_from"/>
+                <not>
+                    <indexExists tableName="catalog_column_lineage" indexName="idx_catalog_column_lineage_time_window"/>
+                </not>
+            </and>
+        </preConditions>
+        <createIndex tableName="catalog_column_lineage" indexName="idx_catalog_column_lineage_time_window">
+            <column name="valid_from"/>
+            <column name="valid_to"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

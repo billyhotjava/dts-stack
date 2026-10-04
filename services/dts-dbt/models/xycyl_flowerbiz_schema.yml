@@ -1,0 +1,269 @@
+version: 2
+
+models:
+  # ═══ DWD Canonical 维度表 ═══
+  - name: xycyl_dim_flowerbiz_status
+    description: "报花单状态码 canonical 维度表（v2: 8 状态完整匹配生产分布）"
+    columns:
+      - name: status_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: code
+        description: "状态原始码"
+        tests:
+          - unique: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_biztype
+    description: "报花 bizType canonical 维度表（v2: 移除 amount_direction，因 biz_total_rent 已自带正负号）"
+    columns:
+      - name: biztype_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: code
+        description: "bizType 原始码"
+        tests:
+          - unique: { config: { severity: warn } }
+      - name: biz_category
+        tests:
+          - accepted_values:
+              values: ['lease', 'sale', 'gift', 'baddebt', 'material']
+              config: { severity: warn }
+      - name: prod_volume
+        tests:
+          - accepted_values:
+              values: ['active', 'pilot', 'unused']
+              config: { severity: warn }
+
+  - name: xycyl_dim_flowerbiz_recovery_type
+    description: "回收类型 canonical 维度表（报损/回购/留用，3 个值与生产匹配）"
+    columns:
+      - name: recovery_type_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_change_type
+    description: "变更类型 canonical 维度表（v2: 真实仅 3 个值——纯金额/货物变更/比率调整）"
+    columns:
+      - name: change_type_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_cost_type
+    description: "报花额外费用类型 canonical（v2: 5 类，labels 对齐 title 真实分布）"
+    columns:
+      - name: cost_type_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  # ═══ DWD Alias 维度表 ═══
+  - name: xycyl_dim_flowerbiz_status_alias
+    description: "状态别名表 alias_raw → canonical_code"
+    columns:
+      - name: alias_raw
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_biztype_alias
+    description: "bizType 别名表 alias_raw → canonical_code"
+    columns:
+      - name: alias_raw
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_recovery_type_alias
+    description: "回收类型别名表"
+    columns:
+      - name: alias_raw
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_change_type_alias
+    description: "变更类型别名表"
+    columns:
+      - name: alias_raw
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dim_flowerbiz_cost_type_alias
+    description: "额外费用类型别名表"
+    columns:
+      - name: alias_raw
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  # ═══ DWD 事实表 ═══
+  - name: xycyl_dwd_flowerbiz_main
+    description: "报花单主表事实层（v2: 4 列分类金额——rent/cost/sale/extra；biz_total_rent 已自带正负号）"
+    columns:
+      - name: biz_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_code
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['20', '1', '21', '2', '3', '4', '5', '-1']
+              config: { severity: warn }
+      - name: biz_type
+        tests:
+          - accepted_values:
+              values: ['1', '2', '3', '4', '6', '7', '8', '10', '11', '12']
+              config: { severity: warn }
+      - name: biz_category
+        tests:
+          - accepted_values:
+              values: ['lease', 'sale', 'gift', 'baddebt', 'material']
+              config: { severity: warn }
+      - name: business_date
+        tests:
+          - not_null: { config: { severity: warn } }
+      - name: biz_month
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dwd_flowerbiz_item
+    description: "报花明细事实层（v2: line_rent_total/line_cost_total 派生）"
+    columns:
+      - name: biz_item_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: biz_id
+        tests:
+          - relationships:
+              to: ref('xycyl_dwd_flowerbiz_main')
+              field: biz_id
+              config: { severity: warn }
+
+  - name: xycyl_dwd_flowerbiz_change
+    description: "变更单事实层（v2: 申请/确认双角色；before/after 货物对完整暴露）"
+    columns:
+      - name: change_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: change_type
+        tests:
+          - accepted_values:
+              values: ['1', '2', '3']
+              config: { severity: warn }
+
+  - name: xycyl_dwd_flowerbiz_recovery
+    description: "回收事实层（v2: 主表+明细+报花单 三方 JOIN；recovery_cost_amount 派生）"
+    columns:
+      - name: recovery_item_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: recovery_type
+        tests:
+          - accepted_values:
+              values: ['1', '2', '3']
+              config: { severity: warn }
+
+  - name: xycyl_dwd_flowerbiz_log
+    description: "报花单操作日志事实层（v2: log_biz_type 与 main_biz_type 区分；operation_kind 语义化）"
+    columns:
+      - name: log_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dwd_flowerbiz_extra_cost
+    description: "报花额外费用事实层（v2: cost_type 标签对齐生产 title）"
+    columns:
+      - name: extra_cost_id
+        tests:
+          - unique: { config: { severity: warn } }
+          - not_null: { config: { severity: warn } }
+      - name: cost_type
+        tests:
+          - accepted_values:
+              values: ['1', '2', '3', '4', '5']
+              config: { severity: warn }
+
+  # ═══ DWS 汇总表 ═══
+  - name: xycyl_dws_flowerbiz_project_monthly
+    description: "项目 × 客户 × 月份 × biz_category 汇总（v2: 4 列金额；customer_name 反范式）"
+    columns:
+      - name: period_month
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dws_flowerbiz_customer_monthly
+    description: "客户 × 月份 × biz_category 汇总（v2: 4 列金额；customer_name 反范式）"
+    columns:
+      - name: period_month
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_dws_flowerbiz_curing_user_monthly
+    description: "养护人 × 月份 × biz_category 汇总（v2: 4 列金额）"
+    columns:
+      - name: period_month
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  # ═══ ADS Mart 模型 ═══
+  - name: xycyl_ads_flowerbiz_lease_summary
+    description: "1. 租赁汇总（v2: rent_amount 已自带正负号，自然得到加摆-撤摆净额）"
+    columns:
+      - name: 业务月份
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_ads_flowerbiz_lease_detail
+    description: "2. 租赁明细（v2: 字段对齐 dwd_item，position_full_name/good_norms/good_specs）"
+
+  - name: xycyl_ads_flowerbiz_pending
+    description: "3. 待处理报花单（v2: 4 列金额；urgent/审核时间字段补全）"
+
+  - name: xycyl_ads_flowerbiz_sale_summary
+    description: "4. 销售/赠花汇总（v2: sale_amount 来自 total_amount，gift 仅 cost_amount）"
+    columns:
+      - name: 业务月份
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_ads_flowerbiz_baddebt_summary
+    description: "5. 坏账汇总（v2: 拆 cost_amount/rent_amount 双指标）"
+    columns:
+      - name: 业务月份
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_ads_flowerbiz_change_log
+    description: "6. 变更日志（v2: 完整 before/after 货物对；申请/确认双角色）"
+
+  - name: xycyl_ads_flowerbiz_recovery_detail
+    description: "7. 回收明细（v2: recovery_cost_amount 派生；good_norms/good_specs 补全）"
+
+  - name: xycyl_ads_flowerbiz_curing_workload
+    description: "8. 养护人工作量（v2: 4 列金额——租金净额/处理成本/销售金额）"
+    columns:
+      - name: 业务月份
+        tests:
+          - not_null: { config: { severity: warn } }
+
+  - name: xycyl_ads_flowerbiz_audit_trail
+    description: "9. 审批/操作流水（v2: 用 main.biz_type；operation_kind 语义化）"
+
+  - name: xycyl_ads_flowerbiz_extra_cost_summary
+    description: "10. 报花额外费用汇总（v2: 运费/人工/垃圾清理/其他 4 类，移除 税费 单列）"
+    columns:
+      - name: 业务月份
+        tests:
+          - not_null: { config: { severity: warn } }

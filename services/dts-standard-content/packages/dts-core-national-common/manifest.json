@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "2.0",
+  "packageCode": "dts-core-national-common",
+  "packageName": "国家通用与法定计量基础包",
+  "packageVersion": "1.0.0",
+  "standardNo": "国发〔1984〕28号；GB 3100-1993题录；GB/T 18391.1-2009题录",
+  "category": "国家通用基础",
+  "industry": "COMMON",
+  "releasedAt": "2026-07-29T00:00:00Z",
+  "effectiveFrom": "2026-07-29",
+  "dependencies": [],
+  "replaces": [],
+  "deprecated": false,
+  "sourceRegisterRef": "source-register.json#dts-core-national-common",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "description": "DTS通用枚举、审计数据元与法定计量单位基础集；不包含受版权保护的国家标准全文。",
+  "files": {
+    "01-business-terms.csv": "86ffcb80a1e8fcdf719e90a849dc897f949f3dcb80892b42a170b5b96a8b2964",
+    "02-data-elements.csv": "94ddd95a38a4e21c7431132484b5ae929c527b626683a9b41e741ccd2a0772f1",
+    "03-reference-code-directories.csv": "9847abdbe824f2f266f6186712c8343857e213255439e183b287fb2df27c0305",
+    "04-reference-code-items.csv": "123ab914801f134b3e12ad64fde307b519ad3996b9c0f054ce01d1f77b05d0a9",
+    "06-measurement-units.csv": "b87e8dc507262c724185e7be1884e23229446f206c93013f32650a7acafdcd36",
+    "source-register.json": "64fb9c1bb80a72623355aa6abeadb36e61477589f2705c6102ed63126618ebcc"
+  },
+  "contentChecksum": "d07b18002308910fffb8931d3e61d607f667ae124b8112aa89ee373db3b93c3a"
+}

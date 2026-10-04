@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260922-03-admin-role-stable-key" author="f11" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="admin_role_member"/>
+            <tableExists tableName="admin_role_assignment"/>
+        </preConditions>
+        <comment>
+            Sprint-104 F11-T02：角色成员与授权绑定从 username 键向稳定账号键（issuer/realm+kc_id）
+            演进。新增可空 keycloak_id 列用于双写；username 列与既有唯一约束保持不变，回填与切换
+            由 T08 迁移步骤执行，本 changeSet 不做数据回填、不删约束。只做前向加列。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE admin_role_member ADD COLUMN IF NOT EXISTS keycloak_id VARCHAR(64);
+            ALTER TABLE admin_role_assignment ADD COLUMN IF NOT EXISTS keycloak_id VARCHAR(64);
+            CREATE INDEX IF NOT EXISTS idx_admin_role_member_keycloak_id ON admin_role_member (keycloak_id);
+            CREATE INDEX IF NOT EXISTS idx_admin_role_assignment_keycloak_id ON admin_role_assignment (keycloak_id);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX IF EXISTS idx_admin_role_assignment_keycloak_id;
+                DROP INDEX IF EXISTS idx_admin_role_member_keycloak_id;
+                ALTER TABLE admin_role_assignment DROP COLUMN IF EXISTS keycloak_id;
+                ALTER TABLE admin_role_member DROP COLUMN IF EXISTS keycloak_id;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

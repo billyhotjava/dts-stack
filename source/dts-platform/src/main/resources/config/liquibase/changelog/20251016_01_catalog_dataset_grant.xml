@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251016-01-catalog-dataset-grant" author="codex">
+        <comment>Create catalog_dataset_grant table for dataset user assignments</comment>
+        <createTable tableName="catalog_dataset_grant">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_id" type="varchar(64)"/>
+            <column name="grantee_username" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grantee_name" type="varchar(128)"/>
+            <column name="grantee_dept" type="varchar(64)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="catalog_dataset_grant"
+                                 baseColumnNames="dataset_id"
+                                 constraintName="fk_dataset_grant_dataset"
+                                 referencedTableName="catalog_dataset"
+                                 referencedColumnNames="id"
+                                 deferrable="false"
+                                 initiallyDeferred="false"
+                                 validate="true"/>
+
+        <addUniqueConstraint tableName="catalog_dataset_grant"
+                             columnNames="dataset_id,grantee_id"
+                             constraintName="uk_dataset_grant_dataset_grantee_id"/>
+        <addUniqueConstraint tableName="catalog_dataset_grant"
+                             columnNames="dataset_id,grantee_username"
+                             constraintName="uk_dataset_grant_dataset_grantee_username"/>
+
+        <createIndex indexName="idx_dataset_grant_dataset" tableName="catalog_dataset_grant">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex indexName="idx_dataset_grant_username" tableName="catalog_dataset_grant">
+            <column name="grantee_username"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

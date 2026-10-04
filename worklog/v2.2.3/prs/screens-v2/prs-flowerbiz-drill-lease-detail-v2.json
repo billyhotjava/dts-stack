@@ -1,0 +1,1045 @@
+{
+  "schemaVersion": "1.0",
+  "id": "prs-v2-drill-lease-detail",
+  "name": "花卉租赁报花单明细钻取 V2.2.3",
+  "description": "适配 DTS v2.2.3；内部。依据花卉 V2 模型及已登记 ODS 日志；空金额保留为空，不将未知值视为零。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "autoHeight": false,
+  "backgroundColor": "#0b2f5f",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2022-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectName",
+      "label": "项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "customerName",
+      "label": "客户",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bg-base",
+      "type": "shape",
+      "name": "背景底色",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#0b2f5f",
+        "borderColor": "#0b2f5f",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bg-grid",
+      "type": "richtext",
+      "name": "背景网格",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(12,68,126,.96),rgba(4,22,54,.98));\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);background-size:28px 28px;opacity:.42\"></div><div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(39,216,255,.22),transparent 58%);\"></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "header-clock",
+      "type": "datetime",
+      "name": "当前时间",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "domain-label",
+      "type": "title",
+      "name": "PRS · Flowerbiz Command Center",
+      "x": 24,
+      "y": 26,
+      "width": 420,
+      "height": 20,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS · 花卉租赁业务分析",
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "screen-title",
+      "type": "title",
+      "name": "PRS 报花单明细钻取",
+      "x": 560,
+      "y": 18,
+      "width": 800,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS 报花单明细钻取",
+        "fontSize": 30,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": [
+        {
+          "type": "jump-url",
+          "label": "返回报花执行看板",
+          "panelTitle": "{{name}}",
+          "panelBodyTemplate": "{{name}}",
+          "jumpUrlTemplate": "/bi/screens/18/preview?mode=published&var_dateFrom={{runtime.dateFrom}}&var_dateTo={{runtime.dateTo}}&var_projectName={{runtime.projectName}}&var_customerName={{runtime.customerName}}",
+          "jumpOpenMode": "self"
+        }
+      ]
+    },
+    {
+      "id": "filter-date-range",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1130,
+      "y": 24,
+      "width": 320,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "startVariableKey": "dateFrom",
+        "endVariableKey": "dateTo"
+      }
+    },
+    {
+      "id": "filter-project",
+      "type": "filter-select",
+      "name": "项目",
+      "x": 1468,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目",
+        "variableKey": "projectName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT project_name::text AS label, project_name::text AS value FROM (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) options WHERE project_name IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "filter-customer",
+      "type": "filter-select",
+      "name": "客户",
+      "x": 1640,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "客户",
+        "variableKey": "customerName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff",
+        "_sourceColumns": [
+          {
+            "name": "label",
+            "displayName": "label",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "value",
+            "displayName": "value",
+            "baseType": "type/Text"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "SELECT DISTINCT customer_name::text AS label, customer_name::text AS value FROM (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) options WHERE customer_name IS NOT NULL ORDER BY label",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": []
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "kpi-1",
+      "type": "number-card",
+      "name": "明细行数",
+      "x": 130,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "明细行数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "明细行数",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT COUNT(*) AS \"明细行数\", COUNT(DISTINCT order_id) AS \"单据数\", SUM(requested_quantity) AS \"申请数量\", SUM(finished_quantity) AS \"完成数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "kpi-2",
+      "type": "number-card",
+      "name": "单据数",
+      "x": 550,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "单据数",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "单据数",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT COUNT(*) AS \"明细行数\", COUNT(DISTINCT order_id) AS \"单据数\", SUM(requested_quantity) AS \"申请数量\", SUM(finished_quantity) AS \"完成数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "kpi-3",
+      "type": "number-card",
+      "name": "申请数量",
+      "x": 970,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "申请数量",
+        "value": null,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "申请数量",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT COUNT(*) AS \"明细行数\", COUNT(DISTINCT order_id) AS \"单据数\", SUM(requested_quantity) AS \"申请数量\", SUM(finished_quantity) AS \"完成数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "kpi-4",
+      "type": "number-card",
+      "name": "完成数量",
+      "x": 1390,
+      "y": 112,
+      "width": 360,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "完成数量",
+        "value": null,
+        "suffix": "",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "完成数量",
+        "_sourceColumns": [
+          {
+            "name": "明细行数",
+            "displayName": "明细行数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "单据数",
+            "displayName": "单据数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT COUNT(*) AS \"明细行数\", COUNT(DISTINCT order_id) AS \"单据数\", SUM(requested_quantity) AS \"申请数量\", SUM(finished_quantity) AS \"完成数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "t-detail",
+      "type": "title",
+      "name": "报花单明细",
+      "x": 44,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "报花单明细",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-lease-detail",
+      "type": "table",
+      "name": "报花单明细",
+      "x": 44,
+      "y": 288,
+      "width": 1820,
+      "height": 330,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "报花单号",
+            "alias": "报花单号",
+            "width": 180
+          },
+          {
+            "source": "项目",
+            "alias": "项目",
+            "width": 120
+          },
+          {
+            "source": "客户",
+            "alias": "客户",
+            "width": 120
+          },
+          {
+            "source": "绿植",
+            "alias": "绿植",
+            "width": 120
+          },
+          {
+            "source": "申请数量",
+            "alias": "申请数量",
+            "width": 120
+          },
+          {
+            "source": "完成数量",
+            "alias": "完成数量",
+            "width": 120
+          },
+          {
+            "source": "原始租金值",
+            "alias": "原始租金值",
+            "width": 120
+          },
+          {
+            "source": "原始成本值",
+            "alias": "原始成本值",
+            "width": 120
+          }
+        ],
+        "pageSize": 10,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "报花单号",
+            "displayName": "报花单号",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "项目",
+            "displayName": "项目",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "客户",
+            "displayName": "客户",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/Integer"
+          },
+          {
+            "name": "原始租金值",
+            "displayName": "原始租金值",
+            "baseType": "type/Decimal"
+          },
+          {
+            "name": "原始成本值",
+            "displayName": "原始成本值",
+            "baseType": "type/Decimal"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT order_code AS \"报花单号\", project_name AS \"项目\", customer_name AS \"客户\", green_name AS \"绿植\", requested_quantity AS \"申请数量\", finished_quantity AS \"完成数量\", source_rent AS \"原始租金值\", source_cost AS \"原始成本值\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] ORDER BY business_time DESC,order_item_id DESC LIMIT 300",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "t-plant",
+      "type": "title",
+      "name": "绿植数量 TOP",
+      "x": 44,
+      "y": 650,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "绿植数量 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-plant-top",
+      "type": "table",
+      "name": "绿植数量 TOP",
+      "x": 44,
+      "y": 686,
+      "width": 580,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "绿植",
+            "alias": "绿植",
+            "width": 180
+          },
+          {
+            "source": "申请数量",
+            "alias": "申请数量",
+            "width": 120
+          },
+          {
+            "source": "完成数量",
+            "alias": "完成数量",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "绿植",
+            "displayName": "绿植",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "完成数量",
+            "displayName": "完成数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT green_name AS \"绿植\", SUM(requested_quantity) AS \"申请数量\", SUM(finished_quantity) AS \"完成数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] GROUP BY green_name ORDER BY SUM(requested_quantity) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "t-position",
+      "type": "title",
+      "name": "摆位 TOP",
+      "x": 672,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "摆位 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-position-top",
+      "type": "table",
+      "name": "摆位 TOP",
+      "x": 650,
+      "y": 686,
+      "width": 560,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "摆位",
+            "alias": "摆位",
+            "width": 180
+          },
+          {
+            "source": "明细数",
+            "alias": "明细数",
+            "width": 120
+          },
+          {
+            "source": "申请数量",
+            "alias": "申请数量",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "摆位",
+            "displayName": "摆位",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "申请数量",
+            "displayName": "申请数量",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT COALESCE(position_name,position_id::text) AS \"摆位\", COUNT(*) AS \"明细数\", SUM(requested_quantity) AS \"申请数量\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] GROUP BY COALESCE(position_name,position_id::text) ORDER BY COUNT(*) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    },
+    {
+      "id": "t-user",
+      "type": "title",
+      "name": "养护人经手 TOP",
+      "x": 1280,
+      "y": 650,
+      "width": 300,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "养护人经手 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-user-top",
+      "type": "table",
+      "name": "养护人经手 TOP",
+      "x": 1266,
+      "y": 686,
+      "width": 590,
+      "height": 310,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "经手养护人",
+            "alias": "经手养护人",
+            "width": 180
+          },
+          {
+            "source": "报花单数",
+            "alias": "报花单数",
+            "width": 120
+          },
+          {
+            "source": "明细数",
+            "alias": "明细数",
+            "width": 120
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "bodyBackground": "rgba(9,36,90,0.50)",
+        "oddRowBackground": "rgba(9,36,90,0.50)",
+        "evenRowBackground": "rgba(88,180,255,0.08)",
+        "_sourceColumns": [
+          {
+            "name": "经手养护人",
+            "displayName": "经手养护人",
+            "baseType": "type/Text"
+          },
+          {
+            "name": "报花单数",
+            "displayName": "报花单数",
+            "baseType": "type/BigInteger"
+          },
+          {
+            "name": "明细数",
+            "displayName": "明细数",
+            "baseType": "type/BigInteger"
+          }
+        ]
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": 1,
+          "query": "WITH b AS (SELECT a.*,o.order_code,o.curing_user_name,c.customer_name,p.alias_name AS position_name,CASE o.order_type WHEN 1 THEN '换花' WHEN 2 THEN '加花' WHEN 3 THEN '减花' WHEN 4 THEN '调花' WHEN 6 THEN '坏账' WHEN 7 THEN '售花' WHEN 8 THEN '赠花' WHEN 10 THEN '辅料' WHEN 11 THEN '加盆架' WHEN 12 THEN '减盆架' ELSE '未知' END AS type_name FROM public.prs_v2_ads_lease_detail a JOIN public.prs_v2_dwd_flower_order o ON o.order_id=a.order_id AND o.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_customer c ON c.customer_id=a.customer_id AND c.tenant_id IS NOT DISTINCT FROM a.tenant_id LEFT JOIN public.prs_v2_dwd_position p ON p.position_id=a.position_id AND p.tenant_id IS NOT DISTINCT FROM a.tenant_id WHERE a.is_effective AND o.is_effective) SELECT curing_user_name AS \"经手养护人\", COUNT(DISTINCT order_id) AS \"报花单数\", COUNT(*) AS \"明细数\" FROM b WHERE business_time >= {{dateFrom}}::date AND business_time < ({{dateTo}}::date + INTERVAL '1 day') [[AND project_name = {{projectName}}]] [[AND customer_name = {{customerName}}]] GROUP BY curing_user_name ORDER BY COUNT(DISTINCT order_id) DESC LIMIT 100",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "customerName",
+              "variableKey": "customerName"
+            }
+          ]
+        },
+        "sourceType": "sql"
+      }
+    }
+  ],
+  "backgroundImage": null,
+  "pages": [],
+  "domainId": "c90dfed4-7060-4c3d-9f2f-9d2501176df0"
+}

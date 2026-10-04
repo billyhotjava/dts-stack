@@ -1,0 +1,51 @@
+#!/bin/bash
+# Package Thales Metro dbt_model for DTS UI import.
+set -e
+
+DIST_DIR="$(cd "$(dirname "$0")" && pwd)"
+SRC_DIR="$DIST_DIR/dbt_model"
+ZIP_FILE="$DIST_DIR/thales-metro-dbt-model.zip"
+
+if [ ! -d "$SRC_DIR" ]; then
+  echo "[ERROR] 源目录不存在: $SRC_DIR" >&2
+  exit 1
+fi
+
+if [ ! -f "$SRC_DIR/models.tsv" ]; then
+  echo "[ERROR] 缺少模型清单文件: $SRC_DIR/models.tsv" >&2
+  echo "        UI 导入需要 models.tsv，请先生成或恢复该文件" >&2
+  exit 1
+fi
+
+if [ ! -f "$SRC_DIR/ods_ddl/ods_create_tables.sql" ]; then
+  echo "[ERROR] 缺少 ODS 初始化建表 SQL: $SRC_DIR/ods_ddl/ods_create_tables.sql" >&2
+  exit 1
+fi
+
+rm -f "$ZIP_FILE"
+
+echo "=== 打包 Thales Metro dbt_model ==="
+cd "$DIST_DIR"
+zip -r "$ZIP_FILE" "dbt_model" \
+  -x 'dbt_model/target/*' \
+  -x 'dbt_model/logs/*' \
+  -x 'dbt_model/dbt_packages/*' \
+  -x 'dbt_model/.*' \
+  -x '*/.DS_Store'
+
+echo ""
+echo "--- 校验 zip 内容 ---"
+unzip -l "$ZIP_FILE" | grep -q 'dbt_model/models\.tsv$' || {
+  echo "[ERROR] 打包后 zip 未包含 models.tsv，构建失败" >&2
+  exit 1
+}
+unzip -l "$ZIP_FILE" | grep -q 'dbt_model/ods_ddl/ods_create_tables\.sql$' || {
+  echo "[ERROR] 打包后 zip 未包含 ODS 建表 SQL，构建失败" >&2
+  exit 1
+}
+echo "  -> dbt_model/models.tsv ✓"
+echo "  -> dbt_model/ods_ddl/ods_create_tables.sql ✓"
+
+echo ""
+echo "=== 完成 ==="
+ls -lh "$ZIP_FILE"

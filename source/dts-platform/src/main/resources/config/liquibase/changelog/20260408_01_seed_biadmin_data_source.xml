@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260408-01-seed-biadmin-ds" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM infra_data_source WHERE jdbc_url LIKE '%/biadmin%'
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed the biadmin data warehouse so analytics DataLakeDatabaseInitializer can auto-register it</comment>
+        <insert tableName="infra_data_source">
+            <column name="id" value="a0000000-0000-0000-0000-000000000001"/>
+            <column name="name" value="数据仓库 (biadmin)"/>
+            <column name="type" value="POSTGRESQL"/>
+            <column name="jdbc_url" value="jdbc:postgresql://dts-pg:5432/biadmin"/>
+            <column name="username" value="biadmin"/>
+            <column name="description" value="内置数据湖，用于存储建模输出与上传数据"/>
+            <column name="status" value="ACTIVE"/>
+        </insert>
+    </changeSet>
+</databaseChangeLog>

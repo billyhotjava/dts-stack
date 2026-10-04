@@ -1,0 +1,278 @@
+.wf-node {
+	position: relative;
+	width: 220px;
+	min-height: 94px;
+	padding: 12px;
+	border: 1px solid #e2e8f0;
+	border-top: 3px solid #64748b;
+	border-radius: 8px;
+	background-color: #ffffff;
+	box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+	color: #0f172a;
+	font-size: 12px;
+	outline: none;
+}
+
+.wf-node-basic {
+	border-top-color: #10b981;
+}
+
+.wf-node-source {
+	border-top-color: #3b82f6;
+}
+
+.wf-node-transform {
+	border-top-color: #a855f7;
+}
+
+.wf-node-validate {
+	border-top-color: #f59e0b;
+}
+
+.wf-node-sink {
+	border-top-color: #ef4444;
+}
+
+.wf-node-selected,
+.wf-node:focus-visible {
+	border-color: #3b82f6;
+	box-shadow:
+		0 0 0 2px rgba(59, 130, 246, 0.22),
+		0 10px 20px rgba(15, 23, 42, 0.1);
+}
+
+.wf-node-dragging {
+	opacity: 0.72;
+}
+
+.wf-node-error {
+	border-color: #ef4444;
+	box-shadow:
+		0 0 0 2px rgba(239, 68, 68, 0.18),
+		0 8px 18px rgba(15, 23, 42, 0.08);
+}
+
+.wf-node-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.wf-node-icon {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	justify-content: center;
+}
+
+.wf-node-title {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wf-node-status,
+.wf-node-classification,
+.wf-node-tag {
+	display: inline-flex;
+	flex: 0 0 auto;
+	align-items: center;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 4px;
+	background-color: #f1f5f9;
+	color: #475569;
+	font-size: 11px;
+	line-height: 20px;
+}
+
+.wf-node-status[data-status="running"] {
+	background-color: #dbeafe;
+	color: #1d4ed8;
+}
+
+.wf-node-status[data-status="success"] {
+	background-color: #dcfce7;
+	color: #15803d;
+}
+
+.wf-node-status[data-status="error"] {
+	background-color: #fee2e2;
+	color: #b91c1c;
+}
+
+.wf-node-classification {
+	background-color: #fef3c7;
+	color: #92400e;
+}
+
+.wf-node-tag-warn,
+.wf-node-mode-overwrite,
+.wf-node-strategy-rollback {
+	background-color: #fee2e2;
+	color: #b91c1c;
+}
+
+.wf-node-mode-upsert {
+	background-color: #dbeafe;
+	color: #1d4ed8;
+}
+
+.wf-node-strategy-silent {
+	background-color: #e2e8f0;
+	color: #334155;
+}
+
+.wf-node-body {
+	margin-top: 10px;
+}
+
+.wf-node-summary {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+	color: #334155;
+	line-height: 1.5;
+}
+
+.wf-node-summary-block {
+	display: block;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wf-node-muted,
+.wf-node-placeholder {
+	color: #64748b;
+}
+
+.wf-node-placeholder {
+	font-style: normal;
+}
+
+.wf-node-error-message {
+	margin-top: 8px;
+	color: #b91c1c;
+	font-size: 11px;
+}
+
+.wf-node-handle {
+	width: 10px;
+	height: 10px;
+	border: 2px solid #94a3b8;
+	background-color: #ffffff;
+}
+
+.wf-node-handle-in {
+	left: -6px;
+}
+
+.wf-node-output {
+	position: absolute;
+	right: -6px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	transform: translateY(-50%);
+}
+
+.wf-node-output-label {
+	position: absolute;
+	right: 14px;
+	max-width: 56px;
+	overflow: hidden;
+	color: currentcolor;
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.wf-node-handle-out {
+	position: relative;
+	right: 0;
+	transform: none;
+}
+
+.wf-node-plus-wrap {
+	position: absolute;
+	top: 50%;
+	right: -44px;
+	z-index: 4;
+	transform: translateY(-50%);
+}
+
+.wf-node-plus {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	border: 1px solid #cbd5e1;
+	border-radius: 50%;
+	background-color: #ffffff;
+	color: #475569;
+	font-size: 16px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.wf-node-plus:hover,
+.wf-node-plus:focus-visible {
+	border-color: #3b82f6;
+	color: #1d4ed8;
+	outline: none;
+	box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.18);
+}
+
+.wf-node-plus-popover {
+	position: absolute;
+	top: -8px;
+	left: 32px;
+	z-index: 20;
+}
+
+.wf-note-node {
+	padding: 12px;
+	border: 1px solid rgba(146, 64, 14, 0.22);
+	border-radius: 8px;
+	box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+	color: #3f2f12;
+	font-size: 13px;
+	line-height: 1.5;
+	white-space: pre-wrap;
+	outline: none;
+}
+
+.wf-note-node-selected,
+.wf-note-node:focus-visible {
+	border-color: #f59e0b;
+	box-shadow:
+		0 0 0 2px rgba(245, 158, 11, 0.22),
+		0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.wf-note-node-dragging {
+	opacity: 0.72;
+}
+
+.wf-note-content {
+	min-height: 72px;
+}
+
+.wf-note-editor {
+	width: 100%;
+	min-height: 92px;
+	border: 0;
+	background-color: transparent;
+	color: inherit;
+	font: inherit;
+	resize: vertical;
+	outline: none;
+}

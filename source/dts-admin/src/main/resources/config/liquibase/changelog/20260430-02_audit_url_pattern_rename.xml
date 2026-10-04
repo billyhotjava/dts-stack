@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Audit URL rename: /api/audit-logs → /api/audit-entries.
+
+        The Java endpoints (AuditEntryResource, SecurityAuditEntryProxyResource) and the
+        admin/platform front-ends were updated to the new URL. The audit_operation_mapping
+        seed rows still carry the old url_pattern strings (planted across changelogs
+        20251015-01 / -02 / -07, 20251018-06, 20251021-02, 20251220-02). Update them in
+        place so OperationMappingEngine resolves real traffic to the right rule rows.
+
+        Note: this is a content update on existing rows — no schema change. Idempotent
+        because the WHERE clause becomes a no-op once applied.
+    -->
+    <changeSet id="20260430-02-audit-url-pattern-rename" author="codex">
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries"/>
+            <where>url_pattern = '/api/audit-logs'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries/{id}"/>
+            <where>url_pattern = '/api/audit-logs/{id}'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries/export"/>
+            <where>url_pattern = '/api/audit-logs/export'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries/categories"/>
+            <where>url_pattern = '/api/audit-logs/categories'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries/modules"/>
+            <where>url_pattern = '/api/audit-logs/modules'</where>
+        </update>
+        <update tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/audit-entries/groups"/>
+            <where>url_pattern = '/api/audit-logs/groups'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

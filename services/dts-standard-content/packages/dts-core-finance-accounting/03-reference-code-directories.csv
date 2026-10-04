@@ -1,0 +1,4 @@
+code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version
+,ACCOUNTING_ELEMENT_DTS,企业会计要素分类,DTS参考,财务会计,VARCHAR,1,,1.0.0
+,DEBIT_CREDIT_DIRECTION_DTS,借贷方向,DTS参考,财务会计,VARCHAR,1,,1.0.0
+,CURRENCY_GBT12406_STARTER,表示货币的代码起步子集,GB/T 12406-2022参考,财务会计,CHAR,1,,2022-starter

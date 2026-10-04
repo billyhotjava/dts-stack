@@ -1,0 +1,7 @@
+import SemanticWorkspacePage, { type SemanticModelingSection } from "@/pages/metrics/semantic/SemanticWorkspacePage";
+
+export type { SemanticModelingSection };
+
+export default function SemanticModelingCenterPage({ section = "overview" }: { section?: SemanticModelingSection }) {
+	return <SemanticWorkspacePage section={section} />;
+}

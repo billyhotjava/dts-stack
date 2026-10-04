@@ -1,0 +1,51 @@
+ARG RUNTIME_BASE_IMAGE=eclipse-temurin:21-jre
+FROM ${RUNTIME_BASE_IMAGE}
+
+ARG UBUNTU_PORTS_MIRROR=https://mirrors.aliyun.com/ubuntu-ports
+ARG UBUNTU_ARCHIVE_MIRROR=https://mirrors.aliyun.com/ubuntu
+RUN set -eux; \
+    ARCH=$(dpkg --print-architecture); \
+    case "$ARCH" in \
+      arm*|aarch64) MIRROR="${UBUNTU_PORTS_MIRROR}";; \
+      *) MIRROR="${UBUNTU_ARCHIVE_MIRROR}";; \
+    esac; \
+    MIRROR="${MIRROR%/}"; \
+    printf '%s\n' \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble noble-updates noble-backports" \
+      "Components: main universe restricted multiverse" \
+      "Trusted: yes" \
+      "" \
+      "Types: deb" \
+      "URIs: ${MIRROR}/" \
+      "Suites: noble-security" \
+      "Components: main universe restricted multiverse" \
+      "Trusted: yes" \
+      > /etc/apt/sources.list.d/ubuntu.sources
+RUN printf '%s\n' \
+      'APT::Get::AllowUnauthenticated "true";' \
+      'Acquire::AllowInsecureRepositories "true";' \
+      'Acquire::AllowDowngradeToInsecureRepositories "true";' \
+      'Acquire::https::Verify-Peer "false";' \
+      'Acquire::https::Verify-Host "false";' \
+      > /etc/apt/apt.conf.d/99allow-insecure
+
+ENV TZ=Asia/Shanghai \
+    LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    JAVA_OPTS="-Djava.security.egd=file:/dev/./urandom -XX:MaxRAMPercentage=75.0"
+
+RUN set -eux; \
+    apt-get -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true update || true; \
+    apt-get install -y --no-install-recommends tzdata ca-certificates curl; \
+    cp /usr/share/zoneinfo/$TZ /etc/localtime; \
+    echo $TZ > /etc/timezone; \
+    rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY builds/dts-platform/dts-platform.jar /app/app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

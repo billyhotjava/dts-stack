@@ -1,0 +1,57 @@
+{
+  "model_count": 31,
+  "layers": {
+    "ADS": 9,
+    "DWD": 17,
+    "DWS": 5
+  },
+  "source_count": 19,
+  "dbt_parse": "PASS",
+  "zip_files": 39,
+  "zip_bytes": 142698,
+  "sha256": "ca29c0f1ef90a143e7d05d81301a5cba607d77533b066c0d1e123ce2476ad1fc",
+  "materialized": true,
+  "business_query_tests_executed": false,
+  "source_schema_read": true,
+  "page_import": "SUCCESS",
+  "classification": "INTERNAL",
+  "materialization_status": "BLOCKED",
+  "update_summary": {
+    "selected": 31,
+    "pending": 0,
+    "succeeded": 0,
+    "created": 0,
+    "updated": 0,
+    "skipped": 0,
+    "failed": 7,
+    "blocked": 24
+  },
+  "initial_import_summary": {
+    "selected": 31,
+    "pending": 0,
+    "succeeded": 31,
+    "created": 31,
+    "updated": 0,
+    "skipped": 0,
+    "failed": 0,
+    "blocked": 0
+  },
+  "current_import_summary": {
+    "selected": 31,
+    "pending": 0,
+    "succeeded": 17,
+    "created": 0,
+    "updated": 17,
+    "skipped": 14,
+    "failed": 0,
+    "blocked": 0
+  },
+  "materialization_models": 31,
+  "physical_relations_verified": 31,
+  "published": false,
+  "publication_status": "BLOCKED_GOVERNANCE_QUALITY_START",
+  "publication_error": "MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED",
+  "classification_bindings": {
+    "INTERNAL": 572
+  }
+}

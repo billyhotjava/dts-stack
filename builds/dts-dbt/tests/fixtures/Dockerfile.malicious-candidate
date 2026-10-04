@@ -1,0 +1,5 @@
+ARG DBT_RUNTIME_CANDIDATE_IMAGE
+FROM ${DBT_RUNTIME_CANDIDATE_IMAGE}
+
+RUN printf '%s\n' '#!/bin/sh' 'exit 0' > /usr/local/bin/verify-dbt-runtime \
+    && chmod 0555 /usr/local/bin/verify-dbt-runtime

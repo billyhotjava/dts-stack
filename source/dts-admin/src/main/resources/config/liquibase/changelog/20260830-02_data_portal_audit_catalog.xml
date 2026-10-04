@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260830-02-data-portal-audit-catalog" author="codex">
+        <comment>登记数据门户浏览和编排动作，避免目录与内容绑定变更落入通用兜底分类</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            ) VALUES (
+                'analytics',
+                'analytics.data-portal',
+                '数据门户',
+                'analytics',
+                'analytics',
+                TRUE,
+                35,
+                'data-portal-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            ) VALUES
+                ('analytics', 'ANALYTICS_DATA_PORTAL_READ', 'analytics.data-portal', '数据门户',
+                 'ANALYTICS_DATA_PORTAL_READ', '查看数据门户', 'QUERY', 'DATA_PORTAL', TRUE, TRUE,
+                 'data-portal-v1', CURRENT_TIMESTAMP),
+                ('analytics', 'ANALYTICS_DATA_PORTAL_CREATE', 'analytics.data-portal', '数据门户',
+                 'ANALYTICS_DATA_PORTAL_CREATE', '新增门户目录或内容', 'CREATE', 'DATA_PORTAL', TRUE, TRUE,
+                 'data-portal-v1', CURRENT_TIMESTAMP),
+                ('analytics', 'ANALYTICS_DATA_PORTAL_UPDATE', 'analytics.data-portal', '数据门户',
+                 'ANALYTICS_DATA_PORTAL_UPDATE', '修改门户目录', 'UPDATE', 'DATA_PORTAL', FALSE, TRUE,
+                 'data-portal-v1', CURRENT_TIMESTAMP),
+                ('analytics', 'ANALYTICS_DATA_PORTAL_DELETE', 'analytics.data-portal', '数据门户',
+                 'ANALYTICS_DATA_PORTAL_DELETE', '移除门户目录或内容', 'DELETE', 'DATA_PORTAL', FALSE, TRUE,
+                 'data-portal-v1', CURRENT_TIMESTAMP)
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- 审计分类属于持久证据元数据，镜像回滚时保留。
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

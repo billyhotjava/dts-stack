@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+      Sprint-41 / F1-T01: 语义模型受控模式开关（绞杀者）。
+      新增 governance_mode 列（CONTROLLED | PERMISSIVE）。
+      存量行经 defaultValue 回填 PERMISSIVE（行为字节不变）；新建模型由 service 默认 CONTROLLED。
+    -->
+    <changeSet id="20260616_01_semantic_model_governance_mode" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="semantic_model"/>
+            <not><columnExists tableName="semantic_model" columnName="governance_mode"/></not>
+        </preConditions>
+        <addColumn tableName="semantic_model">
+            <column name="governance_mode" type="varchar(32)" defaultValue="PERMISSIVE"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

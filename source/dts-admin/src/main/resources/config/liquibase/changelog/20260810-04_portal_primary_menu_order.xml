@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-04-portal-primary-menu-order" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="name"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="sort_order"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="cfg_key"/>
+            <columnExists tableName="system_config" columnName="cfg_value"/>
+        </preConditions>
+        <comment>
+            统一平台门户与管理端菜单树的一级顺序：数据集成、数仓规划、数据建模、数据开发与运维、
+            数据治理、数据分析与服务。仅更新七个内置根菜单的排序，保留菜单 ID、父子关系和角色可见性绑定。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'sprint87-portal-primary-menu-order';
+                snapshot_key CONSTANT VARCHAR := 'portal.menu.primary.order.snapshot.20260810-04';
+                seed_hash CONSTANT VARCHAR := '5724f69e330b5d6d66f5885eb4efcda0b7e98d17f40aa98d249d865f9aef8e58';
+                previous_seed_hash TEXT;
+                menu_snapshot JSONB;
+                root_count INTEGER;
+                root_key_count INTEGER;
+                updated_count INTEGER;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:primary-order:20260810-04', 0));
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'Portal primary-menu order snapshot already exists: %', snapshot_key;
+                END IF;
+
+                SELECT jsonb_agg(
+                           jsonb_build_object(
+                               'id', roots.id,
+                               'key', roots.menu_key,
+                               'sortOrder', roots.sort_order
+                           )
+                           ORDER BY roots.id
+                       ),
+                       COUNT(*),
+                       COUNT(DISTINCT roots.menu_key)
+                  INTO menu_snapshot, root_count, root_key_count
+                  FROM (
+                      SELECT id,
+                             sort_order,
+                             COALESCE(
+                                 NULLIF(metadata::jsonb ->> 'key', ''),
+                                 CASE name
+                                     WHEN 'sys.nav.portal.workbench' THEN 'workbench'
+                                     WHEN 'sys.nav.portal.dataIntegration' THEN 'resource'
+                                     WHEN 'sys.nav.portal.dataArchitecture' THEN 'data-architecture'
+                                     WHEN 'sys.nav.portal.studioDataModeling' THEN 'modeling'
+                                     WHEN 'sys.nav.portal.studioCenter' THEN 'studio'
+                                     WHEN 'sys.nav.portal.governanceOperations' THEN 'governance'
+                                     WHEN 'sys.nav.portal.dataConsumption' THEN 'consumption'
+                                 END
+                             ) AS menu_key
+                        FROM portal_menu
+                       WHERE parent_id IS NULL
+                         AND deleted = FALSE
+                  ) roots
+                 WHERE roots.menu_key IN (
+                     'workbench', 'resource', 'data-architecture', 'modeling',
+                     'studio', 'governance', 'consumption'
+                 );
+
+                IF root_count <> 7 OR root_key_count <> 7 THEN
+                    RAISE EXCEPTION
+                        'Portal primary-menu order requires exactly seven distinct built-in roots; found % rows / % keys',
+                        root_count,
+                        root_key_count;
+                END IF;
+
+                SELECT cfg_value
+                  INTO previous_seed_hash
+                  FROM system_config
+                 WHERE cfg_key = 'portal.menu.seed.hash';
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key,
+                    jsonb_build_object('seedHash', previous_seed_hash, 'menus', menu_snapshot)::TEXT,
+                    'Rollback snapshot for portal primary-menu order',
+                    'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Portal primary-menu order rollback snapshot', 'RUNTIME', FALSE, 'platform',
+                    actor, now(), actor, now()
+                );
+
+                WITH desired(menu_key, desired_order) AS (
+                    VALUES
+                        ('workbench', 1),
+                        ('resource', 2),
+                        ('data-architecture', 3),
+                        ('modeling', 4),
+                        ('studio', 5),
+                        ('governance', 6),
+                        ('consumption', 7)
+                ), targets AS (
+                    SELECT menu.id, desired.desired_order
+                      FROM portal_menu menu
+                      JOIN desired
+                        ON desired.menu_key = COALESCE(
+                            NULLIF(menu.metadata::jsonb ->> 'key', ''),
+                            CASE menu.name
+                                WHEN 'sys.nav.portal.workbench' THEN 'workbench'
+                                WHEN 'sys.nav.portal.dataIntegration' THEN 'resource'
+                                WHEN 'sys.nav.portal.dataArchitecture' THEN 'data-architecture'
+                                WHEN 'sys.nav.portal.studioDataModeling' THEN 'modeling'
+                                WHEN 'sys.nav.portal.studioCenter' THEN 'studio'
+                                WHEN 'sys.nav.portal.governanceOperations' THEN 'governance'
+                                WHEN 'sys.nav.portal.dataConsumption' THEN 'consumption'
+                            END
+                        )
+                     WHERE menu.parent_id IS NULL
+                       AND menu.deleted = FALSE
+                )
+                UPDATE portal_menu menu
+                   SET sort_order = targets.desired_order,
+                       last_modified_by = actor,
+                       last_modified_date = now()
+                  FROM targets
+                 WHERE menu.id = targets.id;
+
+                GET DIAGNOSTICS updated_count = ROW_COUNT;
+                IF updated_count <> 7 THEN
+                    RAISE EXCEPTION 'Portal primary-menu order expected seven updates, updated %', updated_count;
+                END IF;
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                    UPDATE system_config
+                       SET cfg_value = seed_hash,
+                           description = COALESCE(NULLIF(description, ''), 'Portal menu seed hash'),
+                           last_modified_by = actor,
+                           last_modified_date = now()
+                     WHERE cfg_key = 'portal.menu.seed.hash';
+                ELSE
+                    INSERT INTO system_config (
+                        cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                        display_name, config_scope, restart_required, owner, created_by, created_date,
+                        last_modified_by, last_modified_date
+                    ) VALUES (
+                        'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                        'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                    );
+                END IF;
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'sprint87-portal-primary-menu-order';
+                    snapshot_key CONSTANT VARCHAR := 'portal.menu.primary.order.snapshot.20260810-04';
+                    snapshot JSONB;
+                    previous_seed_hash TEXT;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:primary-order:20260810-04', 0));
+
+                    SELECT cfg_value::jsonb
+                      INTO snapshot
+                      FROM system_config
+                     WHERE cfg_key = snapshot_key;
+
+                    IF snapshot IS NULL OR jsonb_typeof(snapshot -> 'menus') <> 'array' THEN
+                        RAISE EXCEPTION 'Portal primary-menu order rollback snapshot is missing: %', snapshot_key;
+                    END IF;
+
+                    WITH saved AS (
+                        SELECT (item ->> 'id')::BIGINT AS id,
+                               (item ->> 'sortOrder')::INTEGER AS sort_order
+                          FROM jsonb_array_elements(snapshot -> 'menus') item
+                    )
+                    UPDATE portal_menu menu
+                       SET sort_order = saved.sort_order,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                      FROM saved
+                     WHERE menu.id = saved.id;
+
+                    previous_seed_hash := snapshot ->> 'seedHash';
+                    IF previous_seed_hash IS NULL THEN
+                        DELETE FROM system_config
+                         WHERE cfg_key = 'portal.menu.seed.hash'
+                           AND last_modified_by = actor;
+                    ELSIF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                        UPDATE system_config
+                           SET cfg_value = previous_seed_hash,
+                               last_modified_by = actor || '-rollback',
+                               last_modified_date = now()
+                         WHERE cfg_key = 'portal.menu.seed.hash';
+                    ELSE
+                        INSERT INTO system_config (
+                            cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                            display_name, config_scope, restart_required, owner, created_by, created_date,
+                            last_modified_by, last_modified_date
+                        ) VALUES (
+                            'portal.menu.seed.hash', previous_seed_hash, 'Portal menu seed hash',
+                            'SYSTEM', FALSE, 'STRING', FALSE, 0, 'Portal menu seed hash', 'RUNTIME', FALSE,
+                            'platform', actor || '-rollback', now(), actor || '-rollback', now()
+                        );
+                    END IF;
+
+                    DELETE FROM system_config WHERE cfg_key = snapshot_key;
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

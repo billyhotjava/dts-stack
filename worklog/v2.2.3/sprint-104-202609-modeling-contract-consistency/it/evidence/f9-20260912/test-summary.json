@@ -1,0 +1,379 @@
+{
+  "backend": {
+    "sha": "a37c3b6988ffe065668fe0f0c126f48974224846",
+    "status": "PASS",
+    "tests": 230,
+    "platformTests": 217,
+    "adminTests": 13,
+    "suites": [
+      {
+        "name": "com.yuzhi.dts.platform.security.modeling.ModelingDirectoryDeadlineTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.729
+      },
+      {
+        "name": "com.yuzhi.dts.platform.security.modeling.ModelingIdentityFilterTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.398
+      },
+      {
+        "name": "com.yuzhi.dts.platform.security.modeling.ModelingIdentityServiceTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.038
+      },
+      {
+        "name": "com.yuzhi.dts.platform.security.session.PortalSessionConcurrencyTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 11.9
+      },
+      {
+        "name": "com.yuzhi.dts.platform.security.session.PortalSessionRegistryTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.076
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.catalog.CatalogClassificationEditServiceTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.569
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.catalog.CatalogClassificationVersionVisibilityPostgresIT",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 67.06
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.catalog.CatalogDatasetClassificationProjectionPostgresTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.732
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.governance.QualitySqlScopeValidatorTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.24
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelDataRegistrationServiceTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.963
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelIngestionTargetServiceTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.18
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelLifecycleServiceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.17
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelMaterializationDispatchServiceTest",
+        "tests": 13,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.48
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanServiceTest",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.354
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateServiceTest",
+        "tests": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.044
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelSpecPlanWriteAccessAdapterTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.003
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelSpecSourceCurrentIdentityTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.421
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelSpecSourceValidationAdapterTest",
+        "tests": 12,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.242
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingCompilerContractTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.008
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingContextInitializationPostgresTest",
+        "tests": 8,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.627
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingDbtArtifactImportServiceTest",
+        "tests": 4,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.045
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingDbtCompilerTest",
+        "tests": 19,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.096
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingPermissionScopePostgresIT",
+        "tests": 10,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.905
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingSqlReadSetGuardTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.058
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingWordRootLiquibaseTest",
+        "tests": 2,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.018
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.PlanOperationalRunServiceTest",
+        "tests": 9,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.647
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.migration.ModelingPlanVersionReviewRetirementLiquibaseIT",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.468
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.migration.ModelingPlanVersionReviewRetirementLiquibaseTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.006
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.observability.ModelingRoundtripMetricsAspectTest",
+        "tests": 3,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.354
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanAuthorizationGuardTest",
+        "tests": 6,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.006
+      },
+      {
+        "name": "com.yuzhi.dts.platform.web.rest.KeycloakAuthResourceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.964
+      },
+      {
+        "name": "com.yuzhi.dts.platform.web.rest.ModelSpecReservedIdempotencyBoundaryTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.6
+      },
+      {
+        "name": "com.yuzhi.dts.platform.web.rest.ModelingAuxResourceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 2.122
+      },
+      {
+        "name": "com.yuzhi.dts.platform.web.rest.ModelingBusinessProcessResourceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 3.957
+      },
+      {
+        "name": "com.yuzhi.dts.platform.web.rest.ModelingWordRootResourceTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.018
+      },
+      {
+        "name": "com.yuzhi.dts.platform.service.modeling.ModelingCatalogBoundaryArchitectureTest",
+        "tests": 0,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 15.02
+      },
+      {
+        "name": "com.yuzhi.dts.admin.web.rest.platform.ModelingDirectoryResourceTest",
+        "tests": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 4.069
+      },
+      {
+        "name": "com.yuzhi.dts.admin.web.rest.platform.PlatformDirectoryResourceTest",
+        "tests": 1,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 1.004
+      },
+      {
+        "name": "com.yuzhi.dts.admin.web.rest.platform.ReleaseDutyInternalResourceTest",
+        "tests": 5,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "seconds": 0.058
+      }
+    ],
+    "appliesToSourceSha": "1c8a710709a1aba174622bfe0d3713465ec5a45c",
+    "unchangedSourcePaths": [
+      "source/dts-platform",
+      "source/dts-admin",
+      "source/dts-common"
+    ]
+  },
+  "frontend": {
+    "sha": "1c8a710709a1aba174622bfe0d3713465ec5a45c",
+    "status": "PASS",
+    "files": 5,
+    "tests": 102,
+    "failures": 0,
+    "testExitCode": 0,
+    "buildExitCode": 0,
+    "typeCheck": "PASS (included in pnpm build)",
+    "legacyBrowserBuild": true,
+    "realChrome95Browser": "NOT_RUN"
+  },
+  "notRun": [
+    "formal service images and delivery archive",
+    "runtime deployment",
+    "authenticated Chrome95 acceptance S01-S26",
+    "customer Q5 historical downgrade scan",
+    "20/200-model ACL query-count benchmark",
+    "production-like upgrade and rollback rehearsal"
+  ],
+  "rawEvidenceDirectory": "/data/dts-stack-test-evidence/f9-20260912",
+  "logs": {
+    "backend-8.log": {
+      "sha256": "4c5d8519bb3a99a386fd7802caae149b9d8a1da5a770f9b767de9c1fea320b46",
+      "bytes": 175502
+    },
+    "preflight.json": {
+      "sha256": "510a92c1ff67d5fd2462039dd1c81473f78834d819b58a2f82c73425ef76a00a",
+      "bytes": 670
+    },
+    "frontend-tests-5.log": {
+      "sha256": "58f5e6701465dcd923a865dc38fc26ffafa7088ff20854244850ec9a29288b9e",
+      "bytes": 1310
+    },
+    "frontend-build-5.log": {
+      "sha256": "a1e27bc88e57cd92423d1c5f4d58b8734faad556b4a1fa979bcaab37bf52fd45",
+      "bytes": 46411
+    }
+  },
+  "static": {
+    "gitDiffCheck": "PASS",
+    "biome": {
+      "files": 15,
+      "errors": 0,
+      "warnings": 5,
+      "exitCode": 0
+    },
+    "gitnexus": "impact before symbol edits and detect_changes before commits",
+    "hookNote": "lefthook was not available on PATH; hook was not bypassed"
+  }
+}

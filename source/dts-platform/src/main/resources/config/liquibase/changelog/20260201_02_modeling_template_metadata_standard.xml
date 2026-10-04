@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260201_02_modeling_template_metadata_standard" author="platform">
+        <addColumn tableName="modeling_template">
+            <column name="metadata_standard_ids" type="text"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

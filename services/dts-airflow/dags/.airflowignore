@@ -1,0 +1,9 @@
+^.*/__pycache__/.*$
+^.*\.pyc$
+^.*\.json$
+^.*\.csv$
+^.*\.tsv$
+^.*\.xlsx$
+^.*\.xls$
+^.*\.parquet$
+^.*/exchange/.*$

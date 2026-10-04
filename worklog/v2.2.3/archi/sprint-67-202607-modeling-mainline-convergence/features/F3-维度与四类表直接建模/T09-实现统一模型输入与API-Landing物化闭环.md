@@ -1,0 +1,63 @@
+# T09：实现统一模型输入与 API Landing 物化闭环
+
+**优先级**：P0
+**状态**：IN_PROGRESS
+**依赖**：F3-T06、F3-T07、F3-T08、F6-T06
+
+## 目标
+
+让模型实现只消费统一的物理资产、上游模型或受控生成器，API 数据先通过现有采集任务生成并登记 ODS Landing 资产，再进入同一物化和血缘链。
+
+## 范围
+
+- `ModelImplementation` 建立 `PHYSICAL_ASSET`、`UPSTREAM_MODEL`、`GENERATED` 三种主输入方式；
+- 兼容读取现有 `sourceRefs`、`dependsOn`、`generationStrategy`，新写经适配层进入统一输入；
+- 数据库同步表和 API Landing 表统一解析为当前计划已确认物理资产 revision；
+- API 试跑成功后登记 Landing 元数据、采集任务 revision、checkpoint 和来源血缘；
+- 目标 DDL、编译/测试、部署和物理资产回写关联同一 modelSpecId/revision；
+- 普通模式生成绑定实现 revision 的 system-managed ephemeral STG，不登记虚假物理表；
+- dbt 高级模式显式管理 STG，并只为真实物化节点登记技术型物理资产；
+- 普通模式可单向转换为新的 dbt 高级实现 revision，禁止自动覆盖用户 SQL 或静默降级；
+- SUMMARY/APPLICATION 禁止直接物理来源，模型循环、自引用和版本漂移 fail closed。
+
+## 不做
+
+- 不实现 OpenAPI/Swagger 自动导入；
+- 不支持 GraphQL、SOAP/XML 或复杂 JSON 自动拆表；
+- 不允许模型运行时直接调用 API；
+- 不扩展为通用虚拟表框架。
+
+## 验证
+
+- [ ] 连接测试不会自动创建规划来源或模型输入；
+- [ ] 数据库表完成元数据同步和规划确认后可作为 `PHYSICAL_ASSET`；
+- [ ] API 未试跑或未登记 Landing 时返回 `API_LANDING_NOT_READY`；
+- [ ] API Landing 登记后可被计划确认并用于模型实现；
+- [ ] 日期维度通过 `GENERATED` 实现，无需上游表；
+- [ ] 普通模式生成 ephemeral STG、编译证据和完整血缘，但物理资产台账不存在虚假 STG 表；
+- [ ] 转换 dbt 高级模式后保留 modelSpecId/revision，真实 STG view/table 可登记技术资产；
+- [ ] 高级实现不能被普通表单覆盖，回到普通模式必须显式创建新实现 revision；
+- [ ] SUMMARY/APPLICATION 只接受锁定 revision 的 `UPSTREAM_MODEL`；
+- [ ] 漂移、跨计划、跨部门、循环和目标自引用均拒绝；
+- [ ] 部署后可从目标资产反查模型、Landing、采集任务和原始连接。
+
+## 完成标准
+
+- [ ] 后端契约、持久化、stage gate、编译和血缘测试通过；
+- [ ] PostgreSQL 真实落库和元数据 revision 对账通过；
+- [ ] API checkpoint 连续性和失败重试有真实证据；
+- [ ] F6-T08 真实联动前保持 READY/IN_PROGRESS，不提前关闭。
+
+## 实施状态（2026-07-24）
+
+三种实现输入、revision/checksum CAS、受控编译设置、实现证据失效规则、API Landing 权威成功校验、目录/血缘登记和 dbt 物化节点过滤已落码。当前只等待统一静态复核及一次性测试批次，尚未以未执行的测试替代完成证据。
+
+冻结复核继续补齐了实现制品身份和外部证据约束：
+
+- 制品唯一身份包含 `modelSpec revision + implementation revision`，新实现修订不再与历史制品冲突；
+- DBT 同一 `nodeKind + artifactType` 是稳定槽位，改路径或改正文不能绕过不可变校验，SQL/SCHEMA 双制品在同一事务写入；
+- legacy modeling-vNext 写入点同步使用四段身份，生成式编译读取当前 implementation revision，不再固定写入 revision 1；
+- 只有当前绑定的 `dbt test` 或 `dbt build` 成功运行可登记 TEST PASSED，`run/compile` 不能冒充测试证据；
+- DBT compile/release 门禁要求当前 implementation 的制品集合恰好为 `SQL + SCHEMA`，额外或漂移制品均 fail closed。
+
+上述内容尚待用户手工编译与统一真实验收确认，Task 状态不变。

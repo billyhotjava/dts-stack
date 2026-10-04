@@ -1,0 +1,9 @@
+[     402ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3011/node_modules/.vite/deps/chunk-GW7TADPA.js?v=e48c8429:21606
+[   23999ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3011/node_modules/.vite/deps/chunk-GW7TADPA.js?v=e48c8429:21606
+[  126666ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3011/node_modules/.vite/deps/chunk-GW7TADPA.js?v=e48c8429:21606
+[  182381ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:3011/node_modules/.vite/deps/chunk-GW7TADPA.js?v=e48c8429:21606
+[  226987ms] [LOG] [vite] server connection lost. Polling for restart... @ http://127.0.0.1:3011/@vite/client:963
+[  226988ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  227989ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  228992ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034
+[  230210ms] [ERROR] WebSocket connection to 'ws://127.0.0.1:3011/' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:3011/@vite/client:1034

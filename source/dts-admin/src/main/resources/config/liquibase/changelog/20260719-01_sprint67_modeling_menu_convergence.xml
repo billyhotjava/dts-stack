@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-01-sprint67-modeling-menu-convergence" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+
+        <comment>
+            Converge Sprint-67 modeling navigation without deleting menu ids or role visibility bindings.
+            Duplicate entries are soft-deleted; reusable canonical rows keep their original ids.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            BEGIN
+                UPDATE portal_menu
+                SET metadata = '{"key":"subjects","sectionKey":"studio","entryKey":"subjects","titleKey":"sys.nav.portal.governanceSubjects","title":"业务分类","icon":"solar:map-point-bold-duotone","externalLink":"/governance/subjects"}',
+                    sort_order = 1,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name = 'sys.nav.portal.governanceSubjects';
+
+                UPDATE portal_menu
+                SET metadata = '{"key":"semantic-objects","sectionKey":"studio","entryKey":"semantic-objects","titleKey":"sys.nav.portal.studioSemanticObjects","title":"维度目录","icon":"solar:box-bold-duotone","externalLink":"/modeling/dimensions"}',
+                    sort_order = 1,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name = 'sys.nav.portal.studioSemanticObjects';
+
+                UPDATE portal_menu
+                SET metadata = '{"key":"semantic-models","sectionKey":"studio","entryKey":"semantic-models","titleKey":"sys.nav.portal.studioSemanticModels","title":"模型中心","icon":"solar:database-bold-duotone","externalLink":"/modeling/models"}',
+                    sort_order = 2,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name = 'sys.nav.portal.studioSemanticModels';
+
+                UPDATE portal_menu
+                SET metadata = '{"key":"sql","sectionKey":"studio","entryKey":"sql","titleKey":"sys.nav.portal.studioSqlModeling","title":"高级建模（SQL/dbt）","icon":"solar:documents-bold-duotone","externalLink":"/studio/sql-modeling"}',
+                    sort_order = 3,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name = 'sys.nav.portal.studioSqlModeling';
+
+                UPDATE portal_menu
+                SET sort_order = 1,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name = 'sys.nav.portal.studioMetricWorkbench';
+
+                UPDATE portal_menu
+                SET deleted = TRUE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE name IN (
+                    'sys.nav.portal.governanceStandardPackage',
+                    'sys.nav.portal.governanceTemplates',
+                    'sys.nav.portal.studioDbtFiles',
+                    'sys.nav.portal.studioLowCodeDevelopment',
+                    'sys.nav.portal.studioSemanticMetrics',
+                    'sys.nav.portal.studioSemanticPublish'
+                );
+            END;
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            UPDATE portal_menu
+            SET deleted = FALSE,
+                last_modified_by = 'system',
+                last_modified_date = now()
+            WHERE name IN (
+                'sys.nav.portal.governanceStandardPackage',
+                'sys.nav.portal.governanceTemplates',
+                'sys.nav.portal.studioDbtFiles',
+                'sys.nav.portal.studioLowCodeDevelopment',
+                'sys.nav.portal.studioSemanticMetrics',
+                'sys.nav.portal.studioSemanticPublish'
+            );
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

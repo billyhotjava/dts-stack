@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801_11_rollback_dispatch_generation_attempts" author="platform">
+        <preConditions onFail="HALT">
+            <tableExists tableName="integration_rollback_dispatch_outbox"/>
+            <not>
+                <columnExists tableName="integration_rollback_dispatch_outbox" columnName="generation_attempts"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="integration_rollback_dispatch_outbox">
+            <column name="generation_attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <!-- A replay resets only this cycle counter; dispatch_attempts remains cumulative evidence. -->
+        <sql dbms="postgresql">
+            UPDATE integration_rollback_dispatch_outbox
+               SET generation_attempts = dispatch_attempts;
+            ALTER TABLE integration_rollback_dispatch_outbox
+                ADD CONSTRAINT chk_rollback_dispatch_generation_attempts
+                CHECK (
+                    generation_attempts &gt;= 0
+                    AND generation_attempts &lt;= dispatch_attempts
+                );
+        </sql>
+        <rollback>
+            <sql dbms="postgresql">
+                ALTER TABLE integration_rollback_dispatch_outbox
+                    DROP CONSTRAINT IF EXISTS chk_rollback_dispatch_generation_attempts;
+            </sql>
+            <dropColumn tableName="integration_rollback_dispatch_outbox" columnName="generation_attempts"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

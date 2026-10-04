@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260113_01_catalog_dataset_access_approval" author="platform">
+        <!-- Extend existing explicit-grant table so it can represent time-bound data-content permissions. -->
+        <addColumn tableName="catalog_dataset_grant">
+            <column name="grant_type" type="varchar(32)" defaultValue="SHARE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="can_query" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="can_preview" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_from" type="timestamp"/>
+            <column name="valid_to" type="timestamp"/>
+            <column name="source_request_id" type="uuid"/>
+        </addColumn>
+
+        <createIndex tableName="catalog_dataset_grant" indexName="idx_catalog_dataset_grant_type">
+            <column name="grant_type"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_grant" indexName="idx_catalog_dataset_grant_valid_to">
+            <column name="valid_to"/>
+        </createIndex>
+
+        <!-- Access approval workflow: request + ordered tasks. -->
+        <createTable tableName="catalog_dataset_access_request">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_name" type="varchar(128)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="warehouse_layer" type="varchar(16)"/>
+            <column name="requester_id" type="varchar(64)"/>
+            <column name="requester_username" type="varchar(64)"/>
+            <column name="requester_name" type="varchar(128)"/>
+            <column name="requester_dept" type="varchar(64)"/>
+            <column name="can_query" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="can_preview" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="varchar(1024)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_from" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="valid_to" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_by" type="varchar(50)"/>
+            <column name="decided_at" type="timestamp"/>
+            <column name="decision_notes" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="catalog_dataset_access_request"
+            baseColumnNames="dataset_id"
+            referencedTableName="catalog_dataset"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_dataset_access_request_dataset"
+            onDelete="CASCADE"
+        />
+
+        <createIndex tableName="catalog_dataset_access_request" indexName="idx_catalog_dataset_access_request_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_access_request" indexName="idx_catalog_dataset_access_request_dataset">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_access_request" indexName="idx_catalog_dataset_access_request_requester">
+            <column name="requester_username"/>
+        </createIndex>
+
+        <createTable tableName="catalog_dataset_access_task">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="request_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_order" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="approver_role" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dept_code" type="varchar(64)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="decided_by" type="varchar(50)"/>
+            <column name="decided_at" type="timestamp"/>
+            <column name="decision_notes" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="catalog_dataset_access_task"
+            baseColumnNames="request_id"
+            referencedTableName="catalog_dataset_access_request"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_dataset_access_task_request"
+            onDelete="CASCADE"
+        />
+
+        <createIndex tableName="catalog_dataset_access_task" indexName="idx_catalog_dataset_access_task_request">
+            <column name="request_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_access_task" indexName="idx_catalog_dataset_access_task_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_access_task" indexName="idx_catalog_dataset_access_task_role_dept">
+            <column name="approver_role"/>
+            <column name="dept_code"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

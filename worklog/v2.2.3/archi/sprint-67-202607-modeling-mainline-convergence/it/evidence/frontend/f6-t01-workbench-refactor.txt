@@ -1,0 +1,22 @@
+Sprint-67 F6-T01 指标工作台收敛重构证据
+日期：2026-07-28
+
+实现范围
+- 指标工作台按“定义与发布、从模型创建、模板复用、运行与消费”四个任务分区；保持 /modeling/metric-workbench 为唯一顶级入口。
+- 指标模板、运行看板、指标商店、我的订阅回收到工作台，不新增菜单或第二指标正文。
+- 模型字段创建草稿改为 POST /api/governance/indicators/model-field-drafts；指标草稿和 MODEL_SPEC_FIELD 来源引用在同一 Spring 事务内提交。
+- 后端以 canonical PUBLISHED ModelSpec 的字段、revision 和 standardBindings 为真值；模型版本、字段角色、类型/层级或计量单位版本漂移时在创建前拒绝。
+- 指标目录和模型关联选择器按 10 条/页读取并汇总，不再发送 size=200/500。
+- 移动端阶段导航使用两列完整标签，避免 390px 下被压缩成省略文本。
+
+自动化结果
+- Node helper/source-contract：6/6 PASS。
+- ModelFieldIndicatorDraftServiceTest：2/2 PASS。
+- pnpm exec tsc --noEmit：PASS。
+- pnpm build（LEGACY_BROWSER_BUILD=1）：PASS，10650 modules transformed。
+- Playwright mock 增量旅程：1/1 PASS；覆盖单次事务 POST、owner 回跳、精确版本回绑、四任务分区、390x844 无横向溢出及 console/page/network clean。
+- 截图：../chrome95/f6-model-metric-handoff-chromium95.png。
+
+真实性边界
+- Playwright 使用 Sprint-67 既有精确 API mock，不替代真实登录/API/PostgreSQL E2E。
+- 本机 production preview 的 /api/keycloak/auth/login 返回 HTTP 500，因此本轮没有把真实登录旅程标记通过，F6-T01 保持 IN_PROGRESS。

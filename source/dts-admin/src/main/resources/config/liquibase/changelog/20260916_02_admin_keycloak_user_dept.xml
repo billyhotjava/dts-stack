@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+      部门归属改由 Keycloak 快照承载。此前 resolveDepartments 只读 person_profile，
+      而该表自 4d53821ba「移除 PersonProfile 写入」起再无写入方，导致 MDM 侧调岗
+      在页面上永不生效。这两列是 Keycloak user attribute dept_code/dept_name 的本地镜像，
+      与 realm_roles / group_paths / person_security_level 同属快照语义。
+    -->
+    <changeSet id="20260916-02-admin-keycloak-user-dept" author="dts">
+        <addColumn tableName="admin_keycloak_user">
+            <column name="dept_code" type="varchar(64)"/>
+            <column name="dept_name" type="varchar(128)"/>
+        </addColumn>
+        <sql>CREATE INDEX IF NOT EXISTS idx_admin_kc_user_dept_code_lower ON admin_keycloak_user (lower(dept_code))</sql>
+    </changeSet>
+
+</databaseChangeLog>

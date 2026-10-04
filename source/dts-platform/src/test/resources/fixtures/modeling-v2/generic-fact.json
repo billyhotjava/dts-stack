@@ -1,0 +1,60 @@
+{
+  "planId": "10000000-0000-0000-0000-000000000001",
+  "domainId": "20000000-0000-0000-0000-000000000001",
+  "modelType": "FACT",
+  "layer": "DWD",
+  "name": "generic_event_detail",
+  "description": "Generic cross-industry event detail model",
+  "implementationMode": "DESIGNER_GENERATED",
+  "materialization": "table",
+  "businessActivityRef": null,
+  "consumptionScenario": null,
+  "grain": {
+    "statement": "one row per event",
+    "keys": ["record_id"]
+  },
+  "factShape": "TRANSACTION",
+  "timeSemantics": {
+    "type": "EVENT_TIME",
+    "fields": ["event_time"]
+  },
+  "fields": [
+    {
+      "name": "record_id",
+      "dataType": "varchar",
+      "nullable": false,
+      "sourceFieldRef": "source.record_id",
+      "role": "KEY",
+      "securityLevel": null
+    },
+    {
+      "name": "event_time",
+      "dataType": "timestamp",
+      "nullable": false,
+      "sourceFieldRef": "source.event_time",
+      "role": "TIME",
+      "securityLevel": null
+    }
+  ],
+  "sourceRefs": [
+    {
+      "kind": "TABLE",
+      "ref": "catalog.dataset.source",
+      "layer": "ODS",
+      "role": "PRIMARY",
+      "alias": null,
+      "joinType": null,
+      "joinExpression": null,
+      "sortOrder": 0,
+      "sourceBindingId": "50000000-0000-0000-0000-000000000001",
+      "resolvedVersion": "v1"
+    }
+  ],
+  "dependsOn": [],
+  "dimensionRefs": [],
+  "metricRefs": [],
+  "standardBindings": [],
+  "generationStrategy": null,
+  "dimensionProfile": null,
+  "idempotencyKey": "generic-fact-fixture-v2"
+}

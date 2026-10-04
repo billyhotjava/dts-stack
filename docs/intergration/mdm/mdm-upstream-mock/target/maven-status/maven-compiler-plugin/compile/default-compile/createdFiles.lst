@@ -1,0 +1,9 @@
+META-INF/spring-configuration-metadata.json
+com/yuzhi/dts/mdm/upstream/UpstreamMockApplication.class
+com/yuzhi/dts/mdm/upstream/web/UpstreamMockController$PullLog.class
+com/yuzhi/dts/mdm/upstream/web/UpstreamMockController$CallbackLog.class
+com/yuzhi/dts/mdm/upstream/web/UpstreamMockController.class
+com/yuzhi/dts/mdm/upstream/config/RestTemplateConfig.class
+com/yuzhi/dts/mdm/upstream/web/UpstreamMockController$CallbackResult.class
+com/yuzhi/dts/mdm/upstream/config/UpstreamMockProperties.class
+com/yuzhi/dts/mdm/upstream/web/UpstreamMockController$1.class

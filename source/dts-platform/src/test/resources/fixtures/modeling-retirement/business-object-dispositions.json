@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Pure policy contract fixtures for business-object retirement dry runs; no production migration is executed.",
+  "cases": [
+    {
+      "name": "stable entity becomes a dimension",
+      "input": {
+        "legacyKind": "ENTITY",
+        "stableKeys": ["department_id"],
+        "grainKeys": [],
+        "factSignal": false,
+        "archiveRequested": false,
+        "proposedModelSpecId": "dim-department",
+        "candidateTargets": []
+      },
+      "expected": {
+        "identification": "DIMENSION_LIKE",
+        "readiness": "READY",
+        "recommendedDisposition": "AUTO_DIMENSION",
+        "executableAction": "AUTO_DIMENSION"
+      }
+    },
+    {
+      "name": "fact merges into its only compatible target",
+      "input": {
+        "legacyKind": "FACT",
+        "stableKeys": [],
+        "grainKeys": ["order_id"],
+        "factSignal": true,
+        "archiveRequested": false,
+        "proposedModelSpecId": null,
+        "candidateTargets": [
+          {
+            "modelSpecId": "fact-order-detail",
+            "modelType": "FACT",
+            "domainId": "operations"
+          }
+        ]
+      },
+      "expected": {
+        "identification": "FACT_LIKE",
+        "readiness": "READY",
+        "recommendedDisposition": "AUTO_FACT_MERGE",
+        "executableAction": "AUTO_FACT_MERGE"
+      }
+    },
+    {
+      "name": "mixed responsibilities require a manual split",
+      "input": {
+        "legacyKind": "ENTITY",
+        "stableKeys": ["project_id"],
+        "grainKeys": ["snapshot_date"],
+        "factSignal": true,
+        "archiveRequested": false,
+        "proposedModelSpecId": null,
+        "candidateTargets": []
+      },
+      "expected": {
+        "identification": "MIXED",
+        "readiness": "NEEDS_SPLIT",
+        "recommendedDisposition": "MANUAL_SPLIT",
+        "executableAction": null
+      }
+    },
+    {
+      "name": "unused unclassified object may be archived",
+      "input": {
+        "legacyKind": null,
+        "stableKeys": [],
+        "grainKeys": [],
+        "factSignal": false,
+        "archiveRequested": true,
+        "proposedModelSpecId": null,
+        "candidateTargets": []
+      },
+      "expected": {
+        "identification": "ARCHIVE_CANDIDATE",
+        "readiness": "READY",
+        "recommendedDisposition": "ARCHIVE_ONLY",
+        "executableAction": "ARCHIVE_ONLY"
+      }
+    }
+  ]
+}

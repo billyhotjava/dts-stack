@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260426-01-ingestion-execution-batch-id" author="system">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="batch_id"/>
+            </not>
+        </preConditions>
+        <comment>Add DTS ingestion batch id to execution history</comment>
+        <addColumn tableName="ingestion_execution">
+            <column name="batch_id" type="varchar(128)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260426-02-ingestion-execution-batch-id-index" author="system">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingestion_execution" columnName="batch_id"/>
+            <not>
+                <indexExists tableName="ingestion_execution" indexName="idx_ingestion_execution_batch_id"/>
+            </not>
+        </preConditions>
+        <comment>Add index for DTS ingestion batch id lookup</comment>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_batch_id">
+            <column name="batch_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

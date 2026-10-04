@@ -1,0 +1,290 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260718-01a-warehouse-plan-head-expand" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan"/>
+        </preConditions>
+
+        <addColumn tableName="modeling_warehouse_plan">
+            <column name="code" type="varchar(128)"/>
+            <column name="name" type="varchar(256)"/>
+            <column name="objective" type="text"/>
+            <column name="scope" type="text"/>
+            <column name="owner_id" type="varchar(128)"/>
+            <column name="owner_department_id" type="varchar(128)"/>
+            <column name="onboarding_mode" type="varchar(32)"/>
+            <column name="lifecycle_status" type="varchar(32)"/>
+            <column name="legacy_source" type="varchar(64)"/>
+            <column name="legacy_ref" type="varchar(256)"/>
+            <column name="business_scope_confirmed" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="business_scope_version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sources_version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_mappings_version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="policy_version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <sql dbms="postgresql"><![CDATA[
+            UPDATE modeling_warehouse_plan
+               SET code = COALESCE(code, 'legacy_' || replace(id::text, '-', '')),
+                   name = COALESCE(name, 'Legacy plan ' || COALESCE(process_id, id::text)),
+                   owner_id = COALESCE(owner_id, owner),
+                   onboarding_mode = COALESCE(onboarding_mode, 'BUSINESS_FIRST'),
+                   lifecycle_status = COALESCE(
+                       lifecycle_status,
+                       CASE
+                           WHEN status = 'PUBLISHED' THEN 'PUBLISHED'
+                           WHEN status = 'ARCHIVED' THEN 'ARCHIVED'
+                           ELSE 'DRAFT'
+                       END
+                   ),
+                   legacy_source = COALESCE(legacy_source, 'MODELING_VNEXT'),
+                   legacy_ref = COALESCE(legacy_ref, id::text)
+        ]]></sql>
+
+        <addNotNullConstraint tableName="modeling_warehouse_plan" columnName="code" columnDataType="varchar(128)"/>
+        <addNotNullConstraint tableName="modeling_warehouse_plan" columnName="name" columnDataType="varchar(256)"/>
+        <addNotNullConstraint tableName="modeling_warehouse_plan" columnName="onboarding_mode" columnDataType="varchar(32)"/>
+        <addNotNullConstraint tableName="modeling_warehouse_plan" columnName="lifecycle_status" columnDataType="varchar(32)"/>
+
+        <dropUniqueConstraint tableName="modeling_warehouse_plan" constraintName="uk_modeling_warehouse_plan_process_layer"/>
+        <dropNotNullConstraint tableName="modeling_warehouse_plan" columnName="process_id" columnDataType="varchar(128)"/>
+        <dropNotNullConstraint tableName="modeling_warehouse_plan" columnName="layer" columnDataType="varchar(16)"/>
+        <dropNotNullConstraint tableName="modeling_warehouse_plan" columnName="modeling_mode" columnDataType="varchar(32)"/>
+
+        <addUniqueConstraint
+            tableName="modeling_warehouse_plan"
+            columnNames="tenant_id, code"
+            constraintName="uk_modeling_warehouse_plan_tenant_code"/>
+        <addUniqueConstraint
+            tableName="modeling_warehouse_plan"
+            columnNames="tenant_id, id"
+            constraintName="uk_modeling_warehouse_plan_tenant_id"/>
+
+        <rollback>
+            <dropUniqueConstraint tableName="modeling_warehouse_plan" constraintName="uk_modeling_warehouse_plan_tenant_id"/>
+            <dropUniqueConstraint tableName="modeling_warehouse_plan" constraintName="uk_modeling_warehouse_plan_tenant_code"/>
+            <sql dbms="postgresql"><![CDATA[
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan
+                         WHERE process_id IS NULL OR layer IS NULL OR modeling_mode IS NULL
+                    ) AND NOT EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan
+                         GROUP BY tenant_id, process_id, layer
+                        HAVING count(*) > 1
+                    ) THEN
+                        ALTER TABLE modeling_warehouse_plan ALTER COLUMN process_id SET NOT NULL;
+                        ALTER TABLE modeling_warehouse_plan ALTER COLUMN layer SET NOT NULL;
+                        ALTER TABLE modeling_warehouse_plan ALTER COLUMN modeling_mode SET NOT NULL;
+                        ALTER TABLE modeling_warehouse_plan
+                            ADD CONSTRAINT uk_modeling_warehouse_plan_process_layer
+                            UNIQUE (tenant_id, process_id, layer);
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="policy_version"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="source_mappings_version"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="sources_version"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="business_scope_version"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="business_scope_confirmed"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="legacy_ref"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="legacy_source"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="lifecycle_status"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="onboarding_mode"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="owner_department_id"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="owner_id"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="scope"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="objective"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="name"/>
+            <dropColumn tableName="modeling_warehouse_plan" columnName="code"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260718-01b-warehouse-plan-business-scope" author="codex">
+        <createTable tableName="modeling_warehouse_plan_domain">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="confirmation_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_domain" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_domain_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_domain" columnNames="tenant_id, plan_id, domain_id" constraintName="uk_warehouse_plan_domain"/>
+        <createIndex tableName="modeling_warehouse_plan_domain" indexName="idx_warehouse_plan_domain_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <createTable tableName="modeling_warehouse_plan_process">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="process_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"/>
+            <column name="process_shape" type="varchar(32)"/>
+            <column name="confirmation_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_process" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_process_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_process" columnNames="tenant_id, plan_id, process_id" constraintName="uk_warehouse_plan_process"/>
+        <createIndex tableName="modeling_warehouse_plan_process" indexName="idx_warehouse_plan_process_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <createTable tableName="modeling_warehouse_plan_metric_need">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="metric_ref" type="varchar(256)"/>
+            <column name="name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="definition" type="text"/>
+            <column name="domain_id" type="${uuidType}"/>
+            <column name="process_id" type="varchar(128)"/>
+            <column name="confirmation_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_metric_need" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_metric_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <createIndex tableName="modeling_warehouse_plan_metric_need" indexName="idx_warehouse_plan_metric_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <rollback>
+            <dropTable tableName="modeling_warehouse_plan_metric_need" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_process" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_domain" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260718-01c-warehouse-plan-sources-policy" author="codex">
+        <createTable tableName="modeling_warehouse_plan_source">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="source_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="source_id" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="source_version" type="varchar(128)"/>
+            <column name="confirmation_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="exclusion_reason" type="text"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_source" columnNames="tenant_id, id" constraintName="uk_warehouse_plan_source_tenant_id"/>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_source" columnNames="tenant_id, plan_id, source_type, source_id" constraintName="uk_warehouse_plan_source_ref"/>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_source" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_source_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <createIndex tableName="modeling_warehouse_plan_source" indexName="idx_warehouse_plan_source_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <createTable tableName="modeling_warehouse_plan_source_mapping">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="source_binding_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"/>
+            <column name="process_id" type="varchar(128)"/>
+            <column name="mapping_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="notes" type="text"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_source_mapping" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_source_mapping_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_source_mapping" baseColumnNames="tenant_id, source_binding_id" constraintName="fk_warehouse_source_mapping_source" referencedTableName="modeling_warehouse_plan_source" referencedColumnNames="tenant_id, id"/>
+        <createIndex tableName="modeling_warehouse_plan_source_mapping" indexName="idx_warehouse_source_mapping_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <createTable tableName="modeling_warehouse_plan_policy">
+            <column name="plan_id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="layer_policy_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="naming_policy_ref" type="varchar(256)"/>
+            <column name="history_policy" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="default_time_zone" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_policy" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_policy_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <createIndex tableName="modeling_warehouse_plan_policy" indexName="idx_warehouse_plan_policy_tenant"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <rollback>
+            <dropTable tableName="modeling_warehouse_plan_policy" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_source_mapping" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_source" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260718-01d-warehouse-plan-version-evidence-migration" author="codex">
+        <createTable tableName="modeling_warehouse_plan_version">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_version" type="int"><constraints nullable="false"/></column>
+            <column name="snapshot_json" type="text"><constraints nullable="false"/></column>
+            <column name="content_checksum" type="varchar(128)"/>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_version" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_version_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_version" columnNames="tenant_id, plan_id, plan_version" constraintName="uk_warehouse_plan_version"/>
+
+        <createTable tableName="modeling_warehouse_plan_review">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_version" type="int"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="reviewer_id" type="varchar(128)"/>
+            <column name="comments" type="text"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_review" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_plan_review_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <createIndex tableName="modeling_warehouse_plan_review" indexName="idx_warehouse_plan_review_plan"><column name="tenant_id"/><column name="plan_id"/><column name="plan_version"/></createIndex>
+
+        <createTable tableName="modeling_warehouse_plan_stage_evidence">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="stage_code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="freshness" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="evidence_json" type="text"/>
+            <column name="computed_at" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_warehouse_plan_stage_evidence" baseColumnNames="tenant_id, plan_id" constraintName="fk_warehouse_stage_evidence_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_stage_evidence" columnNames="tenant_id, plan_id, stage_code" constraintName="uk_warehouse_stage_evidence"/>
+
+        <createTable tableName="modeling_legacy_plan_mapping">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="legacy_source" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="legacy_ref" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="migration_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="batch_id" type="varchar(128)"/>
+            <column name="content_checksum" type="varchar(128)"/>
+            <column name="created_date" type="timestamp" defaultValueComputed="${now}"/>
+            <column name="last_modified_date" type="timestamp" defaultValueComputed="${now}"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_legacy_plan_mapping" baseColumnNames="tenant_id, plan_id" constraintName="fk_legacy_plan_mapping_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="tenant_id, id"/>
+        <addUniqueConstraint tableName="modeling_legacy_plan_mapping" columnNames="tenant_id, legacy_source, legacy_ref" constraintName="uk_legacy_plan_mapping_ref"/>
+        <createIndex tableName="modeling_legacy_plan_mapping" indexName="idx_legacy_plan_mapping_plan"><column name="tenant_id"/><column name="plan_id"/></createIndex>
+
+        <rollback>
+            <dropTable tableName="modeling_legacy_plan_mapping" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_stage_evidence" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_review" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan_version" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

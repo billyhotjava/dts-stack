@@ -1,0 +1,7 @@
+{
+  "codeSetAssociations": [
+    "gender_code_set_elements=1",
+    "education_code_set_elements=1",
+    "region_code_set_elements=1"
+  ]
+}

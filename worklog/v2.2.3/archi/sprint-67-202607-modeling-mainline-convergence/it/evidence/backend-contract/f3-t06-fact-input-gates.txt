@@ -1,0 +1,67 @@
+Sprint-67 F3-T06 — FACT 上游输入与目标模型分离门禁
+Date: 2026-07-22
+
+Implemented contract
+- DRAFT_SAVE: FACT 只要具备粒度定义，可在 sourceRefs=[] 且 dependsOn=[] 时保存。
+- IMPLEMENTATION_READY: 至少需要一个当前可用的物理来源，或一个锁定当前 revision 的上游 ModelSpec。
+- RELEASE_READY: 复用实现门禁；两类证据同时存在时必须全部有效。
+- 物理来源表是上游输入，不是当前正在创建的目标表；草稿阶段不要求预先完成 ETL/ELT。
+
+Backend verification
+Command:
+  cd source/dts-platform
+  ./mvnw verify -q
+Result:
+  PASS. Final Java verification completed successfully.
+  Relevant reviewed suites: 80 tests, 0 failures, 0 errors.
+  ModelSpecSourceValidationAdapter: 10/10.
+  ModelSpecStageGateService: 17/17.
+  ModelSpecApplicationService: 24/24.
+  ModelSpecCompilerProjection: 4/4.
+
+Frontend focused regression
+Command:
+  cd source/dts-platform-webapp
+  node --experimental-strip-types --test \
+    src/pages/modeling/modelSpecV2Contract.test.ts \
+    src/pages/modeling/modelSpecWorkbench.test.ts \
+    src/pages/modeling/modelSpecSourceSelection.test.ts \
+    src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts
+Result:
+  PASS; tests=58, pass=58, fail=0.
+
+Frontend static verification
+Commands:
+  pnpm exec biome check <8 touched ModelSpec files>
+  pnpm exec tsc --noEmit
+Results:
+  PASS; no Biome diagnostics and TypeScript exit=0.
+
+Final production build
+Command:
+  cd source/dts-platform-webapp
+  pnpm build
+Result:
+  PASS; exit=0; 10594 modules transformed; completed in 2m25s.
+  Non-blocking existing warnings: caniuse-lite data age and large chunk advisory.
+
+Review
+- Java review: no remaining HIGH or MEDIUM finding after replacing snapshot-only source evidence with live fail-closed validation.
+- TypeScript review: no remaining finding after aligning UI copy with inclusive-OR semantics.
+- Final code review: APPROVE; no HIGH or MEDIUM finding.
+
+GitNexus changed-scope audit
+Status:
+  PASS. mcp__gitnexus__detect_changes(repo="s10-stack", scope="all") reported
+  risk_level=low and affected_processes=[]. The shared dirty worktree contained
+  74 indexed changed files / 467 changed symbols, including unrelated pre-existing
+  and parallel changes, so these totals are not claimed as F3-T06-only ownership.
+
+Real Chrome 95 / API / PostgreSQL
+Status:
+  PENDING. Validate source-free FACT draft save, physical-source-only and upstream-model-only implementation gates, mixed stale evidence rejection, dependency-cycle rejection and compiler projection against the deployed stack.
+
+Current boundary
+- Code, automated regression, static checks and the one final production build are complete.
+- No container rebuild or deployment is claimed by this evidence.
+- T06 remains IN_PROGRESS until real deployed evidence and Sprint Go/No-Go are attached.

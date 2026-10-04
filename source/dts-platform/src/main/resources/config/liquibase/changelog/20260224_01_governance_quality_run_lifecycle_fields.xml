@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260224-01-governance-quality-run-lifecycle-fields" author="codex">
+        <comment>Add quality run input parameters and error category fields for lifecycle tracing</comment>
+
+        <addColumn tableName="gov_quality_run">
+            <column name="input_params_json" type="jsonb"/>
+            <column name="error_category" type="varchar(64)"/>
+        </addColumn>
+
+        <createIndex indexName="idx_gov_quality_run_error_category" tableName="gov_quality_run">
+            <column name="error_category"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

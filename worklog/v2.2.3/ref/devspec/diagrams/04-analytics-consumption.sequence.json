@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "分析消费链：契约读取与查询执行",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "client",
+      "type": "frontend",
+      "label": "分析页面",
+      "sublabel": "AnalysisResource"
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "查询网关",
+      "sublabel": "AnalysisQueryGateway"
+    },
+    {
+      "id": "contract",
+      "type": "backend",
+      "label": "契约客户端",
+      "sublabel": "契约客户端"
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "平台契约端点",
+      "sublabel": "契约端点"
+    },
+    {
+      "id": "cache",
+      "type": "database",
+      "label": "契约缓存",
+      "sublabel": "Caffeine 5 分钟"
+    },
+    {
+      "id": "compiler",
+      "type": "backend",
+      "label": "SQL 编译",
+      "sublabel": "AnalysisSqlCompiler"
+    },
+    {
+      "id": "facade",
+      "type": "backend",
+      "label": "执行门面",
+      "sublabel": "QueryExecutionFacade"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "label": "查询数据源",
+      "sublabel": "DatasetQueryService"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 510,
+      "label": "契约校验与查询执行"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-query",
+      "from": "client",
+      "to": "gateway",
+      "y": 168,
+      "label": "POST /api/analysis/{id}/query",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-contract",
+      "from": "gateway",
+      "to": "contract",
+      "y": 196,
+      "label": "get(datasetId, version, checksum)"
+    },
+    {
+      "id": "m-cache",
+      "from": "contract",
+      "to": "cache",
+      "y": 224,
+      "label": "getIfPresent"
+    },
+    {
+      "id": "m-cache-back",
+      "from": "cache",
+      "to": "contract",
+      "y": 252,
+      "label": "命中直接返回",
+      "variant": "return"
+    },
+    {
+      "id": "m-http",
+      "from": "contract",
+      "to": "platform",
+      "y": 280,
+      "label": "GET versions/{version}",
+      "variant": "security"
+    },
+    {
+      "id": "m-contract-back",
+      "from": "platform",
+      "to": "contract",
+      "y": 308,
+      "label": "契约（校验 ID/版本/checksum/PUBLISHED）",
+      "variant": "return"
+    },
+    {
+      "id": "m-compile",
+      "from": "gateway",
+      "to": "compiler",
+      "y": 336,
+      "label": "compile(spec, contract)"
+    },
+    {
+      "id": "m-exec",
+      "from": "gateway",
+      "to": "facade",
+      "y": 364,
+      "label": "executePrepared",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-sql",
+      "from": "facade",
+      "to": "db",
+      "y": 392,
+      "label": "执行 SQL（绑定与合规）"
+    },
+    {
+      "id": "m-rows",
+      "from": "db",
+      "to": "facade",
+      "y": 420,
+      "label": "结果集",
+      "variant": "return"
+    },
+    {
+      "id": "m-result",
+      "from": "facade",
+      "to": "gateway",
+      "y": 448,
+      "label": "AnalysisQueryResult",
+      "variant": "return"
+    },
+    {
+      "id": "m-response",
+      "from": "gateway",
+      "to": "client",
+      "y": 476,
+      "label": "查询结果",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "契约校验",
+      "items": [
+        "缓存键为 datasetId:version:checksum",
+        "未命中时 HTTP 读取并核对 PUBLISHED",
+        "404 抛 ANALYSIS_DATASET_NOT_FOUND"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "invalidate 无调用方，撤销依赖 5 分钟自然过期",
+        "公共分享另走部门 + 密级双重校验",
+        "执行器为具体类，无接口替换点"
+      ]
+    }
+  ]
+}

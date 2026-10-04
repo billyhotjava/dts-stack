@@ -1,0 +1,5 @@
+import MetricDictionaryPage from "@/pages/metrics/MetricDictionaryPage";
+
+export default function IndicatorsPage() {
+	return <MetricDictionaryPage />;
+}

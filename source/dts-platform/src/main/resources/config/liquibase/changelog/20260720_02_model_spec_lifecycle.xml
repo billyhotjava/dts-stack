@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260720_02_model_spec_lifecycle" author="codex">
+        <createTable tableName="modeling_dbt_artifact_legacy_orphan">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="project_key" type="varchar(128)"/>
+            <column name="dbt_unique_id" type="varchar(256)"/>
+            <column name="artifact_type" type="varchar(32)"/>
+            <column name="path" type="text"/>
+            <column name="content_checksum" type="varchar(128)"/>
+            <column name="content" type="text"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="revision" type="int"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+            <column name="archived_date" type="timestamp" defaultValueDate="${now}"><constraints nullable="false"/></column>
+            <column name="archive_reason" type="varchar(64)" defaultValue="NULL_MODEL_OWNER"><constraints nullable="false"/></column>
+        </createTable>
+        <sql>
+            insert into modeling_dbt_artifact_legacy_orphan (
+                id, project_key, dbt_unique_id, artifact_type, path, content_checksum, content,
+                status, revision, created_date, last_modified_date
+            )
+            select id, project_key, dbt_unique_id, artifact_type, path, content_checksum, content,
+                   status, revision, created_date, last_modified_date
+              from modeling_dbt_artifact
+             where model_spec_id is null;
+            delete from modeling_dbt_artifact where model_spec_id is null;
+        </sql>
+
+        <dropUniqueConstraint tableName="modeling_dbt_artifact" constraintName="uk_modeling_dbt_artifact_project_unique"/>
+        <addNotNullConstraint tableName="modeling_dbt_artifact" columnName="model_spec_id" columnDataType="${uuidType}"/>
+        <addColumn tableName="modeling_dbt_artifact">
+            <column name="plan_id" type="${uuidType}"/>
+            <column name="model_checksum" type="varchar(128)"/>
+            <column name="ownership" type="varchar(32)" defaultValue="LEGACY_READONLY"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(256)"/>
+        </addColumn>
+        <sql>
+            update modeling_dbt_artifact a
+               set plan_id = s.plan_id,
+                   model_checksum = r.content_checksum,
+                   ownership = case when s.contract_version = 2 then s.implementation_mode else 'LEGACY_READONLY' end
+              from modeling_model_spec s, modeling_model_spec_revision r
+             where a.model_spec_id = s.id
+               and r.model_spec_id = s.id
+               and r.revision = a.revision;
+        </sql>
+        <addNotNullConstraint tableName="modeling_dbt_artifact" columnName="model_checksum" columnDataType="varchar(128)"/>
+        <addUniqueConstraint
+            tableName="modeling_dbt_artifact"
+            columnNames="model_spec_id,revision,dbt_unique_id"
+            constraintName="uk_modeling_dbt_artifact_owner_revision"/>
+        <createIndex tableName="modeling_dbt_artifact" indexName="idx_modeling_dbt_artifact_owner_revision">
+            <column name="model_spec_id"/><column name="revision"/><column name="status"/>
+        </createIndex>
+
+        <addColumn tableName="modeling_pipeline_run">
+            <column name="plan_id" type="${uuidType}"/>
+            <column name="model_revision" type="int"/>
+            <column name="model_checksum" type="varchar(128)"/>
+            <column name="repair_path" type="text"/>
+        </addColumn>
+        <sql>
+            update modeling_pipeline_run pr
+               set plan_id = s.plan_id,
+                   model_revision = s.revision,
+                   model_checksum = coalesce(s.current_checksum, r.content_checksum),
+                   repair_path = '/modeling/models/' || s.id || '?tab=design&amp;planId=' || coalesce(s.plan_id::text, '')
+              from modeling_model_spec s
+              join modeling_model_spec_revision r on r.model_spec_id = s.id and r.revision = s.revision
+             where pr.model_spec_id = s.id;
+        </sql>
+        <addNotNullConstraint tableName="modeling_pipeline_run" columnName="model_revision" columnDataType="int"/>
+        <addNotNullConstraint tableName="modeling_pipeline_run" columnName="model_checksum" columnDataType="varchar(128)"/>
+        <addNotNullConstraint tableName="modeling_pipeline_run" columnName="repair_path" columnDataType="text"/>
+        <createIndex tableName="modeling_pipeline_run" indexName="idx_modeling_pipeline_run_model_revision">
+            <column name="tenant_id"/><column name="model_spec_id"/><column name="model_revision"/>
+        </createIndex>
+
+        <createTable tableName="modeling_model_implementation">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="model_revision" type="int"><constraints nullable="false"/></column>
+            <column name="model_checksum" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="ownership" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="project_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="dbt_unique_id" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_model_implementation" baseColumnNames="model_spec_id" constraintName="fk_modeling_model_implementation_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_model_implementation" columnNames="tenant_id,model_spec_id" constraintName="uk_modeling_model_implementation_owner"/>
+        <addUniqueConstraint tableName="modeling_model_implementation" columnNames="tenant_id,project_key,dbt_unique_id" constraintName="uk_modeling_model_implementation_dbt"/>
+
+        <createTable tableName="modeling_model_lifecycle_event">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="model_spec_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="model_revision" type="int"><constraints nullable="false"/></column>
+            <column name="model_checksum" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="event_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="actor_id" type="varchar(128)"/>
+            <column name="comment_text" type="text"/>
+            <column name="external_ref" type="varchar(512)"/>
+            <column name="details_json" type="jsonb"/>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_model_lifecycle_event" baseColumnNames="model_spec_id" constraintName="fk_modeling_model_lifecycle_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_model_lifecycle_event" columnNames="tenant_id,model_spec_id,event_type,idempotency_key" constraintName="uk_modeling_model_lifecycle_idempotency"/>
+        <createIndex tableName="modeling_model_lifecycle_event" indexName="idx_modeling_model_lifecycle_revision">
+            <column name="tenant_id"/><column name="model_spec_id"/><column name="model_revision"/><column name="event_type"/>
+        </createIndex>
+
+        <createTable tableName="modeling_model_registration_step">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="release_event_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="step_code" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="external_ref" type="varchar(512)"/>
+            <column name="attempt_count" type="int" defaultValueNumeric="1"><constraints nullable="false"/></column>
+            <column name="error_message" type="text"/>
+            <column name="last_attempt_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_model_registration_step" baseColumnNames="release_event_id" constraintName="fk_modeling_registration_release" referencedTableName="modeling_model_lifecycle_event" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_model_registration_step" columnNames="release_event_id,step_code" constraintName="uk_modeling_registration_step"/>
+
+        <rollback>
+            <sql>
+                do $$
+                begin
+                    if exists (select 1 from modeling_model_lifecycle_event)
+                       or exists (select 1 from modeling_model_implementation)
+                       or exists (select 1 from modeling_model_registration_step)
+                       or exists (select 1 from modeling_dbt_artifact where ownership &lt;&gt; 'LEGACY_READONLY') then
+                        raise exception 'ROLLBACK_BLOCKED_MODEL_LIFECYCLE_DATA_EXISTS';
+                    end if;
+                end $$;
+            </sql>
+            <dropTable tableName="modeling_model_registration_step"/>
+            <dropTable tableName="modeling_model_lifecycle_event"/>
+            <dropTable tableName="modeling_model_implementation"/>
+            <dropIndex tableName="modeling_pipeline_run" indexName="idx_modeling_pipeline_run_model_revision"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="repair_path"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="model_checksum"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="model_revision"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="plan_id"/>
+            <dropIndex tableName="modeling_dbt_artifact" indexName="idx_modeling_dbt_artifact_owner_revision"/>
+            <dropUniqueConstraint tableName="modeling_dbt_artifact" constraintName="uk_modeling_dbt_artifact_owner_revision"/>
+            <dropColumn tableName="modeling_dbt_artifact" columnName="idempotency_key"/>
+            <dropColumn tableName="modeling_dbt_artifact" columnName="ownership"/>
+            <dropColumn tableName="modeling_dbt_artifact" columnName="model_checksum"/>
+            <dropColumn tableName="modeling_dbt_artifact" columnName="plan_id"/>
+            <dropNotNullConstraint tableName="modeling_dbt_artifact" columnName="model_spec_id" columnDataType="${uuidType}"/>
+            <addUniqueConstraint tableName="modeling_dbt_artifact" columnNames="project_key,dbt_unique_id" constraintName="uk_modeling_dbt_artifact_project_unique"/>
+            <sql>
+                insert into modeling_dbt_artifact (
+                    id, model_spec_id, project_key, dbt_unique_id, artifact_type, path,
+                    content_checksum, content, status, revision, created_date, last_modified_date
+                )
+                select id, null, project_key, dbt_unique_id, artifact_type, path,
+                       content_checksum, content, status, revision, created_date, last_modified_date
+                  from modeling_dbt_artifact_legacy_orphan;
+            </sql>
+            <dropTable tableName="modeling_dbt_artifact_legacy_orphan"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

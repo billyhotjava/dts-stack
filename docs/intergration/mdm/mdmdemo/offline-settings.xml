@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+          xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0 https://maven.apache.org/xsd/settings-1.0.0.xsd">
+
+  <!-- 离线调试使用：只引用本地仓库，不走外网 -->
+  <!-- 本地仓库位于 mdmdemo 目录内的 mvn 子目录（例如 d:\s10\mdmdemo\mvn） -->
+  <localRepository>${user.dir}/mvn</localRepository>
+
+  <offline>true</offline>
+
+  <profiles>
+    <profile>
+      <id>local-only</id>
+      <repositories>
+        <repository>
+          <id>local-repo</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+          <id>aliyunmaven</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+        <repository>
+          <id>central</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </repository>
+      </repositories>
+      <pluginRepositories>
+        <pluginRepository>
+          <id>local-repo</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>aliyunmaven</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+        <pluginRepository>
+          <id>central</id>
+          <url>file://${user.dir}/mvn</url>
+          <releases><enabled>true</enabled></releases>
+          <snapshots><enabled>true</enabled></snapshots>
+        </pluginRepository>
+      </pluginRepositories>
+    </profile>
+  </profiles>
+
+  <activeProfiles>
+    <activeProfile>local-only</activeProfile>
+  </activeProfiles>
+</settings>

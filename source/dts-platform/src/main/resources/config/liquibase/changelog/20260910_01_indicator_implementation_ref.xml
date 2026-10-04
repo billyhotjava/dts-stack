@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.20.xsd">
+ <changeSet id="20260910-01-indicator-implementation-ref" author="codex">
+  <!-- Accept the already-shipped expanded variant; missing additions run below in new changesets. -->
+  <validCheckSum>9:701bf26bcae14951cf1cc35d6f3d6421</validCheckSum>
+  <addColumn tableName="gov_indicator_definition"><column name="implementation_ref" type="jsonb"/></addColumn>
+  <sql><![CDATA[
+    WITH exact_refs AS (
+      SELECT indicator_id, min(ref_target) target FROM gov_indicator_reference
+      WHERE ref_type = 'MODEL_SPEC_FIELD'
+      GROUP BY indicator_id HAVING count(*) = 1
+    )
+    UPDATE gov_indicator_definition i
+    SET implementation_ref = jsonb_build_object(
+      'modelSpecId', split_part(r.target, '@', 1),
+      'modelRevision', split_part(split_part(r.target, '@', 2), '#', 1)::integer,
+      'fieldName', split_part(r.target, '#', 2))
+    FROM exact_refs r WHERE r.indicator_id = i.id
+      AND r.target ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}@[1-9][0-9]{0,8}#[A-Za-z_][A-Za-z0-9_]*$';
+  ]]></sql>
+  <addColumn tableName="gov_indicator_definition"><column name="execution_mode" type="varchar(24)"/></addColumn>
+  <addColumn tableName="gov_indicator_run">
+   <column name="indicator_version" type="varchar(32)"/>
+   <column name="dependency_versions" type="text"/>
+  </addColumn>
+ </changeSet>
+</databaseChangeLog>

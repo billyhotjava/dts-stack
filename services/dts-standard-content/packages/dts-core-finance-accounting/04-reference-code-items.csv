@@ -1,0 +1,10 @@
+code_type_code,code_value,code_name,description,sort_num,parent_code,is_default
+ACCOUNTING_ELEMENT_DTS,ASSET,资产,企业会计要素之资产,10,,N
+ACCOUNTING_ELEMENT_DTS,LIABILITY,负债,企业会计要素之负债,20,,N
+ACCOUNTING_ELEMENT_DTS,EQUITY,所有者权益,企业会计要素之所有者权益,30,,N
+ACCOUNTING_ELEMENT_DTS,REVENUE,收入,企业会计要素之收入,40,,N
+ACCOUNTING_ELEMENT_DTS,EXPENSE,费用,企业会计要素之费用,50,,N
+ACCOUNTING_ELEMENT_DTS,PROFIT,利润,企业会计要素之利润,60,,N
+DEBIT_CREDIT_DIRECTION_DTS,DEBIT,借方,借贷记账法的借方,10,,N
+DEBIT_CREDIT_DIRECTION_DTS,CREDIT,贷方,借贷记账法的贷方,20,,N
+CURRENCY_GBT12406_STARTER,CNY,人民币,GB/T 12406对应的人民币三字符代码；本码表不是完整币种表,10,,Y

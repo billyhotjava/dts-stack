@@ -1,0 +1,301 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dts-analytics 模块关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      600
+    ]
+  },
+  "components": [
+    {
+      "id": "screen",
+      "type": "frontend",
+      "label": "大屏",
+      "sublabel": "ScreenResource",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "bi_rest",
+      "type": "frontend",
+      "label": "卡片 · 看板 · 分析 API",
+      "sublabel": "Card / Dashboard / Analysis",
+      "pos": [
+        377,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "publication",
+      "type": "backend",
+      "label": "发布与登记",
+      "sublabel": "service/publication",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "analysis_app",
+      "type": "backend",
+      "label": "分析定义",
+      "sublabel": "AnalysisApplicationService",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "classification",
+      "type": "security",
+      "label": "消费分类与权限",
+      "sublabel": "ConsumerClassification",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "受治理查询网关",
+      "sublabel": "AnalysisQueryGateway",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "contract",
+      "type": "external",
+      "label": "数据集契约客户端",
+      "sublabel": "PlatformAnalysisDatasetContract",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "semantic_pub",
+      "type": "frontend",
+      "label": "语义发布入站",
+      "sublabel": "SemanticPublishResource",
+      "pos": [
+        1058,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "semantic",
+      "type": "backend",
+      "label": "语义查询",
+      "sublabel": "SemanticQueryService",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "facade",
+      "type": "backend",
+      "label": "查询执行",
+      "sublabel": "QueryExecutionFacade",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "datasource",
+      "type": "database",
+      "label": "外部数据源",
+      "sublabel": "ExternalDatabaseDataSourceRegistry",
+      "pos": [
+        718,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "db_reg",
+      "type": "backend",
+      "label": "分析库登记",
+      "sublabel": "PlatformAnalyticsDatabaseRegistration",
+      "pos": [
+        1058,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [],
+  "connections": [
+    {
+      "id": "bi_rest-gateway",
+      "from": "bi_rest",
+      "to": "gateway",
+      "label": "受治理查询",
+      "variant": "emphasis",
+      "labelAt": [
+        477,
+        179
+      ]
+    },
+    {
+      "id": "bi_rest-publication",
+      "from": "bi_rest",
+      "to": "publication",
+      "label": "发布"
+    },
+    {
+      "id": "bi_rest-classification",
+      "from": "bi_rest",
+      "to": "classification",
+      "label": "分类校验"
+    },
+    {
+      "id": "screen-classification",
+      "from": "screen",
+      "to": "classification",
+      "label": "大屏权限",
+      "labelAt": [
+        137,
+        179
+      ]
+    },
+    {
+      "id": "gateway-contract",
+      "from": "gateway",
+      "to": "contract",
+      "label": "契约读取",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-facade",
+      "from": "gateway",
+      "to": "facade",
+      "label": "SQL 执行",
+      "labelAt": [
+        477,
+        349
+      ]
+    },
+    {
+      "id": "publication-analysis_app",
+      "from": "publication",
+      "to": "analysis_app",
+      "label": "定义快照"
+    },
+    {
+      "id": "publication-contract",
+      "from": "publication",
+      "to": "contract",
+      "label": "契约校验",
+      "labelAt": [
+        818,
+        179
+      ]
+    },
+    {
+      "id": "semantic-gateway",
+      "from": "semantic",
+      "to": "gateway",
+      "label": "指标计划查询"
+    },
+    {
+      "id": "facade-datasource",
+      "from": "facade",
+      "to": "datasource",
+      "label": "JDBC 查询"
+    },
+    {
+      "id": "semantic_pub-db_reg",
+      "from": "semantic_pub",
+      "to": "db_reg",
+      "label": "登记分析库",
+      "labelAt": [
+        1158,
+        349
+      ]
+    },
+    {
+      "id": "db_reg-datasource",
+      "from": "db_reg",
+      "to": "datasource",
+      "label": "元数据同步"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "跨服务出口（指向 dts-platform）",
+      "items": [
+        "契约客户端 → /internal 数据集契约",
+        "发布登记 Outbox → /internal/reports/registrations",
+        "分类 / 权限客户端 → catalog 与 asset-permission"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "箭头 = 构造注入方向（调用方 → 被依赖方）",
+        "analysis_app → contract、semantic_pub → 分类未画出",
+        "大屏子模块（锁、协作、AI）并入大屏节点"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "dts.runtime-candidate/v1",
+  "candidateProfileId": "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02",
+  "platform": "linux/amd64",
+  "status": "NOT_CERTIFIED",
+  "certificationProfileId": null,
+  "materializationFailureCode": "DBT_RUNTIME_NOT_CERTIFIED",
+  "sourceCommit": null,
+  "buildUtc": null,
+  "architecture": "amd64",
+  "baseImage": {
+    "name": "python:3.11-slim",
+    "indexDigest": "sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93",
+    "platform": "linux/amd64",
+    "platformManifestDigest": "sha256:00af38ae2ed311628970782e8a2d7f014d8909dbc63cb97bc0a158187f4db045"
+  },
+  "candidateImage": {
+    "tagAlias": "dts-dbt:h83-rt01-linux-amd64-candidate-r1",
+    "platform": "linux/amd64",
+    "platformManifestDigest": null
+  },
+  "lockGenerator": {
+    "platform": "linux/amd64",
+    "baseIndexDigest": "sha256:db3ff2e1800a8581e2c48a27c3995339d47bdf046da21c7627accd3d51053a93",
+    "basePlatformManifestDigest": "sha256:00af38ae2ed311628970782e8a2d7f014d8909dbc63cb97bc0a158187f4db045",
+    "pipTools": "7.5.2",
+    "bootstrapPip": "24.0",
+    "bootstrapSetuptools": "79.0.1",
+    "bootstrapLockSha256": "e4860ac14f16fb4fd6f5b1383017f49f51ff4623174ae8e62458c9ac6c416f63"
+  },
+  "pythonVersion": null,
+  "runtime": {
+    "dbtCore": "1.10.22",
+    "dbtPostgres": "1.10.0",
+    "dbtAdapters": "1.24.5",
+    "dbtCommon": "1.38.0",
+    "requirementsLockSha256": "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02"
+  },
+  "postgresql": {
+    "serverVersion": null,
+    "driver": "psycopg2-binary==2.9.12",
+    "connectionMode": null
+  },
+  "evidenceManifestSha256": null
+}

@@ -1,0 +1,479 @@
+package com.yuzhi.dts.platform.service.infra;
+
+import com.yuzhi.dts.platform.config.CatalogFeatureProperties;
+import com.yuzhi.dts.platform.domain.catalog.CatalogColumnSchema;
+import com.yuzhi.dts.platform.domain.catalog.CatalogDataset;
+import com.yuzhi.dts.platform.domain.catalog.CatalogSchemaDriftEvent;
+import com.yuzhi.dts.platform.domain.catalog.CatalogTableSchema;
+import com.yuzhi.dts.platform.repository.catalog.CatalogColumnSchemaRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogSchemaDriftEventRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogTableSchemaRepository;
+import com.yuzhi.dts.platform.repository.service.InfraDataSourceRepository;
+import com.yuzhi.dts.platform.domain.service.InfraDataSource;
+import com.yuzhi.dts.platform.service.catalog.CatalogAutoLineageService;
+import com.yuzhi.dts.platform.service.catalog.CatalogColumnSyncService;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftConsumerReferenceReadPort;
+import com.yuzhi.dts.platform.service.catalog.SchemaDriftDetector;
+import com.yuzhi.dts.platform.service.infra.InceptorCatalogSyncService.CatalogSyncResult;
+import jakarta.transaction.Transactional;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.Set;
+import javax.sql.DataSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Component
+@Transactional
+public class PostgresCatalogSyncService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(PostgresCatalogSyncService.class);
+    private static final String TYPE_POSTGRES = "POSTGRES";
+    private static final String STATUS_ACTIVE = "ACTIVE";
+    private static final String HARVEST_STATUS_SYNCED = "SYNCED";
+    private static final String HARVEST_STATUS_STALE = "STALE";
+    private static final String DEFAULT_OWNER = "system";
+    private static final String DEFAULT_EXPOSED_BY = "VIEW";
+
+    private final InfraDataSourceRepository infraDataSourceRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final CatalogTableSchemaRepository tableRepository;
+    private final CatalogColumnSchemaRepository columnRepository;
+    private final CatalogFeatureProperties catalogFeatureProperties;
+    private final DataSource dataSource;
+    private final CatalogAutoLineageService autoLineageService;
+    private final CatalogSchemaDriftEventRepository schemaDriftEventRepository;
+    private final SchemaDriftDetector schemaDriftDetector;
+    private final CatalogColumnSyncService columnSyncService;
+    private final SchemaDriftConsumerReferenceReadPort driftConsumerReferences;
+
+    public PostgresCatalogSyncService(
+        InfraDataSourceRepository infraDataSourceRepository,
+        CatalogDatasetRepository datasetRepository,
+        CatalogTableSchemaRepository tableRepository,
+        CatalogColumnSchemaRepository columnRepository,
+        CatalogFeatureProperties catalogFeatureProperties,
+        DataSource dataSource,
+        CatalogAutoLineageService autoLineageService,
+        CatalogSchemaDriftEventRepository schemaDriftEventRepository,
+        SchemaDriftDetector schemaDriftDetector,
+        CatalogColumnSyncService columnSyncService,
+        SchemaDriftConsumerReferenceReadPort driftConsumerReferences
+    ) {
+        this.infraDataSourceRepository = infraDataSourceRepository;
+        this.datasetRepository = datasetRepository;
+        this.tableRepository = tableRepository;
+        this.columnRepository = columnRepository;
+        this.catalogFeatureProperties = catalogFeatureProperties;
+        this.dataSource = dataSource;
+        this.autoLineageService = autoLineageService;
+        this.schemaDriftEventRepository = schemaDriftEventRepository;
+        this.schemaDriftDetector = schemaDriftDetector;
+        this.columnSyncService = columnSyncService;
+        this.driftConsumerReferences = driftConsumerReferences;
+    }
+
+    public boolean isFallbackActive() {
+        try {
+            return infraDataSourceRepository
+                .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE)
+                .isPresent();
+        } catch (org.springframework.dao.InvalidDataAccessResourceUsageException ex) {
+            LOG.debug(
+                "PostgreSQL fallback inactive because infra_data_source table is unavailable: {}",
+                ex.getMostSpecificCause() != null ? ex.getMostSpecificCause().getMessage() : ex.getMessage()
+            );
+            return false;
+        } catch (RuntimeException ex) {
+            LOG.debug("Failed to probe PostgreSQL fallback: {}", ex.getMessage());
+            return false;
+        }
+    }
+
+    public CatalogSyncResult synchronize() {
+        return synchronize(null);
+    }
+
+    public CatalogSyncResult synchronize(UUID runId) {
+        if (!isFallbackActive()) {
+            LOG.debug("Skipping PostgreSQL catalog sync: fallback not active");
+            return CatalogSyncResult.inactive();
+        }
+
+        UUID sourceId = infraDataSourceRepository
+            .findFirstByTypeIgnoreCaseAndStatusIgnoreCase(TYPE_POSTGRES, STATUS_ACTIVE)
+            .map(InfraDataSource::getId)
+            .orElse(null);
+
+        String schema = resolveSchema();
+        Instant snapshotTime = Instant.now();
+        Map<String, TableMeta> metadata;
+        try {
+            metadata = fetchMetadata(schema);
+        } catch (Exception ex) {
+            LOG.error("Failed to enumerate PostgreSQL metadata: {}", ex.getMessage(), ex);
+            return CatalogSyncResult.failed(ex.getMessage());
+        }
+
+        if (metadata.isEmpty()) {
+            int datasetsRemoved = cleanupStaleDatasets(sourceId, schema, Collections.emptySet());
+            LOG.info("PostgreSQL catalog sync completed: schema={} has no tables (marked {} dataset(s) stale)", schema, datasetsRemoved);
+            return new CatalogSyncResult(schema, 0, 0, 0, datasetsRemoved, 0, 0, List.of(), null);
+        }
+
+        int datasetsCreated = 0;
+        int datasetsUpdated = 0;
+        int tablesCreated = 0;
+        int columnsImported = 0;
+        int datasetsRemoved = 0;
+        List<String> processedTables = new ArrayList<>(metadata.size());
+
+        for (Map.Entry<String, TableMeta> entry : metadata.entrySet()) {
+            String tableName = entry.getKey();
+            TableMeta tableMeta = entry.getValue();
+            List<ColumnMeta> columns = tableMeta != null ? tableMeta.columns() : List.of();
+            processedTables.add(tableName);
+
+            CatalogDataset dataset = (sourceId != null)
+                ? datasetRepository.findFirstBySourceIdAndHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(sourceId, schema, tableName).orElseGet(CatalogDataset::new)
+                : datasetRepository.findFirstByHiveDatabaseIgnoreCaseAndHiveTableIgnoreCase(schema, tableName).orElseGet(CatalogDataset::new);
+            boolean isNewDataset = dataset.getId() == null;
+
+            dataset.setSourceId(sourceId);
+            dataset.setHiveDatabase(schema);
+            dataset.setHiveTable(tableName);
+            dataset.setSnapshotTime(snapshotTime);
+            dataset.setType(TYPE_POSTGRES);
+            dataset.setName(defaultIfBlank(dataset.getName(), tableName));
+            dataset.setOwner(defaultIfBlank(dataset.getOwner(), DEFAULT_OWNER));
+            dataset.setExposedBy(defaultIfBlank(dataset.getExposedBy(), DEFAULT_EXPOSED_BY));
+            dataset.setHarvestStatus(HARVEST_STATUS_SYNCED);
+
+            dataset = datasetRepository.save(dataset);
+            if (isNewDataset) {
+                datasetsCreated++;
+            } else {
+                datasetsUpdated++;
+            }
+
+            final CatalogDataset currentDataset = dataset;
+            CatalogTableSchema tableSchema = tableRepository
+                .findFirstByDatasetAndNameIgnoreCase(currentDataset, tableName)
+                .orElseGet(() -> {
+                    CatalogTableSchema schemaEntity = new CatalogTableSchema();
+                    schemaEntity.setDataset(currentDataset);
+                    schemaEntity.setName(tableName);
+                    return schemaEntity;
+                });
+
+            boolean isNewTable = tableSchema.getId() == null;
+            tableSchema.setOwner(defaultIfBlank(tableSchema.getOwner(), dataset.getOwner()));
+            if (StringUtils.hasText(dataset.getClassification())) {
+                tableSchema.setClassification(defaultIfBlank(tableSchema.getClassification(), dataset.getClassification()));
+            }
+            tableSchema = tableRepository.save(tableSchema);
+            if (isNewTable) {
+                tablesCreated++;
+            }
+
+            List<CatalogColumnSchema> existingColumns = columnRepository.findByTable(tableSchema);
+            Map<String, SchemaDriftDetector.ColumnSnapshot> beforeSnapshot = schemaDriftDetector.snapshotExisting(existingColumns);
+            columnsImported += columnSyncService.synchronizeSnapshot(
+                tableSchema,
+                columns
+                    .stream()
+                    .map(column ->
+                        new CatalogColumnSyncService.ColumnSpec(
+                            column.name(),
+                            column.dataType(),
+                            column.nullable(),
+                            column.comment(),
+                            null,
+                            null,
+                            null,
+                            null
+                        )
+                    )
+                    .toList()
+            );
+
+            if (!beforeSnapshot.isEmpty() || !columns.isEmpty()) {
+                List<SchemaDriftDetector.ColumnSnapshot> afterSnapshot = columns
+                    .stream()
+                    .map(col -> new SchemaDriftDetector.ColumnSnapshot(col.name(), col.dataType(), col.nullable()))
+                    .toList();
+                Set<String> referencedFields = driftConsumerReferences
+                    .findCurrentReferencedFields(tableSchema.getId(), dataset.getSourceId(), schema, tableName)
+                    .orElse(null);
+                SchemaDriftDetector.DriftSummary drift = schemaDriftDetector.diff(
+                    beforeSnapshot,
+                    afterSnapshot,
+                    referencedFields
+                );
+                if (drift.added() > 0 || drift.removed() > 0 || drift.changed() > 0) {
+                    recordSchemaDrift(runId, TYPE_POSTGRES, dataset, schema, tableName, drift);
+                }
+            }
+            if (tableMeta != null && tableMeta.isView() && org.springframework.util.StringUtils.hasText(tableMeta.viewDefinition())) {
+                try {
+                    autoLineageService.syncAutoViewLineage(dataset, tableMeta.viewDefinition());
+                } catch (Exception ex) {
+                    LOG.debug("Auto lineage sync skipped for {}.{}: {}", schema, tableName, ex.getMessage());
+                }
+            }
+        }
+
+        Set<String> processedLower = processedTables
+            .stream()
+            .filter(Objects::nonNull)
+            .map(name -> name.trim().toLowerCase(Locale.ROOT))
+            .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+        datasetsRemoved = cleanupStaleDatasets(sourceId, schema, processedLower);
+
+        LOG.info(
+            "PostgreSQL catalog sync completed: schema={}, tables={}, newDatasets={}, updatedDatasets={}, tablesCreated={}, columnsImported={}, markedStale={}",
+            schema,
+            metadata.size(),
+            datasetsCreated,
+            datasetsUpdated,
+            tablesCreated,
+            columnsImported,
+            datasetsRemoved
+        );
+        return new CatalogSyncResult(
+            schema,
+            metadata.size(),
+            datasetsCreated,
+            datasetsUpdated,
+            datasetsRemoved,
+            tablesCreated,
+            columnsImported,
+            processedTables,
+            null
+        );
+    }
+
+    private void recordSchemaDrift(
+        UUID runId,
+        String integration,
+        CatalogDataset dataset,
+        String hiveDatabase,
+        String hiveTable,
+        SchemaDriftDetector.DriftSummary drift
+    ) {
+        if (dataset == null || dataset.getId() == null || drift == null) {
+            return;
+        }
+        if (schemaDriftEventRepository == null) {
+            return;
+        }
+        CatalogSchemaDriftEvent event = new CatalogSchemaDriftEvent();
+        event.setRunId(runId);
+        event.setIntegration(integration);
+        event.setDatasetId(dataset.getId());
+        event.setHiveDatabase(hiveDatabase);
+        event.setHiveTable(hiveTable);
+        event.setAddedCount(drift.added());
+        event.setRemovedCount(drift.removed());
+        event.setChangedCount(drift.changed());
+        event.setDetailsJson(drift.detailsJson());
+        event.setPolicyMode(CatalogSchemaDriftEvent.POLICY_REVIEW);
+        event.setTicketStatus(CatalogSchemaDriftEvent.TICKET_OPEN);
+        schemaDriftEventRepository.save(event);
+    }
+
+    private int cleanupStaleDatasets(UUID sourceId, String schema, Set<String> processedTablesLower) {
+        if (sourceId == null || !StringUtils.hasText(schema) || processedTablesLower == null) {
+            return 0;
+        }
+        List<CatalogDataset> existing = datasetRepository.findBySourceIdAndHiveDatabaseIgnoreCase(sourceId, schema);
+        if (existing.isEmpty()) {
+            return 0;
+        }
+        int markedStale = 0;
+        for (CatalogDataset dataset : existing) {
+            if (dataset == null || dataset.getId() == null) {
+                continue;
+            }
+            String tableName = dataset.getHiveTable();
+            if (!StringUtils.hasText(tableName)) {
+                continue;
+            }
+            if (processedTablesLower.contains(tableName.trim().toLowerCase(Locale.ROOT))) {
+                continue;
+            }
+            if (!HARVEST_STATUS_STALE.equalsIgnoreCase(dataset.getHarvestStatus())) {
+                dataset.setHarvestStatus(HARVEST_STATUS_STALE);
+                datasetRepository.save(dataset);
+                markedStale++;
+            }
+        }
+        return markedStale;
+    }
+
+    private void purgeDataset(CatalogDataset dataset) {
+        if (dataset == null) {
+            return;
+        }
+        try {
+            List<CatalogTableSchema> tables = tableRepository.findByDataset(dataset);
+            for (CatalogTableSchema tableSchema : tables) {
+                columnRepository.deleteByTable(tableSchema);
+            }
+            if (!tables.isEmpty()) {
+                tableRepository.deleteAll(tables);
+            }
+            datasetRepository.delete(dataset);
+        } catch (Exception ex) {
+            LOG.warn("Failed to purge stale PostgreSQL dataset {}({}): {}", dataset.getName(), dataset.getId(), ex.getMessage());
+        }
+    }
+
+    private String resolveSchema() {
+        String configured = Optional
+            .ofNullable(catalogFeatureProperties.getPostgresSchema())
+            .map(String::trim)
+            .filter(s -> !s.isBlank())
+            .orElse("public");
+        try (Connection connection = dataSource.getConnection(); PreparedStatement stmt = connection.prepareStatement(
+            "SELECT schema_name FROM information_schema.schemata WHERE LOWER(schema_name) = LOWER(?) LIMIT 1"
+        )) {
+            stmt.setString(1, configured);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getString("schema_name");
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("Failed to resolve PostgreSQL schema '{}': {}", configured, ex.getMessage());
+        }
+        return configured;
+    }
+
+    private Map<String, TableMeta> fetchMetadata(String schema) throws SQLException {
+        Map<String, TableMeta> result = new LinkedHashMap<>();
+        String tableSql =
+            """
+            SELECT table_name, table_type
+            FROM information_schema.tables
+            WHERE LOWER(table_schema) = LOWER(?) AND table_type IN ('BASE TABLE', 'VIEW')
+            ORDER BY table_name
+            """;
+        try (Connection connection = dataSource.getConnection(); PreparedStatement stmt = connection.prepareStatement(tableSql)) {
+            stmt.setString(1, schema);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String table = rs.getString("table_name");
+                    if (StringUtils.hasText(table)) {
+                        List<ColumnMeta> columns = fetchColumns(connection, schema, table);
+                        String tableType = rs.getString("table_type");
+                        tableType = tableType != null ? tableType.trim() : null;
+                        String viewDefinition = null;
+                        if ("VIEW".equalsIgnoreCase(tableType)) {
+                            viewDefinition = fetchViewDefinition(connection, schema, table);
+                        }
+                        result.put(table.trim(), new TableMeta(table.trim(), tableType, columns, viewDefinition));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<ColumnMeta> fetchColumns(Connection connection, String schema, String table) throws SQLException {
+        String columnSql =
+            """
+            SELECT cols.column_name,
+                   cols.data_type,
+                   cols.is_nullable,
+                   pgd.description AS column_comment
+            FROM information_schema.columns cols
+            LEFT JOIN pg_catalog.pg_class c
+                ON c.relname = cols.table_name
+            LEFT JOIN pg_catalog.pg_namespace n
+                ON n.oid = c.relnamespace
+            LEFT JOIN pg_catalog.pg_description pgd
+                ON pgd.objoid = c.oid AND pgd.objsubid = cols.ordinal_position
+            WHERE LOWER(cols.table_schema) = LOWER(?) AND LOWER(cols.table_name) = LOWER(?)
+              AND (n.nspname IS NULL OR LOWER(n.nspname) = LOWER(cols.table_schema))
+            ORDER BY ordinal_position
+            """;
+        List<ColumnMeta> columns = new ArrayList<>();
+        try (PreparedStatement stmt = connection.prepareStatement(columnSql)) {
+            stmt.setString(1, schema);
+            stmt.setString(2, table);
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    String columnName = rs.getString("column_name");
+                    if (!StringUtils.hasText(columnName)) {
+                        continue;
+                    }
+                    String dataType = defaultIfBlank(rs.getString("data_type"), "text");
+                    String nullable = rs.getString("is_nullable");
+                    String columnComment = rs.getString("column_comment");
+                    columns.add(
+                        new ColumnMeta(
+                            columnName.trim(),
+                            dataType.toLowerCase(Locale.ROOT),
+                            !"NO".equalsIgnoreCase(nullable),
+                            StringUtils.hasText(columnComment) ? columnComment.trim() : null
+                        )
+                    );
+                }
+            }
+        }
+        return columns;
+    }
+
+    private String fetchViewDefinition(Connection connection, String schema, String view) {
+        String sql =
+            """
+            SELECT view_definition
+            FROM information_schema.views
+            WHERE LOWER(table_schema) = LOWER(?) AND LOWER(table_name) = LOWER(?)
+            LIMIT 1
+            """;
+        try (PreparedStatement stmt = connection.prepareStatement(sql)) {
+            stmt.setString(1, schema);
+            stmt.setString(2, view);
+            try (ResultSet rs = stmt.executeQuery()) {
+                if (rs.next()) {
+                    String def = rs.getString("view_definition");
+                    return def != null ? def.trim() : null;
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.debug("Failed to fetch PostgreSQL view definition for {}.{}: {}", schema, view, ex.getMessage());
+        }
+        return null;
+    }
+
+    private record TableMeta(String tableName, String tableType, List<ColumnMeta> columns, String viewDefinition) {
+        boolean isView() {
+            return "VIEW".equalsIgnoreCase(tableType);
+        }
+    }
+
+    private String defaultIfBlank(String current, String fallback) {
+        return StringUtils.hasText(current) ? current : fallback;
+    }
+
+    private record ColumnMeta(String name, String dataType, boolean nullable, String comment) {}
+
+}

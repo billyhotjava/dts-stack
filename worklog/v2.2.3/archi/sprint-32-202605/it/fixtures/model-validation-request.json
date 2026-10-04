@@ -1,0 +1,33 @@
+{
+  "graphId": "demo-project-metrics",
+  "graphVersion": "draft-1",
+  "selector": "ads_project_dashboard_overview",
+  "sourceAssets": [
+    {
+      "type": "DATASET",
+      "id": "dwd_project_detail"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "models/ads/semantic/ads_project_dashboard_overview.sql",
+      "type": "DBT_MODEL_SQL",
+      "content": "select stat_month, dept_name, count(distinct project_id) as project_cnt from {{ ref('dwd_project_detail') }} group by stat_month, dept_name"
+    },
+    {
+      "path": "models/ads/semantic/schema.yml",
+      "type": "DBT_SCHEMA_YML",
+      "content": "version: 2\nmodels:\n  - name: ads_project_dashboard_overview\n    columns:\n      - name: project_cnt\n        tests:\n          - not_null\n"
+    }
+  ],
+  "nodeMap": {
+    "model.ads_project_dashboard_overview": {
+      "nodeId": "model-1",
+      "type": "model"
+    },
+    "metric.project_cnt": {
+      "nodeId": "metric-1",
+      "type": "metric"
+    }
+  }
+}

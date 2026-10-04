@@ -1,0 +1,1606 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-risk-board-v4",
+  "name": "GPMC 风险与预警中心",
+  "description": "管控层风险看板模板，覆盖风险矩阵、分类分布、清单和措施摘要。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号/项目名称",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "gpmc-risk-top",
+      "type": "shape",
+      "name": "gpmc-risk-top",
+      "x": 36,
+      "y": 110,
+      "width": 1848,
+      "height": 140,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-left",
+      "type": "shape",
+      "name": "gpmc-risk-left",
+      "x": 36,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-mid",
+      "type": "shape",
+      "name": "gpmc-risk-mid",
+      "x": 656,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-right",
+      "type": "shape",
+      "name": "gpmc-risk-right",
+      "x": 1276,
+      "y": 268,
+      "width": 608,
+      "height": 316,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-bottom",
+      "type": "shape",
+      "name": "gpmc-risk-bottom",
+      "x": 36,
+      "y": 838,
+      "width": 1848,
+      "height": 220,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "风险与预警中心-header-bar",
+      "type": "shape",
+      "name": "风险与预警中心-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 100,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "风险与预警中心-title",
+      "type": "title",
+      "name": "风险与预警中心",
+      "x": 44,
+      "y": 24,
+      "width": 720,
+      "height": 42,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险与预警中心",
+        "fontSize": 32,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "risk-topic-overview-shape",
+      "type": "shape",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-overview-label",
+      "type": "title",
+      "name": "综合态势",
+      "x": 44,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "综合态势",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-execution-shape",
+      "type": "shape",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-execution-label",
+      "type": "title",
+      "name": "执行监控",
+      "x": 188,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行监控",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-quality-shape",
+      "type": "shape",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-quality-label",
+      "type": "title",
+      "name": "质量跟进",
+      "x": 332,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量跟进",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-tech-state-shape",
+      "type": "shape",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-tech-state-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 476,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-cost-shape",
+      "type": "shape",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.16)",
+        "borderColor": "rgba(88, 180, 255, 0.30)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-cost-label",
+      "type": "title",
+      "name": "成本控制",
+      "x": 620,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "成本控制",
+        "fontSize": 17,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-risk-shape",
+      "type": "shape",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 24,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.24)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 12
+      },
+      "actions": []
+    },
+    {
+      "id": "risk-topic-risk-label",
+      "type": "title",
+      "name": "风险预警",
+      "x": 764,
+      "y": 78,
+      "width": 132,
+      "height": 36,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险预警",
+        "fontSize": 17,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "风险与预警中心-date",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1260,
+      "y": 28,
+      "width": 320,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "风险与预警中心-dept",
+      "type": "filter-select",
+      "name": "事业部/科室",
+      "x": 940,
+      "y": 28,
+      "width": 150,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "事业部/科室",
+        "variableKey": "deptId",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 200,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.dept AS label, d.dept AS value FROM biz_dwd_project_node_v2 d WHERE d.dept IS NOT NULL AND d.dept != '' ORDER BY d.dept",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 200
+        }
+      }
+    },
+    {
+      "id": "风险与预警中心-project",
+      "type": "filter-select",
+      "name": "项目编号",
+      "x": 1104,
+      "y": 28,
+      "width": 140,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目编号",
+        "variableKey": "projectNo",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT d.project_no AS label, d.project_no AS value FROM biz_dwd_project_node_v2 d WHERE d.project_no IS NOT NULL AND d.project_no != '' ORDER BY d.project_no",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
+      }
+    },
+    {
+      "id": "风险与预警中心-risk",
+      "type": "filter-select",
+      "name": "风险等级",
+      "x": 1596,
+      "y": 28,
+      "width": 120,
+      "height": 58,
+      "zIndex": 65,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "风险等级",
+        "variableKey": "riskLevel",
+        "options": [
+          "高",
+          "中",
+          "低"
+        ],
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-total",
+      "type": "number-card",
+      "name": "风险总数",
+      "x": 44,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险总数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_risk_total",
+          "displayName": "风险总数",
+          "domain": "风险",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内提出的风险总数(高+中+低)",
+          "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)新增风险计数"
+        },
+        "metricCode": "pjm_risk_total"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.total_risk_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-high",
+      "type": "number-card",
+      "name": "高风险数",
+      "x": 414,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_risk_high",
+          "displayName": "高风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'高'的风险总数",
+          "formula": "风险等级='高' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)高风险计数"
+        },
+        "metricCode": "pjm_risk_high"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.high_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-mid",
+      "type": "number-card",
+      "name": "中风险数",
+      "x": 784,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "中风险数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_risk_mid",
+          "displayName": "中风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'中'的风险总数",
+          "formula": "风险等级='中' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)中风险计数"
+        },
+        "metricCode": "pjm_risk_mid"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.mid_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-open",
+      "type": "number-card",
+      "name": "未释放风险数",
+      "x": 1154,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未释放风险数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_risk_open",
+          "displayName": "未释放风险数",
+          "domain": "风险",
+          "category": "状态",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "目前状态为'未释放'的风险总数",
+          "formula": "风险状态='未释放' 的风险计数",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)未释放风险计数"
+        },
+        "metricCode": "pjm_risk_open"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(s.open_cnt),0) AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-kpi-release-rate",
+      "type": "number-card",
+      "name": "风险释放率",
+      "x": 1524,
+      "y": 126,
+      "width": 350,
+      "height": 118,
+      "zIndex": 12,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险释放率",
+        "value": 0,
+        "suffix": "%",
+        "precision": 2,
+        "titleFontSize": 17,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "metricNote": {
+          "code": "pjm_risk_release_rate",
+          "displayName": "风险释放率",
+          "domain": "风险",
+          "category": "释放率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已释放风险占总风险的比率",
+          "formula": "已释放风险数 ÷ 风险总数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 60.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "(衍生)释放率"
+        },
+        "metricCode": "pjm_risk_release_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(s.total_risk_cnt)=0 THEN 0 ELSE ROUND(SUM(s.released_cnt)::numeric/NULLIF(SUM(s.total_risk_cnt),0)::numeric*100,2) END AS v FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-project",
+      "type": "bar-chart",
+      "name": "项目风险统计",
+      "x": 52,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73",
+          "#ffc645"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "风险总数",
+            "dataKey": "风险总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
+          },
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目风险统计",
+          "definition": "按「项目编号」分组,对比各组各系列指标",
+          "scope": "X 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "风险总数",
+              "code": "pjm_risk_total",
+              "displayName": "风险总数",
+              "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "高风险数",
+              "code": "pjm_risk_high",
+              "displayName": "高风险数",
+              "formula": "风险等级='高' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态='未释放' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目编号\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-project-open",
+      "type": "bar-chart",
+      "name": "项目未释放风险",
+      "x": 672,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "yAxis": {
+          "type": "category",
+          "name": "项目"
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": false
+        },
+        "colors": [
+          "#ffc645"
+        ],
+        "categoryKey": "项目编号",
+        "series": [
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "项目未释放风险",
+          "definition": "按项目统计当前周期内仍未释放的风险数量。",
+          "scope": "Y 轴=项目编号; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态不等于'已释放'的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT x.\"项目编号\", x.\"未释放风险数\" FROM (SELECT s.project_no AS \"项目编号\", COALESCE(SUM(s.open_cnt),0) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.dept = {{deptId}}]] [[AND s.project_no = {{projectNo}}]] GROUP BY s.project_no) x WHERE x.\"未释放风险数\" > 0 ORDER BY x.\"未释放风险数\" DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-category",
+      "type": "pie-chart",
+      "name": "风险分类分布",
+      "x": 1292,
+      "y": 318,
+      "width": 576,
+      "height": 256,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4"
+        ],
+        "categoryKey": "风险类型",
+        "valueKey": "数量",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "metricNote": {
+          "displayName": "风险分类分布",
+          "definition": "按「风险类型」分组,对比各组「数量」指标",
+          "scope": "X 轴=风险类型; 受顶部时间筛选控制",
+          "sourceTable": "随图表上下文",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "数量",
+              "code": "pjm_qual_count",
+              "displayName": "数量",
+              "formula": "COUNT(*) 或 SUM(...) — 按图表 SQL 分组键计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.risk_category,'未分类') AS \"风险类型\", COUNT(*) AS \"数量\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] GROUP BY COALESCE(d.risk_category,'未分类') ORDER BY COUNT(*) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-dept",
+      "type": "bar-chart",
+      "name": "科室风险统计",
+      "x": 48,
+      "y": 626,
+      "width": 1820,
+      "height": 210,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "责任科室"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": "数量"
+        },
+        "orientation": "vertical",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#8fa7c4",
+          "#ff5d73",
+          "#ffc645"
+        ],
+        "categoryKey": "责任科室",
+        "series": [
+          {
+            "name": "风险总数",
+            "dataKey": "风险总数",
+            "color": "#8fa7c4"
+          },
+          {
+            "name": "高风险数",
+            "dataKey": "高风险数",
+            "color": "#ff5d73"
+          },
+          {
+            "name": "未释放风险数",
+            "dataKey": "未释放风险数",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff",
+        "metricNote": {
+          "displayName": "科室风险统计",
+          "definition": "按「责任科室」分组,对比各组各系列指标",
+          "scope": "X 轴=责任科室; 受顶部时间筛选控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "seriesNotes": [
+            {
+              "name": "风险总数",
+              "code": "pjm_risk_total",
+              "displayName": "风险总数",
+              "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "高风险数",
+              "code": "pjm_risk_high",
+              "displayName": "高风险数",
+              "formula": "风险等级='高' 的风险计数",
+              "unit": "个"
+            },
+            {
+              "name": "未释放风险数",
+              "code": "pjm_risk_open",
+              "displayName": "未释放风险数",
+              "formula": "风险状态='未释放' 的风险计数",
+              "unit": "个"
+            }
+          ]
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.dept AS \"责任科室\", SUM(s.total_risk_cnt) AS \"风险总数\", SUM(s.high_cnt) AS \"高风险数\", SUM(s.open_cnt) AS \"未释放风险数\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') [[AND s.project_no = {{projectNo}}]] AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-detail",
+      "type": "table",
+      "name": "项目风险汇总列表",
+      "x": 36,
+      "y": 888,
+      "width": 1848,
+      "height": 168,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "项目编号",
+            "alias": "项目编号",
+            "width": 100
+          },
+          {
+            "source": "分系统/分任务",
+            "alias": "分系统/分任务",
+            "width": 130
+          },
+          {
+            "source": "风险名称",
+            "alias": "风险名称",
+            "width": 200
+          },
+          {
+            "source": "风险等级",
+            "alias": "风险等级",
+            "width": 80
+          },
+          {
+            "source": "风险分类",
+            "alias": "风险分类",
+            "width": 100
+          },
+          {
+            "source": "风险状态",
+            "alias": "风险状态",
+            "width": 100
+          },
+          {
+            "source": "提出时间",
+            "alias": "提出时间",
+            "width": 110
+          },
+          {
+            "source": "计划释放时间",
+            "alias": "计划释放时间",
+            "width": 120
+          },
+          {
+            "source": "负责人",
+            "alias": "负责人",
+            "width": 90
+          },
+          {
+            "source": "责任科室",
+            "alias": "责任科室",
+            "width": 130
+          },
+          {
+            "source": "实际释放时间",
+            "alias": "实际释放时间",
+            "width": 120
+          },
+          {
+            "source": "滞留天数",
+            "alias": "滞留天数",
+            "width": 90
+          }
+        ],
+        "pageSize": 20,
+        "showHeader": true,
+        "headerColor": "#ffffff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30.0,
+              "critical": 60.0,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          },
+          "风险分类": {
+            "kind": "field",
+            "displayName": "风险类别",
+            "definition": "风险按业务领域的分类。",
+            "enumValues": [
+              {
+                "code": "技术",
+                "label": "技术风险",
+                "description": "技术方案/技术难题/技术指标相关"
+              },
+              {
+                "code": "进度",
+                "label": "进度风险",
+                "description": "节点延期/计划偏差相关"
+              },
+              {
+                "code": "成本",
+                "label": "成本风险",
+                "description": "预算超支/成本上升相关"
+              },
+              {
+                "code": "设计",
+                "label": "设计风险",
+                "description": "设计变更/方案返工相关"
+              },
+              {
+                "code": "质量",
+                "label": "质量风险",
+                "description": "产品/工艺质量相关"
+              },
+              {
+                "code": "其他",
+                "label": "其他风险",
+                "description": "未归入以上分类的风险"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": null
+          },
+          "风险状态": {
+            "kind": "field",
+            "displayName": "风险状态",
+            "definition": "风险的当前生命周期状态。",
+            "enumValues": [
+              {
+                "code": "已释放",
+                "label": "已释放",
+                "description": "风险已闭环,不再影响项目"
+              },
+              {
+                "code": "未释放",
+                "label": "未释放",
+                "description": "风险仍在跟踪中(默认状态)"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
+          }
+        },
+        "headerBackground": "#0f2a55"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统/分任务\", d.risk_name AS \"风险名称\", COALESCE(d.risk_level,'-') AS \"风险等级\", COALESCE(d.risk_category,'-') AS \"风险分类\", COALESCE(d.risk_status,'-') AS \"风险状态\", to_char(d.risk_submit_date,'YYYY-MM-DD') AS \"提出时间\", to_char(d.final_release_date,'YYYY-MM-DD') AS \"计划释放时间\", COALESCE(d.response_owner,'-') AS \"负责人\", COALESCE(d.dept,'-') AS \"责任科室\", to_char(d.risk_release_date,'YYYY-MM-DD') AS \"实际释放时间\", d.pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 d WHERE to_char(d.risk_submit_date,'YYYY-MM') >= to_char({{dateFrom}}::date,'YYYY-MM') AND to_char(d.risk_submit_date,'YYYY-MM') <= to_char({{dateTo}}::date,'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.risk_rank DESC, d.risk_submit_date DESC LIMIT 500",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "gpmc-risk-mid2-left",
+      "type": "shape",
+      "name": "gpmc-risk-mid2-left",
+      "x": 36,
+      "y": 576,
+      "width": 1848,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-mid2-right",
+      "type": "shape",
+      "name": "gpmc-risk-mid2-right",
+      "x": 984,
+      "y": 576,
+      "width": 900,
+      "height": 254,
+      "zIndex": 1,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 18
+      }
+    },
+    {
+      "id": "gpmc-risk-project-overlay-title",
+      "type": "title",
+      "name": "项目风险统计-标题",
+      "x": 52,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险统计（按风险总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-project-open-overlay-title",
+      "type": "title",
+      "name": "项目未释放风险-标题",
+      "x": 672,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目未释放风险（按未释放数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-category-overlay-title",
+      "type": "title",
+      "name": "风险分类分布-标题",
+      "x": 1292,
+      "y": 286,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险分类分布（按风险类型统计）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-dept-overlay-title",
+      "type": "title",
+      "name": "科室风险统计-标题",
+      "x": 64,
+      "y": 594,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室风险统计（按风险总数排序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "gpmc-risk-detail-overlay-title",
+      "type": "title",
+      "name": "项目风险汇总列表-标题",
+      "x": 52,
+      "y": 856,
+      "width": 360,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险汇总列表（按风险级别·提出时间倒序）",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

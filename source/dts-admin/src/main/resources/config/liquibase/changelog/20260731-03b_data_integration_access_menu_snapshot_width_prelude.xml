@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-03b-data-integration-access-menu-snapshot-width-prelude" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <and>
+                <dbms type="postgresql"/>
+                <tableExists tableName="system_config"/>
+                <columnExists tableName="system_config" columnName="cfg_value"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Expand system_config.cfg_value before the frozen 20260731-04 migration persists its complete
+            data-integration menu rollback snapshot. Existing text columns are already safe.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                current_data_type TEXT;
+            BEGIN
+                SELECT data_type
+                  INTO current_data_type
+                  FROM information_schema.columns
+                 WHERE table_schema = current_schema()
+                   AND table_name = 'system_config'
+                   AND column_name = 'cfg_value';
+
+                IF NOT FOUND THEN
+                    RAISE EXCEPTION 'system_config.cfg_value is missing';
+                ELSIF current_data_type = 'character varying' THEN
+                    ALTER TABLE system_config ALTER COLUMN cfg_value TYPE TEXT;
+                ELSIF current_data_type = 'text' THEN
+                    NULL;
+                ELSE
+                    RAISE EXCEPTION 'system_config.cfg_value has unsupported type: %', current_data_type;
+                END IF;
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <!-- Deliberate no-op: narrowing could reject or truncate rollback snapshots and later configuration values. -->
+            <sql dbms="postgresql">SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

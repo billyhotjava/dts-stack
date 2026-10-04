@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+      F1 / Sprint-35b: durable persistence for dts-metrics fact-source state.
+      Replaces the four in-memory ConcurrentHashMaps (graph drafts + model state/version/rollback).
+      jsonb columns carry the heterogeneous Map<String,Object> payloads (graph/diagnostics/artifacts/
+      platform_validation/transient_state) per T01; surrogate UUID PKs + version_lock optimistic lock
+      mirror dts-platform ModelingPlanVersion.
+    -->
+
+    <changeSet id="20260613-01-create-graph-draft" author="codex">
+        <createTable tableName="graph_draft">
+            <column name="id" type="varchar(64)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_graph_draft"/>
+            </column>
+            <column name="graph" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="diagnostics" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)" defaultValue="system">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp with time zone"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp with time zone"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260613-01-create-metric-model-state" author="codex">
+        <createTable tableName="metric_model_state">
+            <column name="model_id" type="varchar(128)">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_metric_model_state"/>
+            </column>
+            <column name="model_name" type="varchar(256)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_ref" type="varchar(512)"/>
+            <column name="artifacts" type="jsonb"/>
+            <column name="applied_policy_source" type="varchar(128)"/>
+            <column name="applied_predicate_hash" type="varchar(128)"/>
+            <column name="platform_validation" type="jsonb"/>
+            <column name="transient_state" type="jsonb"/>
+            <column name="active_version" type="varchar(32)"/>
+            <column name="updated_at" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)" defaultValue="system">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp with time zone"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp with time zone"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260613-01-create-metric-model-version" author="codex">
+        <createTable tableName="metric_model_version">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_metric_model_version"/>
+            </column>
+            <column name="model_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_ordinal" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_name" type="varchar(256)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="platform_publish_reference" type="varchar(512)"/>
+            <column name="release_decision" type="varchar(64)"/>
+            <column name="artifact_ref" type="varchar(512)"/>
+            <column name="published_at" type="timestamp with time zone"/>
+            <column name="version_lock" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)" defaultValue="system">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp with time zone"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp with time zone"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="metric_model_version"
+            baseColumnNames="model_id"
+            constraintName="fk_metric_model_version_model"
+            referencedTableName="metric_model_state"
+            referencedColumnNames="model_id"/>
+
+        <addUniqueConstraint
+            tableName="metric_model_version"
+            columnNames="model_id, version"
+            constraintName="uk_metric_model_version"/>
+
+        <createIndex tableName="metric_model_version" indexName="idx_metric_model_version_model">
+            <column name="model_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260613-01-create-metric-rollback-event" author="codex">
+        <createTable tableName="metric_rollback_event">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_metric_rollback_event"/>
+            </column>
+            <column name="model_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="event_ordinal" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rollback_from_version" type="varchar(32)"/>
+            <column name="rollback_to_version" type="varchar(32)"/>
+            <column name="platform_rollback_reference" type="varchar(512)"/>
+            <column name="reason" type="varchar(1024)"/>
+            <column name="rolled_back_at" type="timestamp with time zone"/>
+            <column name="created_by" type="varchar(50)" defaultValue="system">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp with time zone"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp with time zone"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="metric_rollback_event"
+            baseColumnNames="model_id"
+            constraintName="fk_metric_rollback_event_model"
+            referencedTableName="metric_model_state"
+            referencedColumnNames="model_id"/>
+
+        <createIndex tableName="metric_rollback_event" indexName="idx_metric_rollback_event_model">
+            <column name="model_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

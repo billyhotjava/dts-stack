@@ -1,0 +1,12 @@
+Sprint-67 F4 state and recovery evidence — 2026-07-19
+
+loading: compatibility lookup uses LineLoading; canonical pages preserve prior content while refreshing.
+empty: dimension/model catalogs provide one create action and state the resulting artifact.
+error: model center and compatibility lookup provide explicit retry actions; failed data is not rendered as an empty result.
+permission: write actions follow server/user roles; the live opadmin menu remains role-filtered.
+conflict/stale: revision/ETag recovery remains server-backed from F2/F3 contracts.
+recovery: unmapped legacy object renders NEEDS_CLASSIFICATION with business-classification and workbench actions.
+
+Chrome 95 real API/auth evidence:
+- f4-live-modeling-menu-chromium95.png
+- f4-legacy-recovery-chromium95-narrow.png

@@ -1,0 +1,23 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/pin-b6f3f64dd4db/release.tar.gz",
+  "sha256": "79641812b636712b09d8d9eb1869ce8287d6f17097380466c0973ed509a87e56",
+  "sourceCommit": "b6f3f64dd4db7f8af8de67de95fc924c90598df4",
+  "archiveChecksumsVerified": {
+    "dts-platform-webapp_s104-pin-b6f3f64dd4db-20260909-150818.tar": "2918f0ed74827ef7af60e0364800091b42c4ebc12e843fba1c9f4768f7fee55e",
+    "dts-platform_s104-pin-b6f3f64dd4db-20260909-150818.tar": "a037e145ad2d5bb18c71ba5e38d60b1419736190f820e9204010a82aa69f5247"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-pin-b6f3f64dd4db",
+      "localImageId": "sha256:b3ed0af4b6cdb854bd2686f9a9c9b8143e49b5570c6d968801683206a0078561",
+      "configImageId": "sha256:b3ed0af4b6cdb854bd2686f9a9c9b8143e49b5570c6d968801683206a0078561",
+      "sourceRevision": "b6f3f64dd4db7f8af8de67de95fc924c90598df4"
+    },
+    {
+      "tag": "dts-platform:s104-pin-b6f3f64dd4db",
+      "localImageId": "sha256:9550ee745c3ae48001bc97e655f7d34770e75523fc678d395cea40e5dce539a7",
+      "configImageId": "sha256:9550ee745c3ae48001bc97e655f7d34770e75523fc678d395cea40e5dce539a7",
+      "sourceRevision": "b6f3f64dd4db7f8af8de67de95fc924c90598df4"
+    }
+  ]
+}

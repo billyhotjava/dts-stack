@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="issue_category", model=get_where_subquery(ref('biz_dwd_quality_issue_v2')), values=["设计","工艺","管理","元器件","操作","外协","软件","环境","其他"]) }}{{ config({"severity":"Warn","tags":[]}) }}

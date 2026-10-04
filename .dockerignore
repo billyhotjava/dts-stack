@@ -1,0 +1,51 @@
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+
+**/*.log
+**/*.iml
+
+**/node_modules
+**/dist
+**/coverage
+**/target
+**/.mvn
+**/.venv
+**/__pycache__
+**/.pytest_cache
+
+logs
+logs/
+backups
+backups/
+data
+data/
+services/dts-pg/data
+services/dts-pg/data/
+plugins
+plugins/
+worklog
+worklog/
+
+# Large build artifacts — exclude to prevent multi-GB context sent to Docker daemon
+builds/dist
+builds/legacy-dist
+.pnpm-store
+
+# Airflow / dbt runtime dirs
+services/dts-airflow/logs
+services/dts-airflow/dags
+services/dts-dbt/.dts-scoped-runs
+services/dts-dbt/.dts-runtime
+services/dts-dbt/target
+services/dts-dbt/logs
+services/dts-dbt/profiles/profiles.yml
+services/dts-dbt/profiles/.user.yml
+
+# A checkout may share its root with a deployed stack. Never send runtime secrets
+# or bind-mounted service files to image builders; build inputs live in builds/source.
+/.env
+/.env.*
+/services

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251015-06-remove-visualization-foundation-menus" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+        <comment>Remove deprecated visualization and foundation menus and their visibilities</comment>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                menu_ids INTEGER[];
+            BEGIN
+                SELECT array_agg(id)
+                INTO menu_ids
+                FROM portal_menu
+                WHERE name IN (
+                    'sys.nav.portal.visualizationDashboards',
+                    'sys.nav.portal.visualizationCockpit',
+                    'sys.nav.portal.visualizationProjects',
+                    'sys.nav.portal.visualizationFinance',
+                    'sys.nav.portal.visualizationSupplyChain',
+                    'sys.nav.portal.visualizationHR',
+                    'sys.nav.portal.visualization',
+                    'sys.nav.portal.foundationDataSources',
+                    'sys.nav.portal.foundationDataStorage',
+                    'sys.nav.portal.foundationTaskScheduling',
+                    'sys.nav.portal.foundation'
+                );
+
+                IF menu_ids IS NOT NULL AND array_length(menu_ids, 1) &gt; 0 THEN
+                    IF EXISTS (
+                        SELECT 1 FROM information_schema.tables
+                        WHERE table_name = 'portal_menu_visibility'
+                    ) THEN
+                        DELETE FROM portal_menu_visibility WHERE menu_id = ANY(menu_ids);
+                    END IF;
+
+                    DELETE FROM portal_menu WHERE id = ANY(menu_ids);
+                END IF;
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

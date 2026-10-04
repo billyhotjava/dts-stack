@@ -1,0 +1,25 @@
+Sprint-67 F2-T05 建设规划台账前端证据
+时间：2026-07-21 +08:00
+
+范围：
+- canonical /modeling/plans 台账、工作台“全部规划”和共享计划头编辑器
+- 搜索/生命周期/负责人筛选，查看/编辑/归档与唯一“新建规划”主动作
+- plan-head If-Match、409 两种恢复、403 只读、404 返回台账、网络结果核对
+- 独立请求序列、列表版本单调合并、多计划并发归档隔离
+- 不消费旧项目空间 API
+
+定向测试：
+cd source/dts-platform-webapp
+node --test \
+  src/api/warehousePlanHeader.source-contract.test.ts \
+  src/pages/modeling/warehousePlanViewModel.test.ts \
+  src/pages/modeling/components/WarehousePlanHeaderEditor.source-contract.test.ts \
+  src/pages/modeling/WarehousePlanLedgerPage.source-contract.test.ts \
+  src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts \
+  src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts \
+  src/routes/sections/dashboard/portalGoldenLineMenu.source-contract.test.ts
+
+结果：7/7 PASS，0 fail。
+Biome：9 个相关 TS/TSX 文件检查通过，0 error。
+
+边界：source-contract 只证明静态约束和纯函数；真实渲染与响应式由 chrome95 证据补充，后端事实由 backend-contract 证据补充。

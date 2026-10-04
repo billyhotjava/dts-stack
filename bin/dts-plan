@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dts-plan — Plan management CLI (create / find / list)
+#
+# Usage:
+#   dts-plan create --name "项目进度分析" [--domain "xxx"] [--scope "xxx"]
+#                   [--tags "a,b"] [--content "xxx"] [--dry-run] [--insecure]
+#   dts-plan find   --name "项目进度分析" [--insecure]
+#   dts-plan list   [--keyword "项目"] [--insecure]
+#
+# Environment:
+#   API_BASE      — Platform base URL (required)
+#   TOKEN         — Bearer token (required)
+#   ACTIVE_DEPT   — Department header (optional)
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/dts-common.sh"
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+usage() {
+  cat <<'EOF'
+Usage:
+  dts-plan create --name NAME [--domain DOMAIN] [--scope SCOPE]
+                  [--tags TAGS] [--content CONTENT] [--dry-run] [--insecure]
+  dts-plan find   --name NAME [--insecure]
+  dts-plan list   [--keyword KEYWORD] [--insecure]
+
+Subcommands:
+  create   Create a new plan (auto-resolves name collisions)
+  find     Find a plan by exact name and print its ID
+  list     List plans, optionally filtered by keyword
+
+Environment variables:
+  API_BASE      Platform base URL (required)
+  TOKEN         Bearer token (required)
+  ACTIVE_DEPT   Department header (optional)
+EOF
+  exit "${1:-0}"
+}
+
+# ---------------------------------------------------------------------------
+# Core functions
+# ---------------------------------------------------------------------------
+
+# find_plan_by_name <name>
+#   Prints the plan ID if a plan with exact name exists, empty otherwise.
+find_plan_by_name() {
+  local name="$1"
+  local encoded_name
+  encoded_name="$(url_encode "$name")"
+  local response
+  response="$(dts_curl_get "${_DTS_API_URL}/modeling/plans?keyword=${encoded_name}")"
+
+  if command -v jq >/dev/null 2>&1; then
+    echo "$response" | jq -r --arg name "$name" \
+      '(.data // .) | if type == "array" then . else [.] end | map(select(.name == $name)) | .[0].id // empty'
+  else
+    echo "$response" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+items = data.get('data', data) if isinstance(data, dict) else data
+if isinstance(items, list):
+    for item in items:
+        if item.get('name') == '$name':
+            print(item['id'])
+            break
+" 2>/dev/null || true
+  fi
+}
+
+# resolve_unique_plan_name <base_name>
+#   Returns a name that does not collide with existing plans.
+#   Tries base_name, then base_name-2, base_name-3, ... up to 99.
+resolve_unique_plan_name() {
+  local base_name="$1"
+  local candidate="$base_name"
+  local suffix=1
+
+  while true; do
+    local existing_id
+    existing_id="$(find_plan_by_name "$candidate")"
+    if [[ -z "$existing_id" ]]; then
+      echo "$candidate"
+      return 0
+    fi
+    suffix=$((suffix + 1))
+    candidate="${base_name}-${suffix}"
+    info "Name '${base_name}' already exists (id=$existing_id), trying '$candidate'" >&2
+    if [[ $suffix -gt 99 ]]; then
+      die "too many name collisions for '$base_name'"
+    fi
+  done
+}
+
+# create_plan <name> <domain> <scope> <tags> <content>
+#   Creates the plan via API and prints the new plan ID.
+create_plan() {
+  local name="$1"
+  local domain="$2"
+  local scope="$3"
+  local tags="$4"
+  local content="$5"
+
+  local json_body
+  json_body="$(python3 -c "
+import json, sys
+print(json.dumps({
+    'name': sys.argv[1],
+    'domain': sys.argv[2],
+    'scope': sys.argv[3],
+    'status': 'DRAFT',
+    'tags': sys.argv[4],
+    'content': sys.argv[5]
+}))" "$name" "$domain" "$scope" "$tags" "$content")"
+
+  local response
+  response="$(dts_curl_post_json "${_DTS_API_URL}/modeling/plans" "$json_body")"
+
+  local plan_id
+  if command -v jq >/dev/null 2>&1; then
+    plan_id="$(echo "$response" | jq -r '.id // .data.id // empty')"
+  else
+    plan_id="$(echo "$response" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(data.get('id') or data.get('data', {}).get('id', ''))
+" 2>/dev/null || true)"
+  fi
+
+  if [[ -z "$plan_id" ]]; then
+    die "failed to create plan. Response: $response"
+  fi
+  echo "$plan_id"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: create
+# ---------------------------------------------------------------------------
+cmd_create() {
+  local name="" domain="" scope="" tags="" content="" dry_run=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)      name="$2"; shift 2 ;;
+      --domain)    domain="$2"; shift 2 ;;
+      --scope)     scope="$2"; shift 2 ;;
+      --tags)      tags="$2"; shift 2 ;;
+      --content)   content="$2"; shift 2 ;;
+      --dry-run)   dry_run=true; shift ;;
+      --insecure)  _DTS_INSECURE_FLAG="-k"; shift ;;
+      *) die "create: unknown option '$1'" ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && die "create: --name is required"
+
+  if $dry_run; then
+    info "[dry-run] Would create plan:"
+    info "  name:    $name"
+    info "  domain:  $domain"
+    info "  scope:   $scope"
+    info "  tags:    $tags"
+    info "  content: $content"
+    info "[dry-run] Would resolve unique name and call POST /api/modeling/plans"
+    echo "plan_id=dry-run-00000000-0000-0000-0000-000000000000"
+    return 0
+  fi
+
+  dts_init_http
+
+  info "Resolving unique plan name for '$name'..." >&2
+  local final_name
+  final_name="$(resolve_unique_plan_name "$name")"
+  if [[ "$final_name" != "$name" ]]; then
+    info "Using resolved name: '$final_name'" >&2
+  fi
+
+  info "Creating plan '$final_name'..." >&2
+  local plan_id
+  plan_id="$(create_plan "$final_name" "$domain" "$scope" "$tags" "$content")"
+
+  info "Plan created successfully." >&2
+  echo "plan_id=$plan_id"
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: find
+# ---------------------------------------------------------------------------
+cmd_find() {
+  local name=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --name)      name="$2"; shift 2 ;;
+      --insecure)  _DTS_INSECURE_FLAG="-k"; shift ;;
+      *) die "find: unknown option '$1'" ;;
+    esac
+  done
+
+  [[ -z "$name" ]] && die "find: --name is required"
+
+  dts_init_http
+
+  local plan_id
+  plan_id="$(find_plan_by_name "$name")"
+  if [[ -n "$plan_id" ]]; then
+    echo "plan_id=$plan_id"
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# Subcommand: list
+# ---------------------------------------------------------------------------
+cmd_list() {
+  local keyword=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keyword)   keyword="$2"; shift 2 ;;
+      --insecure)  _DTS_INSECURE_FLAG="-k"; shift ;;
+      *) die "list: unknown option '$1'" ;;
+    esac
+  done
+
+  dts_init_http
+
+  local url="${_DTS_API_URL}/modeling/plans"
+  if [[ -n "$keyword" ]]; then
+    local encoded_keyword
+    encoded_keyword="$(url_encode "$keyword")"
+    url="${url}?keyword=${encoded_keyword}"
+  fi
+
+  dts_curl_get "$url"
+  echo  # ensure trailing newline
+}
+
+# ---------------------------------------------------------------------------
+# Main dispatch
+# ---------------------------------------------------------------------------
+[[ $# -eq 0 ]] && usage 1
+
+case "$1" in
+  create) shift; cmd_create "$@" ;;
+  find)   shift; cmd_find "$@" ;;
+  list)   shift; cmd_list "$@" ;;
+  -h|--help|help) usage 0 ;;
+  *) die "unknown subcommand '$1'. Use 'dts-plan --help' for usage." ;;
+esac

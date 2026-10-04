@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd"
+>
+    <changeSet id="20251230-05-portal-menu-visualization-analytics-seed" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <columnExists tableName="portal_menu" columnName="deleted"/>
+                <columnExists tableName="portal_menu" columnName="security_level"/>
+            </and>
+        </preConditions>
+
+        <comment>Ensure Visualization/Analytics portal menu exists for dts-platform.</comment>
+        <sql dbms="postgresql" splitStatements="false">
+            DO $do$
+            DECLARE
+                root_id BIGINT;
+                analytics_id BIGINT;
+                root_meta TEXT;
+                analytics_meta TEXT;
+            BEGIN
+                root_meta := '{"key":"visualization","sectionKey":"visualization","titleKey":"sys.nav.portal.visualization","title":"数据可视化"}';
+                analytics_meta := '{"key":"analytics","sectionKey":"visualization","entryKey":"analytics","titleKey":"sys.nav.portal.visualizationAnalytics","title":"自助分析"}';
+
+                -- Root section (should already exist; keep idempotent)
+                SELECT id INTO root_id FROM portal_menu WHERE name = 'sys.nav.portal.visualization' LIMIT 1;
+                IF root_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.visualization', 'visualization', NULL, 50, root_meta, NULL, 'solar:pie-chart-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    )
+                    RETURNING id INTO root_id;
+                END IF;
+
+                -- Analytics (end user)
+                SELECT id INTO analytics_id FROM portal_menu WHERE name = 'sys.nav.portal.visualizationAnalytics' LIMIT 1;
+                IF analytics_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.visualizationAnalytics', 'analytics', '/pages/visualization/AnalyticsPage', 15, analytics_meta, root_id,
+                        'solar:chart-2-bold-duotone', 'GENERAL', FALSE,
+                        'system', now(), 'system', now()
+                    )
+                    RETURNING id INTO analytics_id;
+                ELSE
+                    UPDATE portal_menu
+                    SET
+                        path = 'analytics',
+                        parent_id = root_id,
+                        component = '/pages/visualization/AnalyticsPage',
+                        sort_order = 15,
+                        metadata = analytics_meta,
+                        icon = 'solar:chart-2-bold-duotone',
+                        security_level = 'GENERAL',
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = analytics_id;
+                END IF;
+            END;
+            $do$;
+        </sql>
+    </changeSet>
+</databaseChangeLog>
+

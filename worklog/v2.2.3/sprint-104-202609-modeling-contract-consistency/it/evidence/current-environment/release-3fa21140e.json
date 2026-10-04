@@ -1,0 +1,22 @@
+{
+  "commit": "3fa21140e2a38eaf27c5ad797cfafb6fe2b4aff2",
+  "package": "release-3fa21140e/dts-opmanager-upgrade-20260906-163631.tar.gz",
+  "sha256": "67df70a9f8e9c7980227c2cff4b74f8556bd8bbe130f2e1bf8363d4050782e9e",
+  "otherContainersChanged": [],
+  "containers": [
+    {
+      "name": "/deploy-dts-platform-1",
+      "image": "sha256:30cace1f8e75ce777cac1a4985e337ddbaf5f8a55add1b7fcf4aa2dccb55ba3e",
+      "state": "running",
+      "health": "healthy",
+      "startedAt": "2026-09-06T08:40:24.867275137Z"
+    },
+    {
+      "name": "/deploy-dts-platform-webapp-1",
+      "image": "sha256:bea293e514212386baab42e825e3deef6c025fdffe0450c580a7af4314511456",
+      "state": "running",
+      "health": null,
+      "startedAt": "2026-09-06T08:41:36.55296195Z"
+    }
+  ]
+}

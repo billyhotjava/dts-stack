@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0034-01" author="codex">
+        <addColumn tableName="analytics_card">
+            <column name="card_type" type="varchar(32)" defaultValue="question">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="analytics_card" indexName="idx_card_type">
+            <column name="card_type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

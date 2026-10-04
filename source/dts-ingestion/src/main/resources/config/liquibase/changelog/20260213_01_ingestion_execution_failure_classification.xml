@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260213-01-ingestion-execution-failure-classification" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="failure_category"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="failure_category" type="varchar(64)"/>
+            <column name="failure_advice" type="varchar(500)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260213-02-ingestion-execution-failure-category-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="ingestion_execution" columnName="failure_category"/>
+            <not>
+                <indexExists tableName="ingestion_execution" indexName="idx_ingestion_execution_task_failure_category"/>
+            </not>
+        </preConditions>
+        <createIndex
+            tableName="ingestion_execution"
+            indexName="idx_ingestion_execution_task_failure_category">
+            <column name="task_id"/>
+            <column name="failure_category"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

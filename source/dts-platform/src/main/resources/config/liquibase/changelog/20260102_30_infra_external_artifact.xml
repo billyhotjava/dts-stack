@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_30_infra_external_artifact" author="platform">
+        <createTable tableName="infra_external_artifact">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="entry_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="external_id" type="varchar(256)"/>
+            <column name="external_url" type="varchar(2048)"/>
+
+            <column name="classification" type="varchar(32)" defaultValue="INTERNAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="tags" type="varchar(1024)"/>
+
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="status" type="varchar(32)"/>
+            <column name="last_seen_at" type="timestamp"/>
+            <column name="last_message" type="varchar(1024)"/>
+
+            <!-- JSON string for schedule/config/etc -->
+            <column name="props" type="text"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="infra_external_artifact" indexName="idx_external_artifact_entry_key">
+            <column name="entry_key"/>
+        </createIndex>
+        <createIndex tableName="infra_external_artifact" indexName="idx_external_artifact_type">
+            <column name="artifact_type"/>
+        </createIndex>
+        <createIndex tableName="infra_external_artifact" indexName="idx_external_artifact_enabled">
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex tableName="infra_external_artifact" indexName="idx_external_artifact_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

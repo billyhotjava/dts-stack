@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260828-00-ingestion-target-dataset-identity" author="codex">
+        <comment>Persist the canonical catalog dataset identity across task revisions and executions</comment>
+        <addColumn tableName="ingestion_task">
+            <column name="target_dataset_id" type="uuid"/>
+        </addColumn>
+        <addColumn tableName="ingestion_task_revision">
+            <column name="target_dataset_id" type="uuid"/>
+        </addColumn>
+        <addColumn tableName="ingestion_execution">
+            <column name="target_dataset_id" type="uuid"/>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="ingestion_execution" columnName="target_dataset_id"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="target_dataset_id"/>
+            <dropColumn tableName="ingestion_task" columnName="target_dataset_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260828-01-ingestion-execution-command-idempotency" author="codex" runInTransaction="false">
+        <comment>Enforce one ingestion execution ledger per persistent command idempotency identity</comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM ingestion_execution
+                    WHERE batch_id IS NOT NULL
+                    GROUP BY batch_id
+                    HAVING count(*) > 1
+                ) THEN
+                    RAISE EXCEPTION 'INGESTION_EXECUTION_BATCH_DUPLICATES_EXIST';
+                END IF;
+            END
+            $$
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uk_ingestion_execution_batch_id
+            ON ingestion_execution(batch_id)
+            WHERE batch_id IS NOT NULL
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS uk_ingestion_execution_batch_id
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

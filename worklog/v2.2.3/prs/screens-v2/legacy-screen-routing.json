@@ -1,0 +1,114 @@
+{
+  "updatedAt": "2026-09-14T14:28:00+08:00",
+  "changesAppliedVia": "Chrome",
+  "mappings": [
+    {
+      "legacyScreenId": 3,
+      "legacyName": "【历史草稿】花卉租赁经营总览 V2（请用新版15）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 15,
+      "publishedName": "花卉租赁经营总览 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/15/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/15/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 4,
+      "legacyName": "【历史草稿】花卉租赁项目客户分析 V2（请用新版16）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 16,
+      "publishedName": "花卉租赁项目客户分析 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/16/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/16/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 5,
+      "legacyName": "【历史草稿】花卉租赁销售坏账与费用 V2（请用新版17）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 17,
+      "publishedName": "花卉租赁销售坏账与费用 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/17/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/17/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 6,
+      "legacyName": "【历史草稿】花卉租赁报花执行 V2（请用新版18）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 18,
+      "publishedName": "花卉租赁报花执行 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/18/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/18/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 7,
+      "legacyName": "【历史草稿】花卉租赁变更与租期调整 V2（请用新版19）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 19,
+      "publishedName": "花卉租赁变更与租期调整 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/19/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/19/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 8,
+      "legacyName": "【历史草稿】花卉租赁回收撤摆与去向 V2（请用新版20）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 20,
+      "publishedName": "花卉租赁回收撤摆与去向 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/20/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/20/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 9,
+      "legacyName": "【历史草稿】花卉租赁养护工作量 V2（请用新版21）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 21,
+      "publishedName": "花卉租赁养护工作量 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/21/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/21/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 10,
+      "legacyName": "【历史草稿】花卉租赁在途审批与操作监控 V2（请用新版22）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 22,
+      "publishedName": "花卉租赁在途审批与操作监控 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/22/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/22/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 11,
+      "legacyName": "【历史草稿】花卉租赁报花单明细钻取 V2（请用新版23）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 23,
+      "publishedName": "花卉租赁报花单明细钻取 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/23/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/23/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 12,
+      "legacyName": "【历史草稿】花卉租赁变更明细钻取 V2（请用新版24）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 24,
+      "publishedName": "花卉租赁变更明细钻取 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/24/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/24/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 13,
+      "legacyName": "【历史草稿】花卉租赁回收明细钻取 V2（请用新版25）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 25,
+      "publishedName": "花卉租赁回收明细钻取 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/25/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/25/preview?mode=published"
+    },
+    {
+      "legacyScreenId": 14,
+      "legacyName": "【历史草稿】花卉租赁审批操作链路钻取 V2（请用新版26）",
+      "action": "名称标记为历史草稿，保留内容；未修复或发布旧稿",
+      "publishedScreenId": 26,
+      "publishedName": "花卉租赁审批操作链路钻取 V2.2.3",
+      "editorUrl": "https://bi.yuzhicloud.com/#/bi/screens/26/edit",
+      "previewUrl": "https://bi.yuzhicloud.com/#/bi/screens/26/preview?mode=published"
+    }
+  ]
+}

@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-02-model-implementation-input-ledger" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_implementation"/>
+            <tableExists tableName="modeling_dbt_artifact"/>
+        </preConditions>
+        <comment>Add strict revisioned implementation inputs without changing the legacy claim API.</comment>
+
+        <addColumn tableName="modeling_model_implementation">
+            <column name="implementation_revision" type="int" defaultValueNumeric="1"/>
+            <column name="current_implementation_checksum" type="varchar(64)"/>
+            <column name="input_mode" type="varchar(32)" defaultValue="GENERATED"/>
+            <column name="inputs_json" type="jsonb"/>
+            <column name="field_mappings_json" type="jsonb"/>
+            <column name="settings_json" type="jsonb"/>
+            <column name="materialization" type="varchar(64)" defaultValue="table"/>
+        </addColumn>
+        <addColumn tableName="modeling_dbt_artifact">
+            <column name="implementation_revision" type="int" defaultValueNumeric="1"/>
+            <column name="node_kind" type="varchar(64)"/>
+            <column name="materialization" type="varchar(64)" defaultValue="table"/>
+            <column name="physical_asset_ref" type="${uuidType}"/>
+        </addColumn>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            UPDATE modeling_model_implementation
+               SET implementation_revision = COALESCE(implementation_revision, 1),
+                   current_implementation_checksum = CASE
+                       WHEN model_checksum ~ '^[0-9a-f]{64}$' THEN model_checksum
+                       ELSE lpad(md5(id::text || ':implementation-revision:1'), 64, '0')
+                   END,
+                   input_mode = 'GENERATED',
+                   inputs_json = jsonb_build_array(
+                       jsonb_build_object('generatorType', 'LEGACY_CLAIM', 'config', jsonb_build_object())
+                   ),
+                   field_mappings_json = jsonb_build_array(),
+                   settings_json = jsonb_build_object(),
+                   materialization = COALESCE(NULLIF(btrim(materialization), ''), 'table');
+
+            UPDATE modeling_dbt_artifact a
+              SET implementation_revision = COALESCE(i.implementation_revision, 1),
+                   node_kind = COALESCE(NULLIF(btrim(a.artifact_type), ''), 'DBT_NODE'),
+                   materialization = COALESCE(NULLIF(btrim(s.materialization), ''), 'table')
+              FROM modeling_model_spec s
+              LEFT JOIN modeling_model_implementation i
+                ON i.tenant_id = s.tenant_id
+               AND i.model_spec_id = s.id
+             WHERE s.id = a.model_spec_id;
+        ]]></sql>
+
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="implementation_revision" columnDataType="int"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="current_implementation_checksum" columnDataType="varchar(64)"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="input_mode" columnDataType="varchar(32)"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="inputs_json" columnDataType="jsonb"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="field_mappings_json" columnDataType="jsonb"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="settings_json" columnDataType="jsonb"/>
+        <addNotNullConstraint tableName="modeling_model_implementation" columnName="materialization" columnDataType="varchar(64)"/>
+        <addNotNullConstraint tableName="modeling_dbt_artifact" columnName="implementation_revision" columnDataType="int"/>
+        <addNotNullConstraint tableName="modeling_dbt_artifact" columnName="node_kind" columnDataType="varchar(64)"/>
+        <addNotNullConstraint tableName="modeling_dbt_artifact" columnName="materialization" columnDataType="varchar(64)"/>
+
+        <addUniqueConstraint
+            tableName="modeling_model_implementation"
+            columnNames="tenant_id, id"
+            constraintName="uk_modeling_implementation_tenant_id"/>
+
+        <createTable tableName="modeling_model_implementation_revision">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="implementation_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="content_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="input_mode" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="inputs_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="field_mappings_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="settings_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="ownership" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="materialization" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"/>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="modeling_model_implementation_revision"
+            columnNames="tenant_id, implementation_id, revision"
+            constraintName="uk_modeling_implementation_revision"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_implementation_revision"
+            baseColumnNames="tenant_id, implementation_id"
+            constraintName="fk_modeling_implementation_revision_head"
+            referencedTableName="modeling_model_implementation"
+            referencedColumnNames="tenant_id, id"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            INSERT INTO modeling_model_implementation_revision (
+                id, tenant_id, implementation_id, revision, content_checksum, input_mode,
+                inputs_json, field_mappings_json, settings_json, ownership, materialization, created_by, created_date
+            )
+            SELECT (
+                       substr(md5(i.id::text || ':implementation-revision:1'), 1, 8) || '-' ||
+                       substr(md5(i.id::text || ':implementation-revision:1'), 9, 4) || '-' ||
+                       substr(md5(i.id::text || ':implementation-revision:1'), 13, 4) || '-' ||
+                       substr(md5(i.id::text || ':implementation-revision:1'), 17, 4) || '-' ||
+                       substr(md5(i.id::text || ':implementation-revision:1'), 21, 12)
+                   )::uuid,
+                   i.tenant_id, i.id, i.implementation_revision, i.current_implementation_checksum, i.input_mode,
+                   i.inputs_json, i.field_mappings_json, i.settings_json, i.ownership, i.materialization,
+                   i.created_by, i.created_date
+              FROM modeling_model_implementation i
+            ON CONFLICT (tenant_id, implementation_id, revision) DO NOTHING;
+        ]]></sql>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_implementation"
+            baseColumnNames="tenant_id, id, implementation_revision"
+            constraintName="fk_modeling_implementation_current_revision"
+            referencedTableName="modeling_model_implementation_revision"
+            referencedColumnNames="tenant_id, implementation_id, revision"
+            deferrable="true"
+            initiallyDeferred="true"/>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION modeling_implementation_input_payload_valid(
+                mode varchar,
+                inputs jsonb,
+                mappings jsonb,
+                settings jsonb
+            ) RETURNS boolean
+            LANGUAGE plpgsql
+            IMMUTABLE
+            AS $$
+            DECLARE item jsonb;
+            DECLARE setting_key text;
+            DECLARE cast_key text;
+            DECLARE cast_type text;
+            BEGIN
+                IF mode NOT IN ('PHYSICAL_ASSET', 'UPSTREAM_MODEL', 'GENERATED')
+                   OR jsonb_typeof(inputs) <> 'array' OR jsonb_array_length(inputs) = 0
+                   OR jsonb_typeof(mappings) <> 'array' OR jsonb_typeof(settings) <> 'object' THEN
+                    RETURN false;
+                END IF;
+                FOR item IN SELECT value FROM jsonb_array_elements(inputs) LOOP
+                    IF jsonb_typeof(item) <> 'object'
+                       OR (SELECT count(*) FROM jsonb_object_keys(item)) <> (CASE WHEN mode = 'UPSTREAM_MODEL' THEN 3 ELSE 2 END) THEN
+                        RETURN false;
+                    END IF;
+                    IF mode = 'PHYSICAL_ASSET' AND (
+                        NOT (item ? 'sourceBindingId' AND item ? 'resolvedVersion')
+                        OR jsonb_typeof(item -> 'sourceBindingId') <> 'string'
+                        OR jsonb_typeof(item -> 'resolvedVersion') <> 'string'
+                        OR btrim(item ->> 'sourceBindingId') = '' OR btrim(item ->> 'resolvedVersion') = ''
+                    ) THEN RETURN false; END IF;
+                    IF mode = 'UPSTREAM_MODEL' AND (
+                        NOT (item ? 'modelSpecId' AND item ? 'revision' AND item ? 'checksum')
+                        OR jsonb_typeof(item -> 'modelSpecId') <> 'string'
+                        OR jsonb_typeof(item -> 'revision') <> 'number'
+                        OR jsonb_typeof(item -> 'checksum') <> 'string'
+                        OR btrim(item ->> 'modelSpecId') = '' OR (item ->> 'revision') !~ '^[1-9][0-9]*$'
+                        OR (item ->> 'checksum') !~ '^[0-9a-f]{64}$'
+                    ) THEN RETURN false; END IF;
+                    IF mode = 'GENERATED' AND (
+                        NOT (item ? 'generatorType' AND item ? 'config')
+                        OR jsonb_typeof(item -> 'generatorType') <> 'string'
+                        OR jsonb_typeof(item -> 'config') <> 'object'
+                        OR btrim(item ->> 'generatorType') = ''
+                    ) THEN RETURN false; END IF;
+                END LOOP;
+                FOR item IN SELECT value FROM jsonb_array_elements(mappings) LOOP
+                    IF jsonb_typeof(item) <> 'object' OR (SELECT count(*) FROM jsonb_object_keys(item)) <> 2
+                       OR NOT (item ? 'sourceField' AND item ? 'targetField')
+                       OR jsonb_typeof(item -> 'sourceField') <> 'string'
+                       OR jsonb_typeof(item -> 'targetField') <> 'string'
+                       OR (item ->> 'sourceField') !~ '^(src_[0-9]+\.)?[A-Za-z_][A-Za-z0-9_]*$'
+                       OR (item ->> 'targetField') !~ '^[A-Za-z_][A-Za-z0-9_]*$' THEN
+                        RETURN false;
+                    END IF;
+                END LOOP;
+                FOR setting_key IN SELECT key FROM jsonb_object_keys(settings) key LOOP
+                    IF setting_key NOT IN ('casts', 'deduplicateBy', 'dedupBy', 'joins') THEN RETURN false; END IF;
+                END LOOP;
+                IF settings ? 'casts' THEN
+                    IF jsonb_typeof(settings -> 'casts') <> 'object' THEN RETURN false; END IF;
+                    FOR cast_key, cast_type IN SELECT key, value #>> '{}' FROM jsonb_each(settings -> 'casts') LOOP
+                        IF cast_key !~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                           OR lower(cast_type) NOT IN ('string', 'integer', 'bigint', 'decimal', 'date', 'timestamp', 'boolean') THEN
+                            RETURN false;
+                        END IF;
+                    END LOOP;
+                END IF;
+                FOR setting_key IN SELECT key FROM jsonb_object_keys(settings) key WHERE key IN ('deduplicateBy', 'dedupBy') LOOP
+                    IF jsonb_typeof(settings -> setting_key) <> 'array' OR jsonb_array_length(settings -> setting_key) = 0 THEN RETURN false; END IF;
+                    FOR item IN SELECT value FROM jsonb_array_elements(settings -> setting_key) LOOP
+                        IF jsonb_typeof(item) <> 'string' OR (item #>> '{}') !~ '^[A-Za-z_][A-Za-z0-9_]*$' THEN RETURN false; END IF;
+                    END LOOP;
+                END LOOP;
+                IF settings ? 'joins' AND jsonb_typeof(settings -> 'joins') <> 'array' THEN RETURN false; END IF;
+                IF mode = 'GENERATED' THEN
+                    IF jsonb_array_length(inputs) <> 1
+                       OR (settings ? 'joins' AND jsonb_array_length(settings -> 'joins') <> 0) THEN RETURN false; END IF;
+                ELSIF jsonb_array_length(inputs) = 1 THEN
+                    IF settings ? 'joins' AND jsonb_array_length(settings -> 'joins') <> 0 THEN RETURN false; END IF;
+                ELSE
+                    IF NOT (settings ? 'joins')
+                       OR jsonb_array_length(settings -> 'joins') <> jsonb_array_length(inputs) - 1 THEN RETURN false; END IF;
+                    IF (
+                        SELECT count(DISTINCT (join_item ->> 'inputIndex')::numeric)
+                          FROM jsonb_array_elements(settings -> 'joins') join_item
+                         WHERE jsonb_typeof(join_item) = 'object'
+                           AND (SELECT count(*) FROM jsonb_object_keys(join_item)) = 4
+                           AND join_item ?& array['inputIndex', 'type', 'leftField', 'rightField']
+                           AND jsonb_typeof(join_item -> 'inputIndex') = 'number'
+                           AND (join_item ->> 'inputIndex') ~ '^[1-9][0-9]*$'
+                           AND (join_item ->> 'inputIndex')::numeric < jsonb_array_length(inputs)
+                           AND upper(join_item ->> 'type') IN ('INNER', 'LEFT', 'RIGHT', 'FULL')
+                           AND (join_item ->> 'leftField') ~ '^src_[0-9]+\.[A-Za-z_][A-Za-z0-9_]*$'
+                           AND (join_item ->> 'rightField') ~ '^src_[0-9]+\.[A-Za-z_][A-Za-z0-9_]*$'
+                           AND substring(join_item ->> 'leftField' from '^src_([0-9]+)\.')::numeric
+                               < (join_item ->> 'inputIndex')::numeric
+                           AND substring(join_item ->> 'rightField' from '^src_([0-9]+)\.')::numeric
+                               = (join_item ->> 'inputIndex')::numeric
+                    ) <> jsonb_array_length(inputs) - 1 THEN RETURN false; END IF;
+                END IF;
+                RETURN true;
+            END;
+            $$;
+        ]]></sql>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_implementation
+                ADD CONSTRAINT ck_modeling_implementation_input_payload
+                CHECK (
+                    implementation_revision > 0
+                    AND current_implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(materialization) <> ''
+                    AND modeling_implementation_input_payload_valid(input_mode, inputs_json, field_mappings_json, settings_json)
+                );
+            ALTER TABLE modeling_model_implementation_revision
+                ADD CONSTRAINT ck_modeling_implementation_revision_payload
+                CHECK (
+                    revision > 0
+                    AND content_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(materialization) <> ''
+                    AND modeling_implementation_input_payload_valid(input_mode, inputs_json, field_mappings_json, settings_json)
+                );
+            ALTER TABLE modeling_dbt_artifact
+                ADD CONSTRAINT ck_modeling_dbt_artifact_implementation_revision
+                CHECK (implementation_revision > 0 AND btrim(node_kind) <> '' AND btrim(materialization) <> '');
+
+            CREATE INDEX idx_modeling_implementation_revision_lookup
+                ON modeling_model_implementation_revision (tenant_id, implementation_id, revision DESC);
+            CREATE INDEX idx_modeling_dbt_artifact_implementation_revision
+                ON modeling_dbt_artifact (model_spec_id, implementation_revision, revision);
+            CREATE INDEX idx_modeling_dbt_artifact_physical_asset
+                ON modeling_dbt_artifact (physical_asset_ref)
+                WHERE physical_asset_ref IS NOT NULL;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_IMPLEMENTATION_INPUT_LEDGER_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

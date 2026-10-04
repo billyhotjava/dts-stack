@@ -1,0 +1,59 @@
+{
+  "evidenceVersion": 1,
+  "capturedOn": "2026-07-19",
+  "executionMode": "unit-policy-contract",
+  "productionMigrationExecuted": false,
+  "cwd": "/opt/prod/s10/v2.2.3/source/dts-platform",
+  "command": "./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 -Dtest=BusinessObjectRetirementPolicyTest test",
+  "exitCode": 0,
+  "testSummary": {
+    "tests": 23,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "report": "target/surefire-reports/com.yuzhi.dts.platform.service.modeling.BusinessObjectRetirementPolicyTest.txt"
+  },
+  "fixture": {
+    "path": "source/dts-platform/src/test/resources/fixtures/modeling-retirement/business-object-dispositions.json",
+    "readerTest": "canonicalFixtureDrivesAllFourIdentificationAndDispositionOutcomes"
+  },
+  "verifiedDecisions": [
+    {
+      "case": "stable entity becomes a dimension",
+      "identification": "DIMENSION_LIKE",
+      "readiness": "READY",
+      "recommendedDisposition": "AUTO_DIMENSION",
+      "executableAction": "AUTO_DIMENSION"
+    },
+    {
+      "case": "fact merges into its only compatible target",
+      "identification": "FACT_LIKE",
+      "readiness": "READY",
+      "recommendedDisposition": "AUTO_FACT_MERGE",
+      "executableAction": "AUTO_FACT_MERGE"
+    },
+    {
+      "case": "mixed responsibilities require a manual split",
+      "identification": "MIXED",
+      "readiness": "NEEDS_SPLIT",
+      "recommendedDisposition": "MANUAL_SPLIT",
+      "executableAction": null
+    },
+    {
+      "case": "unused unclassified object may be archived",
+      "identification": "ARCHIVE_CANDIDATE",
+      "readiness": "READY",
+      "recommendedDisposition": "ARCHIVE_ONLY",
+      "executableAction": "ARCHIVE_ONLY"
+    }
+  ],
+  "boundaryAssertions": [
+    "normalized duplicate fields produce exactly one MANUAL_REVIEW owner and FIELD_DUPLICATE conflict",
+    "FACT merge requires exactly one modelType=FACT candidate in targetDomainId",
+    "a null or blank candidate modelType/domainId produces TARGET_METADATA_INCOMPLETE and blocks execution",
+    "complete non-FACT or different-domain candidates remain provably incompatible and do not block one compatible FACT target",
+    "same modelSpecId with conflicting metadata cannot be deduplicated into a target",
+    "a DIMENSION proposedModelSpecId is trimmed consistently in Decision and TargetWriteMetadata",
+    "archive candidates with domain, field, or source conflicts remain non-executable"
+  ]
+}

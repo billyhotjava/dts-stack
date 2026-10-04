@@ -1,0 +1,17 @@
+code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version
+,PJM_NODE_TYPE,项目节点类型,DTS自定义,进度管理,VARCHAR,1,,1.0.0
+,PJM_TASK_STATUS,项目任务完成状态,DTS自定义,进度管理,VARCHAR,1,,1.0.0
+,PJM_YES_NO,项目管理是否标志,DTS自定义,项目管理,VARCHAR,1,,1.0.0
+,PJM_RISK_LEVEL,项目风险等级,DTS自定义,风险管理,VARCHAR,1,,1.0.0
+,PJM_MEASURE_CATEGORY,跟进措施类别,DTS自定义,协同闭环,VARCHAR,1,,1.0.0
+,PJM_CLOSURE_STATUS,事项闭环状态,DTS自定义,协同闭环,VARCHAR,1,,1.0.0
+,PJM_CLOSURE_DELIVERABLE_TYPE,闭环交付物类别,DTS自定义,协同闭环,VARCHAR,1,,1.0.0
+,PJM_QUALITY_ISSUE_CATEGORY,质量问题原因分类,DTS自定义,质量管理,VARCHAR,1,,1.0.0
+,PJM_QUALITY_STATUS,质量问题状态,DTS自定义,质量管理,VARCHAR,1,,1.0.0
+,PJM_TECH_CHANGE_CATEGORY,技术状态更改类别,DTS自定义,技术状态管理,VARCHAR,1,,1.0.0
+,PJM_SIGNATURE_STATUS,文件签署状态,DTS自定义,技术状态管理,VARCHAR,1,,1.0.0
+,PJM_REFORM_STATUS,整改落实状态,DTS自定义,技术状态管理,VARCHAR,1,,1.0.0
+,PJM_RISK_PHASE,项目风险阶段,DTS自定义,风险管理,VARCHAR,1,,1.0.0
+,PJM_RISK_CATEGORY,项目风险分类,DTS自定义,风险管理,VARCHAR,1,,1.0.0
+,PJM_RISK_STATUS,项目风险状态,DTS自定义,风险管理,VARCHAR,1,,1.0.0
+,PJM_DEVELOPMENT_MODE,研制方式,DTS自定义,物料管理,VARCHAR,1,,1.0.0

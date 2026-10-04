@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0023-create-analytics-query-trace" author="dts">
+        <createTable tableName="analytics_query_trace">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="chain" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="card_id" type="bigint"/>
+            <column name="database_id" type="bigint"/>
+            <column name="metric_id" type="bigint"/>
+            <column name="metric_version" type="varchar(64)"/>
+            <column name="sql_text" type="text"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="error_code" type="varchar(128)"/>
+            <column name="request_id" type="varchar(128)"/>
+            <column name="actor_user_id" type="bigint"/>
+            <column name="dept" type="varchar(128)"/>
+            <column name="classification" type="varchar(128)"/>
+            <column name="duration_ms" type="bigint"/>
+            <column name="context_json" type="text"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_query_trace" indexName="idx_query_trace_created_at">
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_query_trace" indexName="idx_query_trace_metric_id">
+            <column name="metric_id"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_query_trace" indexName="idx_query_trace_card_id">
+            <column name="card_id"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_query_trace" indexName="idx_query_trace_request_id">
+            <column name="request_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

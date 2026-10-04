@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dts-reset — Reset dbt & airflow to factory state
+#
+# Removes all business-generated files (models, DAGs, seeds, exchanges, etc.)
+# while preserving system skeleton files (dbt_project.yml, profiles/, .gitkeep,
+# get_custom_schema.sql).
+#
+# Usage:
+#   dts-reset              (interactive confirmation)
+#   dts-reset --force      (skip confirmation)
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+DBT_DIR="${PROJECT_ROOT}/services/dts-dbt"
+AIRFLOW_DAGS_DIR="${PROJECT_ROOT}/services/dts-airflow/dags"
+
+# --- colors ---------------------------------------------------------------
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+
+info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
+
+# --- confirmation ----------------------------------------------------------
+FORCE=false
+[[ "${1:-}" == "--force" || "${1:-}" == "-f" ]] && FORCE=true
+
+if [[ "$FORCE" != true ]]; then
+    echo ""
+    warn "This will DELETE all business data from dbt and airflow:"
+    echo "  - dbt models:  models/*/{layer}/ directories + all yml files"
+    echo "  - dbt macros:  all business macros (keep get_custom_schema.sql)"
+    echo "  - dbt target:  manifest.json, run_results.json"
+    echo "  - dbt seeds:   all csv files"
+    echo "  - dbt deploy:  all deploy artifacts"
+    echo "  - airflow:     DAGs, json configs, exchange files"
+    echo ""
+    read -rp "Continue? [y/N] " answer
+    [[ "${answer,,}" == "y" ]] || { echo "Aborted."; exit 0; }
+fi
+
+# --- dbt cleanup -----------------------------------------------------------
+info "Cleaning dbt business files ..."
+
+# models: remove all layer subdirectories
+for dir in ads dwd dws ods model __topic_bindings; do
+    [[ -d "${DBT_DIR}/models/${dir}" ]] && rm -rf "${DBT_DIR}/models/${dir}"
+done
+
+# models: remove ALL yml/yaml files (source definitions, schema tests, etc.)
+find "${DBT_DIR}/models" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) -delete 2>/dev/null || true
+
+# seeds: remove all csv/tsv
+find "${DBT_DIR}/seeds" -type f \( -name '*.csv' -o -name '*.tsv' \) -delete 2>/dev/null || true
+
+# macros: remove all business macros, keep only get_custom_schema.sql
+find "${DBT_DIR}/macros" -type f -name '*.sql' ! -name 'get_custom_schema.sql' -delete 2>/dev/null || true
+
+# target: remove build artifacts (manifest, run_results, etc.)
+rm -rf "${DBT_DIR}/target"
+mkdir -p "${DBT_DIR}/target"
+
+# deploy artifacts
+rm -rf "${DBT_DIR}/deploy"
+
+# partial parse cache
+rm -f "${DBT_DIR}/target/partial_parse.msgpack"
+
+info "dbt cleaned."
+
+# --- airflow cleanup -------------------------------------------------------
+info "Cleaning airflow business files ..."
+
+# DAG python files
+find "${AIRFLOW_DAGS_DIR}" -maxdepth 1 -name '*.py' -delete 2>/dev/null || true
+
+# DAG json configs
+find "${AIRFLOW_DAGS_DIR}" -maxdepth 1 -name '*.json' -delete 2>/dev/null || true
+
+# subdirectories (dwh, ods, exchange, __pycache__)
+for dir in dwh ods ads exchange __pycache__; do
+    [[ -d "${AIRFLOW_DAGS_DIR}/${dir}" ]] && rm -rf "${AIRFLOW_DAGS_DIR}/${dir}"
+done
+
+info "airflow cleaned."
+
+# --- summary ---------------------------------------------------------------
+echo ""
+info "Factory reset complete. Remaining system files:"
+echo ""
+echo "  dbt:"
+find "${DBT_DIR}" -type f -not -path '*/.git/*' -not -path '*/target/*' -not -path '*/logs/*' | sort | sed 's|^|    |'
+echo ""
+echo "  airflow dags:"
+find "${AIRFLOW_DAGS_DIR}" -type f 2>/dev/null | sort | sed 's|^|    |'
+echo ""
+info "Next steps:"
+echo "  1. Upload new ZIP via platform UI (batch import)"
+echo "  2. Click '构建' to rebuild all models"
+echo "  3. Click '上线' to publish"
+echo ""

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260115_02_catalog_dataset_access_request_target_user" author="platform">
+        <!-- Support proxy requests: data admins submit on behalf of employees. -->
+        <addColumn tableName="catalog_dataset_access_request">
+            <column name="target_user_id" type="varchar(64)"/>
+            <column name="target_username" type="varchar(64)"/>
+            <column name="target_name" type="varchar(128)"/>
+            <column name="target_dept" type="varchar(64)"/>
+        </addColumn>
+
+        <createIndex tableName="catalog_dataset_access_request" indexName="idx_catalog_dataset_access_request_target">
+            <column name="target_username"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

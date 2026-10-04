@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260212_03_ingestion_connector_capability" author="ingestion">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="ingestion_connector_capability"/>
+            </not>
+        </preConditions>
+        <createTable tableName="ingestion_connector_capability">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="connector_type" type="varchar(64)">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_ingestion_connector_capability_type"/>
+            </column>
+            <column name="capabilities" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="connector_version" type="varchar(128)"/>
+            <column name="constraints_json" type="jsonb"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="ingestion_connector_capability" indexName="idx_ing_conn_cap_enabled_type">
+            <column name="enabled"/>
+            <column name="connector_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260212_03_ingestion_realtime_status" author="ingestion">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="ingestion_realtime_status"/>
+            </not>
+        </preConditions>
+        <createTable tableName="ingestion_realtime_status">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uk_ingestion_realtime_task"/>
+            </column>
+            <column name="connector_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="topic_name" type="varchar(256)"/>
+            <column name="consumer_group" type="varchar(256)"/>
+            <column name="checkpoint_token" type="varchar(512)"/>
+            <column name="lag_ms" type="bigint"/>
+            <column name="throughput_rps" type="numeric(18,2)"/>
+            <column name="backlog_count" type="bigint"/>
+            <column name="status" type="varchar(32)" defaultValue="IDLE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_heartbeat" type="timestamp"/>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="ingestion_realtime_status" indexName="idx_ing_realtime_status_task">
+            <column name="task_id"/>
+        </createIndex>
+        <createIndex tableName="ingestion_realtime_status" indexName="idx_ing_realtime_status_status_hb">
+            <column name="status"/>
+            <column name="last_heartbeat"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

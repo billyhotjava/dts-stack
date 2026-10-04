@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260925-01-model-asset-registration-task" author="xiezm" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="modeling_model_asset_registration_task"/>
+            </not>
+        </preConditions>
+        <comment>
+            F15 K3: durable handoff from a confirmed build to catalog asset registration. The task is written in
+            the same transaction that marks the release candidate BUILT; a worker registers independently and
+            records failures for retry, so registration never rolls back or blocks the confirmed build.
+        </comment>
+        <createTable tableName="modeling_model_asset_registration_task">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="candidate_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="built_candidate_version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="uuid"/>
+            <column name="environment" type="varchar(32)"/>
+            <column name="state" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_error_code" type="varchar(128)"/>
+            <column name="last_error_message" type="varchar(1000)"/>
+            <column name="next_attempt_at" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="succeeded_at" type="timestamptz"/>
+            <column name="created_date" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamptz">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_model_asset_registration_task" columnNames="tenant_id,candidate_id"
+            constraintName="uk_model_asset_registration_task_candidate"/>
+        <createIndex tableName="modeling_model_asset_registration_task" indexName="idx_model_asset_registration_task_due">
+            <column name="state"/>
+            <column name="next_attempt_at"/>
+        </createIndex>
+        <sql><![CDATA[
+            ALTER TABLE modeling_model_asset_registration_task
+                ADD CONSTRAINT ck_model_asset_registration_task_state
+                CHECK (state IN ('PENDING', 'SUCCEEDED', 'FAILED'));
+        ]]></sql>
+        <rollback>
+            <dropTable tableName="modeling_model_asset_registration_task"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

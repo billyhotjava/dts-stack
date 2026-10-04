@@ -1,0 +1,224 @@
+version: 2
+
+models:
+  - name: stg_fin__own_fund
+    description: "年度基金 ODS 结构化层：长表（年度×基金来源×基金类别），仅做同位类型转换和空值收敛。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: source_row_id
+        description: "ODS 行稳定指纹"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: year_num
+        description: "会计年度"
+        data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: fund_source_raw
+        description: "基金来源原始值"
+        data_type: text
+      - name: fund_source
+        description: "清洗后基金来源原值，供维度映射"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['年初', '预计增加', '预计使用']
+              config:
+                severity: error
+      - name: fund_category_raw
+        description: "基金类别原始值"
+        data_type: text
+      - name: fund_category
+        description: "清洗后基金类别原值，供维度映射"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - accepted_values:
+              arguments:
+                values: ['事业基金', '职工福利基金', '安全生产基金']
+              config:
+                severity: error
+      - name: amount
+        description: "基金金额（万元）"
+        data_type: numeric(15,2)
+      - name: note
+        description: "备注"
+        data_type: text
+
+  - name: stg_fin__project_fund
+    description: "项目经费 ODS 结构化层：仅做同位类型转换和空值收敛，周期解析下沉 DWD。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: source_row_id
+        description: "ODS 行稳定指纹"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: row_no
+        description: "源数据行号"
+        data_type: integer
+      - name: project_id
+        description: "项目编号"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: cycle_raw
+        description: "研制周期原始值"
+        data_type: text
+      - name: cycle
+        description: "清洗后研制周期"
+        data_type: text
+      - name: total_fund
+        description: "项目总经费（万元）"
+        data_type: numeric(15,2)
+      - name: is_major_project
+        description: "是否重大项目"
+        data_type: boolean
+      - name: research_dept
+        description: "承担研究室"
+        data_type: text
+      - name: project_status_raw
+        description: "项目状态原始值"
+        data_type: text
+      - name: project_status
+        description: "清洗后项目状态原值，供维度映射"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['在研', '支出待处理', '已完成待收款', '已完成审计']
+              config:
+                severity: error
+      - name: direct_ctrl
+        description: "直接成本控制数（万元）"
+        data_type: numeric(15,2)
+      - name: reserve_indirect
+        description: "预留间接费用和收益（万元）"
+        data_type: numeric(15,2)
+      - name: direct_spent
+        description: "直接成本账面支出（万元）"
+        data_type: numeric(15,2)
+      - name: direct_rate
+        description: "直接成本执行率（百分比数值）"
+        data_type: numeric(8,2)
+      - name: indirect_spent
+        description: "间接费用支出和收益总额（万元）"
+        data_type: numeric(15,2)
+      - name: received_fund
+        description: "已收款（万元）"
+        data_type: numeric(15,2)
+      - name: receivable_fund
+        description: "待收经费（万元）"
+        data_type: numeric(15,2)
+
+  - name: stg_fin__aux_balance
+    description: "合同辅助余额 ODS 结构化层：仅做同位类型转换和空值收敛，费用分类下沉 DWD。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: source_row_id
+        description: "ODS 行稳定指纹"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: subject_code
+        description: "会计科目编号"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: subject_name
+        description: "会计科目名称"
+        data_type: text
+      - name: dept_name
+        description: "部门名称"
+        data_type: text
+      - name: contract_name_raw
+        description: "合同名称原始值"
+        data_type: text
+      - name: contract_name
+        description: "清洗后合同名称"
+        data_type: text
+      - name: balance
+        description: "辅助核算余额（元）"
+        data_type: numeric(15,2)
+
+  - name: stg_fin__aux_balance_personal
+    description: "个人辅助余额 ODS 结构化层：仅做同位类型转换和空值收敛，借贷方向与科目类别下沉 DWD。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: source_row_id
+        description: "ODS 行稳定指纹"
+        data_type: text
+        tests:
+          - unique:
+              config:
+                severity: error
+          - not_null:
+              config:
+                severity: error
+      - name: source_table
+        description: "来源 ODS 表名"
+        data_type: text
+      - name: subject_code
+        description: "会计科目编号"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: subject_name
+        description: "会计科目名称"
+        data_type: text
+      - name: employee_dept
+        description: "职工部门"
+        data_type: text
+      - name: employee_name
+        description: "职工名称"
+        data_type: text
+      - name: balance
+        description: "个人辅助核算余额（元）"
+        data_type: numeric(15,2)

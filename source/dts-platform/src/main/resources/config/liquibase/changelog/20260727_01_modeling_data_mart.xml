@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-01a-modeling-data-mart-ledger" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="catalog_domain"/>
+            <tableExists tableName="modeling_warehouse_plan"/>
+        </preConditions>
+        <comment>Create the tenant-scoped data-mart planning ledger and its business-domain scope.</comment>
+
+        <createTable tableName="modeling_data_mart">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="purpose" type="text"><constraints nullable="false"/></column>
+            <column name="owner_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="current_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="idempotency_request_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_data_mart" columnNames="tenant_id, id" constraintName="uk_modeling_data_mart_tenant_id"/>
+
+        <createTable tableName="modeling_data_mart_revision">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="data_mart_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="content_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="snapshot_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_data_mart_revision" columnNames="tenant_id, data_mart_id, revision" constraintName="uk_modeling_data_mart_revision"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_data_mart_revision"
+            baseColumnNames="tenant_id, data_mart_id"
+            constraintName="fk_modeling_data_mart_revision_head"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+
+        <createTable tableName="modeling_data_mart_domain">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="data_mart_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_data_mart_domain" columnNames="tenant_id, data_mart_id, domain_id" constraintName="uk_modeling_data_mart_domain"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_data_mart_domain"
+            baseColumnNames="tenant_id, data_mart_id"
+            constraintName="fk_modeling_data_mart_domain_mart"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_data_mart_domain"
+            baseColumnNames="domain_id"
+            constraintName="fk_modeling_data_mart_domain_domain"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"/>
+
+        <createTable tableName="modeling_warehouse_plan_data_mart">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="data_mart_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_warehouse_plan_data_mart" columnNames="tenant_id, plan_id, data_mart_id" constraintName="uk_warehouse_plan_data_mart"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_warehouse_plan_data_mart"
+            baseColumnNames="tenant_id, plan_id"
+            constraintName="fk_warehouse_plan_data_mart_plan"
+            referencedTableName="modeling_warehouse_plan"
+            referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_warehouse_plan_data_mart"
+            baseColumnNames="tenant_id, data_mart_id"
+            constraintName="fk_warehouse_plan_data_mart_mart"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+
+        <addColumn tableName="modeling_warehouse_plan">
+            <column name="data_marts_version" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+        </addColumn>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_data_mart
+                ADD CONSTRAINT ck_modeling_data_mart_payload
+                CHECK (
+                    code ~ '^[A-Z][A-Z0-9_]{1,63}$'
+                    AND status IN ('DRAFT', 'CURRENT', 'RETIRED')
+                    AND revision > 0
+                    AND current_checksum ~ '^[0-9a-f]{64}$'
+                    AND btrim(name) <> ''
+                    AND btrim(purpose) <> ''
+                    AND btrim(owner_id) <> ''
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_request_hash ~ '^[0-9a-f]{64}$'
+                );
+            ALTER TABLE modeling_data_mart_revision
+                ADD CONSTRAINT ck_modeling_data_mart_revision_payload
+                CHECK (
+                    revision > 0
+                    AND status IN ('DRAFT', 'CURRENT', 'RETIRED')
+                    AND content_checksum ~ '^[0-9a-f]{64}$'
+                    AND jsonb_typeof(snapshot_json) = 'object'
+                );
+            CREATE UNIQUE INDEX uk_modeling_data_mart_code
+                ON modeling_data_mart (tenant_id, lower(code));
+            CREATE UNIQUE INDEX uk_modeling_data_mart_name
+                ON modeling_data_mart (tenant_id, lower(name))
+                WHERE status <> 'RETIRED';
+            CREATE UNIQUE INDEX uk_modeling_data_mart_idempotency
+                ON modeling_data_mart (tenant_id, idempotency_key);
+            CREATE INDEX idx_modeling_data_mart_list
+                ON modeling_data_mart (tenant_id, status, name);
+            CREATE INDEX idx_modeling_data_mart_revision_lookup
+                ON modeling_data_mart_revision (tenant_id, data_mart_id, revision DESC);
+            CREATE INDEX idx_modeling_data_mart_domain_lookup
+                ON modeling_data_mart_domain (tenant_id, domain_id, data_mart_id);
+            CREATE INDEX idx_warehouse_plan_data_mart_plan
+                ON modeling_warehouse_plan_data_mart (tenant_id, plan_id);
+            CREATE INDEX idx_warehouse_plan_data_mart_mart
+                ON modeling_warehouse_plan_data_mart (tenant_id, data_mart_id);
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODELING_DATA_MART_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

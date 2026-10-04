@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251024-05-governance-rule-owner-dept" author="codex">
+        <preConditions onFail="CONTINUE">
+            <tableExists tableName="gov_rule"/>
+        </preConditions>
+
+        <addColumn tableName="gov_rule">
+            <column name="owner_dept" type="VARCHAR(128)"/>
+        </addColumn>
+
+        <createIndex indexName="idx_gov_rule_owner_dept" tableName="gov_rule">
+            <column name="owner_dept"/>
+        </createIndex>
+
+        <sql>UPDATE gov_rule
+SET owner_dept = ds.owner_dept
+FROM catalog_dataset ds
+WHERE gov_rule.dataset_id = ds.id
+  AND ds.owner_dept IS NOT NULL
+  AND (gov_rule.owner_dept IS NULL OR TRIM(gov_rule.owner_dept) = '');</sql>
+    </changeSet>
+
+</databaseChangeLog>

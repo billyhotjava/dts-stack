@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# =============================================================================
+# dts-manifest-gen — Scan dbt model SQL files and generate TSV manifest
+#
+# Usage:
+#   dts-manifest-gen [--tag TAG] [--path PATH] [--output FILE]
+#
+# Examples:
+#   dts-manifest-gen --tag project-management
+#   dts-manifest-gen --path models/ads/
+#   dts-manifest-gen --tag biz --path models/dws/
+#   dts-manifest-gen --tag project-management --output out.tsv
+# =============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/dts-common.sh"
+
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+DBT_ROOT="${PROJECT_ROOT}/services/dts-dbt"
+
+# ---------------------------------------------------------------------------
+# Parse arguments
+# ---------------------------------------------------------------------------
+FILTER_TAG=""
+FILTER_PATH=""
+OUTPUT=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --tag)   FILTER_TAG="$2";   shift 2 ;;
+    --path)  FILTER_PATH="$2";  shift 2 ;;
+    --output) OUTPUT="$2";      shift 2 ;;
+    -h|--help)
+      info "Usage: dts-manifest-gen [--tag TAG] [--path PATH] [--output FILE]"
+      exit 0
+      ;;
+    *) die "Unknown option: $1" ;;
+  esac
+done
+
+# ---------------------------------------------------------------------------
+# Discover SQL files
+# ---------------------------------------------------------------------------
+MODEL_DIRS=("dim" "dwd" "dws" "ads")
+
+collect_files() {
+  for dir in "${MODEL_DIRS[@]}"; do
+    local full="${DBT_ROOT}/models/${dir}"
+    [[ -d "$full" ]] || continue
+    for f in "$full"/*.sql; do
+      [[ -f "$f" ]] || continue
+      echo "$f"
+    done
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Map directory to layer
+# ---------------------------------------------------------------------------
+dir_to_layer() {
+  case "$1" in
+    dim) echo "DWD" ;;
+    dwd) echo "DWD" ;;
+    dws) echo "DWS" ;;
+    ads) echo "ADS" ;;
+    *)   echo "UNKNOWN" ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# Extract config fields from SQL file
+# ---------------------------------------------------------------------------
+parse_config() {
+  local file="$1"
+  local config_block
+  # Read everything between {{ config( ... ) }}
+  config_block="$(sed -n '/^{{/,/^}}/p' "$file")"
+
+  # Extract materialized
+  MATERIALIZED="$(echo "$config_block" | sed -n "s/.*materialized=['\"]\\([^'\"]*\\)['\"].*/\\1/p" | head -1)"
+  [[ -z "$MATERIALIZED" ]] && MATERIALIZED="table"
+
+  # Extract tags array content
+  local tags_raw
+  tags_raw="$(echo "$config_block" | tr '\n' ' ' | sed -n "s/.*tags=\[\\([^]]*\\)\].*/\\1/p")"
+  # Clean: remove quotes and spaces, join with comma
+  TAGS="$(echo "$tags_raw" | tr -d "' " | tr -d '"')"
+}
+
+# ---------------------------------------------------------------------------
+# Generate TSV
+# ---------------------------------------------------------------------------
+HEADER="name\tlayer\tsql_path\tsource_data_source_id\talias\tschema_name\tmaterialized\ttags\tstatus\tenabled\towner_dept\tdescription\tcsv_path"
+
+generate() {
+  printf '%b\n' "$HEADER"
+
+  collect_files | sort | while read -r filepath; do
+    local relpath="${filepath#${DBT_ROOT}/}"  # e.g. models/ads/foo.sql
+    local filename="$(basename "$filepath" .sql)"
+    local dirname="$(basename "$(dirname "$filepath")")"
+    local layer
+    layer="$(dir_to_layer "$dirname")"
+
+    # Path filter: check if relpath starts with FILTER_PATH
+    if [[ -n "$FILTER_PATH" ]]; then
+      # Normalize: strip trailing slash for comparison
+      local fp="${FILTER_PATH%/}"
+      if [[ "$relpath" != ${fp}/* && "$relpath" != "$fp" ]]; then
+        continue
+      fi
+    fi
+
+    # Parse config block
+    parse_config "$filepath"
+
+    # Tag filter
+    if [[ -n "$FILTER_TAG" ]]; then
+      # Check if FILTER_TAG is in comma-separated TAGS
+      if ! echo ",$TAGS," | grep -q ",${FILTER_TAG},"; then
+        continue
+      fi
+    fi
+
+    # Emit TSV row
+    printf '%s\t%s\t%s\t\t\tpublic\t%s\t%s\tDRAFT\ttrue\t\t\t\n' \
+      "$filename" "$layer" "$relpath" "$MATERIALIZED" "$TAGS"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
+if [[ -n "$OUTPUT" ]]; then
+  generate > "$OUTPUT"
+  info "Wrote manifest to $OUTPUT ($(( $(wc -l < "$OUTPUT") - 1 )) models)"
+else
+  generate
+fi

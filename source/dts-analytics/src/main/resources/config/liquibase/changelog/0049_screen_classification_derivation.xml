@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="0049-screen-classification-derivation" author="codex">
+        <addColumn tableName="analytics_screen">
+            <column name="manual_classification_floor" type="varchar(32)"/>
+            <column name="classification_snapshot_id" type="varchar(36)"/>
+            <column name="classification_snapshot_version" type="bigint"/>
+            <column name="classification_derived_at" type="timestamp"/>
+            <column name="classification_evidence_json" type="text"/>
+        </addColumn>
+        <sql>
+            update analytics_screen
+               set manual_classification_floor=classification
+             where manual_classification_floor is null
+               and classification is not null
+        </sql>
+        <rollback>
+            <dropColumn tableName="analytics_screen" columnName="classification_evidence_json"/>
+            <dropColumn tableName="analytics_screen" columnName="classification_derived_at"/>
+            <dropColumn tableName="analytics_screen" columnName="classification_snapshot_version"/>
+            <dropColumn tableName="analytics_screen" columnName="classification_snapshot_id"/>
+            <dropColumn tableName="analytics_screen" columnName="manual_classification_floor"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

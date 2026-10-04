@@ -1,0 +1,416 @@
+[
+  {
+    "code": "sys.nav.portal.workbenchOverview",
+    "title": "我的概览",
+    "route": "/workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.workbenchTodo",
+    "title": "待办事项",
+    "route": "/workbench/todo",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceAccessOverview",
+    "title": "接入概览",
+    "route": "/foundation/data-sources",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceDatabaseAccess",
+    "title": "数据库接入",
+    "route": "/foundation/data-sources/database",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceApiAccess",
+    "title": "API 接入",
+    "route": "/foundation/data-sources/api",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceFileAccess",
+    "title": "离线文件接入",
+    "route": "/foundation/data-sources/files",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceAccessDefaults",
+    "title": "默认策略",
+    "route": "/foundation/data-sources/defaults",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceRuntime",
+    "title": "连接器与运行时",
+    "route": "/foundation/connectors",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceConnections",
+    "title": "连接管理",
+    "route": "/foundation/connections",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceConnectors",
+    "title": "连接器目录",
+    "route": "/foundation/connectors",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.resourceJdbcDrivers",
+    "title": "驱动管理",
+    "route": "/foundation/jdbc-drivers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureBusinessDomains",
+    "title": "业务分类与数据域",
+    "route": "/data-architecture?view=business-domains",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureProcesses",
+    "title": "业务过程",
+    "route": "/data-architecture?view=processes",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureLayers",
+    "title": "数仓分层",
+    "route": "/data-architecture?view=layers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureMarts",
+    "title": "数据集市",
+    "route": "/data-architecture?view=marts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.architectureSubjects",
+    "title": "主题域",
+    "route": "/data-architecture?view=subjects",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingHomeWorkspace",
+    "title": "建模概览",
+    "route": "/data-modeling/home/workspace",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningBusinessCategories",
+    "title": "业务分类",
+    "route": "/data-modeling/planning/business-categories",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningLayers",
+    "title": "数仓分层",
+    "route": "/data-modeling/planning/layers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningDomains",
+    "title": "数据域",
+    "route": "/data-modeling/planning/domains",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningProcesses",
+    "title": "业务过程",
+    "route": "/data-modeling/planning/processes",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningMarts",
+    "title": "数据集市",
+    "route": "/data-modeling/planning/marts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.planningSubjects",
+    "title": "主题域",
+    "route": "/data-modeling/planning/subjects",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardFields",
+    "title": "字段标准",
+    "route": "/data-modeling/standards/fields",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardCodes",
+    "title": "标准代码",
+    "route": "/data-modeling/standards/codes",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardRoots",
+    "title": "词根",
+    "route": "/data-modeling/standards/roots",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardDictionary",
+    "title": "命名词典",
+    "route": "/data-modeling/standards/dictionary",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardMappings",
+    "title": "标准映射",
+    "route": "/data-modeling/standards/mappings",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dimensionWorkbench",
+    "title": "模型工作台",
+    "route": "/data-modeling/dimensions/workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.reverseModeling",
+    "title": "逆向建模",
+    "route": "/data-modeling/dimensions/reverse",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricComposite",
+    "title": "复合指标",
+    "route": "/data-modeling/metrics/composite",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricDerived",
+    "title": "派生指标",
+    "route": "/data-modeling/metrics/derived",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricAtomic",
+    "title": "原子指标",
+    "route": "/data-modeling/metrics/atomic",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricModifiers",
+    "title": "修饰词",
+    "route": "/data-modeling/metrics/modifiers",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricPeriods",
+    "title": "时间周期",
+    "route": "/data-modeling/metrics/periods",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingToolbox",
+    "title": "工具箱",
+    "route": "/data-modeling/tools/toolbox",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingImports",
+    "title": "导入记录",
+    "route": "/data-modeling/tools/imports",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelingExports",
+    "title": "导出记录",
+    "route": "/data-modeling/tools/exports",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.modelGraph",
+    "title": "模型关系",
+    "route": "/data-modeling/graphs/models",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.standardGraph",
+    "title": "标准关系",
+    "route": "/data-modeling/graphs/standards",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.metricLineage",
+    "title": "指标血缘",
+    "route": "/data-modeling/graphs/metrics",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioScripts",
+    "title": "脚本开发（Python/Spark）",
+    "route": "/explore/etl/scripts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.studioAdhoc",
+    "title": "即席查询",
+    "route": "/explore/workbench",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsOverview",
+    "title": "运行概览",
+    "route": "/ops/overview",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsInstances",
+    "title": "任务实例监控",
+    "route": "/ops/instances",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsAlerts",
+    "title": "告警记录",
+    "route": "/ops/alerts",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.opsBackfill",
+    "title": "补数管理",
+    "route": "/ops/backfill",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalMap",
+    "title": "资产地图",
+    "route": "/catalog/assets",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalSearch",
+    "title": "数据资产目录",
+    "route": "/catalog/search",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalMetadataManagement",
+    "title": "元数据管理",
+    "route": "/catalog/metadata-management",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineage",
+    "title": "血缘与影响分析",
+    "route": "/catalog/lineage",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineageImpact",
+    "title": "影响分析",
+    "route": "/catalog/lineage/impact",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineageGraph",
+    "title": "血缘图谱",
+    "route": "/catalog/lineage/graph",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineageColumns",
+    "title": "字段血缘",
+    "route": "/catalog/lineage/columns",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineageImport",
+    "title": "血缘导入",
+    "route": "/catalog/lineage/import",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalLineageDiff",
+    "title": "快照对比",
+    "route": "/catalog/lineage/diff",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalPermission",
+    "title": "权限申请",
+    "route": "/security/dataset-access-approval",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.governanceQualityRules",
+    "title": "质量管控",
+    "route": "/governance/rules",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.governanceQualityReport",
+    "title": "质量报告",
+    "route": "/governance/quality",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.governanceClassification",
+    "title": "分级分类",
+    "route": "/security/data-security",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biDashboards",
+    "title": "分析看板",
+    "route": "/bi/dashboards",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biQuestions",
+    "title": "分析卡片",
+    "route": "/bi/questions",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biData",
+    "title": "BI 数据集",
+    "route": "/bi/data",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biPortal",
+    "title": "数据门户",
+    "route": "/bi/portal",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.biScreens",
+    "title": "大屏管理",
+    "route": "/bi/screens",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceApi",
+    "title": "数据 API 管理",
+    "route": "/services/apis",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.dataPortalProducts",
+    "title": "数据产品",
+    "route": "/catalog/data-products",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceOutbound",
+    "title": "数据推送",
+    "route": "/services/products",
+    "requiredRoles": []
+  },
+  {
+    "code": "sys.nav.portal.serviceExchange",
+    "title": "共享交换",
+    "route": "/services/tokens",
+    "requiredRoles": []
+  }
+]

@@ -1,0 +1,31 @@
+Sprint-67 final verification
+verifiedAt=2026-07-20
+
+Backend focused batch A
+command=./mvnw -ntp -Dtest=LegacyObjectMigrationServiceIT,ModelingAuthorizationIT,ModelLifecycleServiceTest test
+result=BUILD SUCCESS; tests=4; failures=0; errors=0
+
+Backend focused batch B
+command=./mvnw -ntp -Dtest=WarehousePlanSourceInventoryContractTest,ModelSpecStageGateServiceTest,ModelSpecResourceTest test
+result=BUILD SUCCESS; tests=21; failures=0; errors=0
+
+Frontend production build
+module=source/dts-platform-webapp
+command=pnpm build
+result=success; modules=10587; duration=2m2s
+warnings=caniuse-lite age and large chunk advisory only
+
+Chrome95 focused failure recovery
+browser=Chrome 95.0.4638.0
+test=exact plan survives list failure
+result=1 passed
+boundary=precise API interception validates UI recovery; backend failure gates are verified separately by Java tests
+
+Deployed journeys
+browser=Chrome 95.0.4638.0
+result=Journey A/B/C 3/3 passed against deployed API and PostgreSQL without API route mocks
+records=../runtime/e2e-record-ids.json
+
+Final static/scope gates
+git_diff_check=PASS; exit=0; no whitespace errors
+gitnexus=../gitnexus/detect-changes.txt

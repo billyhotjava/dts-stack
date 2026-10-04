@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- F1: 指标元数据扩展 — 计算定义 -->
+    <changeSet id="20260405-01-01" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="aggregation_type" type="VARCHAR(16)" defaultValue="SUM"/>
+            <column name="measure_field" type="VARCHAR(200)"/>
+            <column name="numerator_expression" type="TEXT"/>
+            <column name="denominator_expression" type="TEXT"/>
+            <column name="static_filter" type="TEXT"/>
+            <column name="dynamic_filter_config" type="JSONB"/>
+            <column name="is_derived" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="dependency_indicators" type="JSONB"/>
+            <column name="window_function" type="VARCHAR(16)" defaultValue="NONE"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — 维度与粒度 -->
+    <changeSet id="20260405-01-02" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="dimension_fields" type="JSONB"/>
+            <column name="date_column" type="VARCHAR(200)"/>
+            <column name="time_grain" type="VARCHAR(16)" defaultValue="MONTH"/>
+            <column name="granularity" type="VARCHAR(64)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — 数据绑定 -->
+    <changeSet id="20260405-01-03" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="source_table" type="VARCHAR(200)"/>
+            <column name="join_config" type="JSONB"/>
+            <column name="source_layer" type="VARCHAR(8)" defaultValue="ODS"/>
+            <column name="target_layer" type="VARCHAR(8)" defaultValue="ADS"/>
+            <column name="target_model_name" type="VARCHAR(200)"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — 业务属性 -->
+    <changeSet id="20260405-01-04" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="unit" type="VARCHAR(32)"/>
+            <column name="precision_scale" type="INTEGER" defaultValueNumeric="2"/>
+            <column name="threshold_min" type="NUMERIC"/>
+            <column name="threshold_max" type="NUMERIC"/>
+            <column name="direction" type="VARCHAR(16)" defaultValue="HIGHER_BETTER"/>
+            <column name="business_owner" type="VARCHAR(64)"/>
+            <column name="data_privacy" type="VARCHAR(16)" defaultValue="INTERNAL"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — LLM 预留 -->
+    <changeSet id="20260405-01-05" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="llm_generated" type="BOOLEAN" defaultValueBoolean="false"/>
+            <column name="llm_confidence" type="REAL"/>
+            <column name="llm_source_ref" type="TEXT"/>
+            <column name="human_verified" type="BOOLEAN" defaultValueBoolean="false"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — 管理 -->
+    <changeSet id="20260405-01-06" author="system">
+        <addColumn tableName="gov_indicator_definition">
+            <column name="domain" type="VARCHAR(32)"/>
+            <column name="icon" type="VARCHAR(64)"/>
+            <column name="display_order" type="INTEGER" defaultValueNumeric="0"/>
+            <column name="template_id" type="UUID"/>
+        </addColumn>
+    </changeSet>
+
+    <!-- F1: 指标元数据扩展 — 索引 -->
+    <changeSet id="20260405-01-07" author="system">
+        <createIndex indexName="idx_gid_domain" tableName="gov_indicator_definition">
+            <column name="domain"/>
+        </createIndex>
+        <createIndex indexName="idx_gid_template" tableName="gov_indicator_definition">
+            <column name="template_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

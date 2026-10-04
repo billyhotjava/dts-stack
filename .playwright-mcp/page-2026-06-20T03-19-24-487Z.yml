@@ -1,0 +1,152 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e14]:
+      - banner [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: D
+          - generic [ref=e18]: DTS
+          - generic [ref=e19]: ▸
+        - button "team 销售处 down" [active] [ref=e20] [cursor=pointer]:
+          - img "team" [ref=e21]:
+            - img [ref=e22]
+          - generic [ref=e24]: 销售处
+          - img "down" [ref=e25]:
+            - img [ref=e26]
+        - generic [ref=e28]: ▸
+        - button "folder-open 销售准备项目 down" [ref=e29] [cursor=pointer]:
+          - img "folder-open" [ref=e30]:
+            - img [ref=e31]
+          - generic [ref=e33]: 销售准备项目
+          - img "down" [ref=e34]:
+            - img [ref=e35]
+        - button "search 搜索 ⌘K" [ref=e37] [cursor=pointer]:
+          - img "search" [ref=e38]:
+            - img [ref=e39]
+          - generic [ref=e41]: 搜索
+          - generic [ref=e42]: ⌘K
+        - img "bell" [ref=e43]:
+          - img [ref=e44]
+        - generic [ref=e46]:
+          - generic [ref=e48]: 崔
+          - generic [ref=e49]: 崔耀文
+      - generic [ref=e50]:
+        - navigation "主导航" [ref=e51]:
+          - link "appstore 项目门户" [ref=e52] [cursor=pointer]:
+            - /url: /portal
+            - img "appstore" [ref=e53]:
+              - img [ref=e54]
+            - generic [ref=e56]: 项目门户
+          - generic [ref=e57]: 黄金主线
+          - link "check 连接 完成" [ref=e58] [cursor=pointer]:
+            - /url: /connect
+            - img "check" [ref=e60]:
+              - img [ref=e61]
+            - generic [ref=e63]: 连接
+            - generic [ref=e64]: 完成
+          - link "集成 进行中" [ref=e65] [cursor=pointer]:
+            - /url: /integrate
+            - generic [ref=e69]: 集成
+            - generic [ref=e70]: 进行中
+          - link "3 资产 待开始" [ref=e71] [cursor=pointer]:
+            - /url: /assets
+            - generic [ref=e72]: "3"
+            - generic [ref=e73]: 资产
+            - generic [ref=e74]: 待开始
+          - link "4 指标 待开始" [ref=e75] [cursor=pointer]:
+            - /url: /metrics
+            - generic [ref=e76]: "4"
+            - generic [ref=e77]: 指标
+            - generic [ref=e78]: 待开始
+          - generic [ref=e80]: 平台
+          - link "api 数据服务" [ref=e81] [cursor=pointer]:
+            - /url: /platform/serve
+            - img "api" [ref=e83]:
+              - img [ref=e84]
+            - generic [ref=e86]: 数据服务
+          - link "safety-certificate 治理" [ref=e87] [cursor=pointer]:
+            - /url: /platform/govern
+            - img "safety-certificate" [ref=e89]:
+              - img [ref=e90]
+            - generic [ref=e92]: 治理
+          - link "lock 安全" [ref=e93] [cursor=pointer]:
+            - /url: /platform/security
+            - img "lock" [ref=e95]:
+              - img [ref=e96]
+            - generic [ref=e98]: 安全
+          - link "cloud-server 运维" [ref=e99] [cursor=pointer]:
+            - /url: /platform/ops
+            - img "cloud-server" [ref=e101]:
+              - img [ref=e102]
+            - generic [ref=e106]: 运维
+          - link "setting 设置" [ref=e107] [cursor=pointer]:
+            - /url: /platform/settings
+            - img "setting" [ref=e109]:
+              - img [ref=e110]
+            - generic [ref=e112]: 设置
+        - main [ref=e113]:
+          - generic [ref=e114]:
+            - generic [ref=e116]:
+              - generic [ref=e117]: 项目门户
+              - generic [ref=e118]: 销售准备项目
+              - generic [ref=e119]: 整合 PLM 订单与 ERP 客户，产出销售达成率指标
+            - generic [ref=e120]:
+              - generic [ref=e121]:
+                - generic [ref=e122]: 你的下一步
+                - generic [ref=e124]: 阶段 2 · 集成：把已连接的 2 个源在画布上搭一条转换并跑通
+              - button "前往集成 arrow-right" [ref=e125] [cursor=pointer]:
+                - generic [ref=e126]: 前往集成
+                - img "arrow-right" [ref=e127]:
+                  - img [ref=e128]
+            - generic [ref=e130]:
+              - button "阶段 1 完成 连接 2 已连通源 已连通 ≥ 1 个数据源" [ref=e132] [cursor=pointer]:
+                - generic [ref=e133]:
+                  - generic [ref=e134]: 阶段 1
+                  - generic [ref=e137]: 完成
+                - generic [ref=e138]: 连接
+                - generic [ref=e139]:
+                  - generic [ref=e140]: "2"
+                  - generic [ref=e141]: 已连通源
+                - generic [ref=e142]: 已连通 ≥ 1 个数据源
+              - button "阶段 2 进行中 集成 0 跑通作业 跑通 ≥ 1 个转换作业" [ref=e144] [cursor=pointer]:
+                - generic [ref=e145]:
+                  - generic [ref=e146]: 阶段 2
+                  - generic [ref=e149]: 进行中
+                - generic [ref=e150]: 集成
+                - generic [ref=e151]:
+                  - generic [ref=e152]: "0"
+                  - generic [ref=e153]: 跑通作业
+                - generic [ref=e154]: 跑通 ≥ 1 个转换作业
+              - button "阶段 3 待开始 资产 0 发布数据集 发布 ≥ 1 个数据集" [ref=e156] [cursor=pointer]:
+                - generic [ref=e157]:
+                  - generic [ref=e158]: 阶段 3
+                  - generic [ref=e161]: 待开始
+                - generic [ref=e162]: 资产
+                - generic [ref=e163]:
+                  - generic [ref=e164]: "0"
+                  - generic [ref=e165]: 发布数据集
+                - generic [ref=e166]: 发布 ≥ 1 个数据集
+              - button "阶段 4 待开始 指标 0 发布指标 发布 ≥ 1 个指标" [ref=e168] [cursor=pointer]:
+                - generic [ref=e169]:
+                  - generic [ref=e170]: 阶段 4
+                  - generic [ref=e173]: 待开始
+                - generic [ref=e174]: 指标
+                - generic [ref=e175]:
+                  - generic [ref=e176]: "0"
+                  - generic [ref=e177]: 发布指标
+                - generic [ref=e178]: 发布 ≥ 1 个指标
+    - button "reload 重置样例数据" [ref=e180] [cursor=pointer]:
+      - img "reload" [ref=e182]:
+        - img [ref=e183]
+      - generic [ref=e185]: 重置样例数据
+  - menu [ref=e187]:
+    - menuitem "销售处SALES 销售业务数据与分析 · 8 人 check" [ref=e188] [cursor=pointer]:
+      - generic [ref=e190]:
+        - generic [ref=e191]:
+          - generic [ref=e192]: 销售处SALES
+          - generic [ref=e193]: 销售业务数据与分析 · 8 人
+        - img "check" [ref=e194]:
+          - img [ref=e195]
+    - menuitem "质量处QUALITY 质量管理与月报 · 5 人" [ref=e197] [cursor=pointer]:
+      - generic [ref=e200]:
+        - generic [ref=e201]: 质量处QUALITY
+        - generic [ref=e202]: 质量管理与月报 · 5 人

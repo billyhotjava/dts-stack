@@ -1,0 +1,2 @@
+code,name,symbol,quantity_kind,conversion_factor,base_unit_code,precision,status
+CNY,人民币,CNY,CURRENCY,1,,2,ACTIVE

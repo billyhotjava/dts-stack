@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: mdm-demo
+
+mdm:
+  demo:
+    enabled: true
+    storage-path: data/mdm
+    required:
+      users: userCode,userName,deptCode
+      depts: deptCode,deptName
+    callback:
+      url: http://10.10.10.135:8080/api/mdm/receive    # 提供给院方的唯一回调地址（IP 直连）
+      auth-token: ""                                   # 可选，院方回调时带的令牌
+      signature-header: X-Signature
+    upstream:
+      handshake-url: http://example.com/api/mdm/handshake
+      auth-token: ""                                   # 调用院方握手/拉取时使用的令牌
+    registry:
+      system-code: DTS-DEMO
+      system-name: DTS Demo
+      ip-address: 10.10.10.135
+      security-domain: SECRET
+      business-domain: DATA
+      manage-dept: 某研究所数据管理中心
+      contact-name: 张三
+      contact-phone: 13800000000
+      data-plan: FULL_SYNC                  # 请求数据方案描述
+      need-schedule: false                  # 是否需要定时同步
+      schedule-mode: FULL                   # FULL 或 INCREMENTAL
+      exchange-type: HTTP_PULL_PUSH         # 交换类型描述
+      remark: "离线调试用"
+      push-mode: FULL          # FULL 或 INCREMENTAL
+      data-types: users,depts  # 表示期望院方推送的数据类型
+
+server:
+  port: 18080

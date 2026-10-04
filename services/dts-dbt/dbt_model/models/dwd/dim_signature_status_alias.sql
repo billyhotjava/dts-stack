@@ -1,0 +1,37 @@
+{{ config(materialized='table', tags=['project-management-v3', 'dim', 'dwd', 'alias']) }}
+
+SELECT context, alias_raw, canonical_code
+FROM (VALUES
+  ('I_II_no_review',   '已评估评审，已签署',       '已评估评审，已签署'),
+  ('I_II_no_review',   '已评估评审，未签署',       '已评估评审，未签署'),
+  ('I_II_no_review',   '已评估评审，待签署',       '已评估评审，未签署'),
+  ('I_II_no_review',   '已评估评审，已通过',       '已评估评审，未签署'),
+  ('I_II_no_review',   '评审通过',                 '已评估评审，未签署'),
+  ('I_II_no_review',   '已签署',                   '已评估评审，已签署'),
+  ('I_II_no_review',   '已提出需求并签署',         '已评估评审，已签署'),
+  ('I_II_no_review',   '未签署',                   '已提出需求，未评估评审'),
+  ('I_II_no_review',   '已提出需求，待签署',       '已提出需求，未评估评审'),
+  ('I_II_no_review',   '待评审',                   '已提出需求，未评估评审'),
+  ('I_II_no_review',   '待提出',                   '已提出需求，未评估评审'),
+  ('I_II_no_review',   '已提出需求，未评估评审',   '已提出需求，未评估评审'),
+
+  ('I_II_with_review', '已评估评审，已签署',       '已评估评审，已签署'),
+  ('I_II_with_review', '已评估评审，未签署',       '已评估评审，未签署'),
+  ('I_II_with_review', '已评估评审，待签署',       '已评估评审，未签署'),
+  ('I_II_with_review', '已评估评审，已通过',       '已评估评审，未签署'),
+  ('I_II_with_review', '评审通过',                 '已评估评审，未签署'),
+  ('I_II_with_review', '已签署',                   '已评估评审，已签署'),
+  ('I_II_with_review', '已提出需求并签署',         '已评估评审，已签署'),
+  ('I_II_with_review', '未签署',                   '已评估评审，未签署'),
+  ('I_II_with_review', '已提出需求，待签署',       '已评估评审，未签署'),
+  ('I_II_with_review', '待评审',                   '已提出需求，未评估评审'),
+  ('I_II_with_review', '待提出',                   '已提出需求，未评估评审'),
+  ('I_II_with_review', '已提出需求，未评估评审',   '已提出需求，未评估评审'),
+
+  ('III',              '已提出需求，已签署',       '已提出需求，已签署'),
+  ('III',              '已提出需求并签署',         '已提出需求，已签署'),
+  ('III',              '已签署',                   '已提出需求，已签署'),
+  ('III',              '已提出需求，未签署',       '已提出需求，未签署'),
+  ('III',              '已提出需求，待签署',       '已提出需求，未签署'),
+  ('III',              '未签署',                   '已提出需求，未签署')
+) AS t(context, alias_raw, canonical_code)

@@ -1,0 +1,14 @@
+Sprint-67 F4 canonical route transition evidence — 2026-07-19
+
+semantic/subjects       -> /governance/subjects
+semantic/objects        -> mapped /modeling/dimensions or /modeling/models; unmapped -> NEEDS_CLASSIFICATION
+semantic/models         -> /modeling/models
+semantic/metrics        -> /modeling/metric-workbench
+semantic/publish        -> /modeling/models?view=release
+semantic/runs           -> /ops/instances
+low-code-development    -> /modeling/models?view=guided
+modeling/dbt-files      -> /studio/sql-modeling?view=files
+
+Static routes and dynamic resolver both use ModelingCompatibilityPage.
+Loop detection, fixed target queries, legacy aliases and safe returnTo are covered by modelingCompatibilityRoute.test.ts.
+Chrome 95 real run: sprint67-f4-menu-convergence.spec.ts, 2 logical scenarios PASS after one locator-only focused retry.

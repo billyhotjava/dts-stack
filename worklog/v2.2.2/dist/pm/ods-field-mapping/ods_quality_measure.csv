@@ -1,0 +1,11 @@
+序号,Excel表头,ODS字段名,类型,必填,枚举值/说明
+1,项目编号,project_no,varchar,是,
+2,问题名称,issue_name,varchar,,关联到质量信息汇总表
+3,措施内容,measure_content,varchar,,
+4,措施状态,measure_status,varchar,,
+5,责任人,responsible_person,varchar,,
+6,计划完成时间,deadline,varchar,,
+7,实际完成时间,actual_complete_date,varchar,,
+8,最后更新时间,last_update_time,varchar,,
+9,填写人,filled_by,varchar,,
+10,备注,remark,varchar,,

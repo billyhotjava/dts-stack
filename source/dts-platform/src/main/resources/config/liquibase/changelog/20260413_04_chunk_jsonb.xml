@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260413_04_chunk_jsonb" author="platform">
+        <sql dbms="postgresql">
+            ALTER TABLE query_execution_chunk
+            ALTER COLUMN rows_json TYPE jsonb USING rows_json::jsonb
+        </sql>
+        <rollback>
+            <sql dbms="postgresql">
+                ALTER TABLE query_execution_chunk
+                ALTER COLUMN rows_json TYPE text USING rows_json::text
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,2 @@
+hour_slot,total,success,failed,failed_rate
+collect_failed,0,0,1,100

@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "dts.runtime-certification/v1",
+  "status": "CERTIFIED",
+  "certificationProfileId": "H83-CERT-RT01-LINUX-AMD64-EVIDENCE-bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68",
+  "candidateProfileId": "H83-RT01-LINUX-AMD64-DBT11022-PG1100-LOCK-01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02",
+  "platform": "linux/amd64",
+  "dbtCore": "1.10.22",
+  "dbtPostgres": "1.10.0",
+  "adapter": "postgres",
+  "databaseType": "PostgreSQL",
+  "requirementsLockSha256": "01d7c02b6bf4fefdfc188cbf9ef8aed4fb243c227c060103f195c4ca45af5f02",
+  "evidenceManifestSha256": "bcd2fc84b05b9508990538c6642be7ac7b35073ec034e6b1980b22f556345a68",
+  "candidateImagePlatformManifestDigest": "sha256:fe1d15f1b4215e693dadfc1d99be2ae07c7e50e8df144504005feb41cc7686b7",
+  "candidateImageConfigurationDigest": "sha256:da312997c55425d9a63622221245cee61c0e219ce83234587d2122959e1b640f",
+  "certifiedDerivativePlatformManifestDigest": "sha256:2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85",
+  "certifiedDerivativeConfigurationDigest": "sha256:aaacff2f8d95d2fa5adaa15d5077cf64a2461b01c826887a0890976063cd2523",
+  "imageRefTemplate": "<immutable-registry>/dts-dbt@sha256:2f6dddb7237fdb7141f452b6d09da0379ef7569f2f82560473f304b265cbbd85"
+}

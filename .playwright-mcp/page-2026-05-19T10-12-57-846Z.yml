@@ -1,0 +1,108 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: DTS Metrics Service
+      - heading "指标与语义中心" [level=1] [ref=e7]
+    - generic [ref=e8]: dts-metrics UP
+  - generic [ref=e9]:
+    - navigation "指标与语义中心导航" [ref=e10]:
+      - generic [ref=e11]:
+        - paragraph [ref=e12]: 工作台
+        - link "指标工作台" [ref=e13] [cursor=pointer]:
+          - /url: /metrics/center
+        - link "指标资产" [ref=e14] [cursor=pointer]:
+          - /url: /metrics/dictionary
+        - link "指标包" [ref=e15] [cursor=pointer]:
+          - /url: /metrics/packs
+        - link "迁移与回滚" [ref=e16] [cursor=pointer]:
+          - /url: /metrics/migration
+        - link "运行与告警" [ref=e17] [cursor=pointer]:
+          - /url: /metrics/operations
+      - generic [ref=e18]:
+        - paragraph [ref=e19]: 语义建模
+        - link "语义建模流程" [ref=e20] [cursor=pointer]:
+          - /url: /metrics/semantic
+        - link "主题域映射" [ref=e21] [cursor=pointer]:
+          - /url: /metrics/semantic/subjects
+        - link "业务对象 Join" [ref=e22] [cursor=pointer]:
+          - /url: /metrics/semantic/objects
+        - link "指标公式配置" [ref=e23] [cursor=pointer]:
+          - /url: /metrics/semantic/metrics
+        - link "DWS/ADS 数据集" [ref=e24] [cursor=pointer]:
+          - /url: /metrics/semantic/models
+        - link "审核发布与血缘" [ref=e25] [cursor=pointer]:
+          - /url: /metrics/semantic/publish
+        - link "模型运行监控" [ref=e26] [cursor=pointer]:
+          - /url: /metrics/semantic/runs
+    - main [ref=e27]:
+      - generic [ref=e28]:
+        - generic [ref=e29]:
+          - paragraph [ref=e30]: Metric Designer
+          - heading "指标公式配置" [level=2] [ref=e31]
+          - paragraph [ref=e32]: 用可视化方式配置 count、sum、count_if、sum_if、ratio 等指标公式。
+        - generic [ref=e33]:
+          - link "指标字典" [ref=e34] [cursor=pointer]:
+            - /url: /metrics/dictionary
+          - link "配置指标" [ref=e35] [cursor=pointer]:
+            - /url: /metrics/semantic/metrics
+      - generic [ref=e36]:
+        - article [ref=e37]:
+          - paragraph [ref=e38]: 服务归属
+          - paragraph [ref=e39]: dts-metrics
+        - article [ref=e40]:
+          - paragraph [ref=e41]: 启用状态
+          - paragraph [ref=e42]: 待确认
+        - article [ref=e43]:
+          - paragraph [ref=e44]: 当前版本
+          - paragraph [ref=e45]: foundation
+        - article [ref=e46]:
+          - paragraph [ref=e47]: 权限事实源
+          - paragraph [ref=e48]: dts-platform
+      - generic [ref=e50]:
+        - generic [ref=e51]:
+          - generic [ref=e52]:
+            - heading "语义指标设计器" [level=3] [ref=e53]
+            - paragraph [ref=e54]: 迁入 platform 原语义建模链路：基础模型、Join 画布、指标/维度树、筛选、派生指标和 SQL 预览。
+          - generic [ref=e55]:
+            - button "预览 SQL" [disabled] [ref=e56]
+            - button "保存指标草稿" [disabled] [ref=e57]
+        - generic [ref=e58]: 语义模型加载中...
+        - generic [ref=e59]:
+          - complementary [ref=e60]:
+            - generic [ref=e61]: 基础模型
+            - combobox "基础模型" [ref=e62]
+            - generic [ref=e63]: 请选择基础模型后浏览指标和维度
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - generic [ref=e66]:
+                - heading "模型关系画布" [level=4] [ref=e67]
+                - generic [ref=e68]: 0 条 Join
+              - generic [ref=e69]: 请选择基础模型后开始可视化建模
+            - generic [ref=e70]:
+              - generic [ref=e71]:
+                - heading "SQL / DSL 预览" [level=4] [ref=e72]
+                - generic [ref=e73]: LOCAL_DSL
+              - textbox [ref=e74]: "{ \"joins\": [], \"measures\": [], \"dimensions\": [], \"filters\": [], \"derived_metrics\": [ { \"id\": \"direct_cost_execution_rate\", \"label\": \"直接成本执行率\", \"expression\": \"[direct_cost_amount] / [contract_amount]\" } ], \"limit\": 200, \"format\": \"json\" }"
+          - complementary [ref=e75]:
+            - generic [ref=e76]:
+              - heading "属性面板" [level=4] [ref=e77]
+              - generic [ref=e78]: standalone
+            - generic [ref=e79]:
+              - heading "已选指标" [level=4] [ref=e80]
+              - generic [ref=e82]: 从左侧字段树选择
+            - generic [ref=e83]:
+              - heading "已选维度" [level=4] [ref=e84]
+              - generic [ref=e86]: 从左侧字段树选择
+            - generic [ref=e88]:
+              - heading "筛选器" [level=4] [ref=e89]
+              - button "新增" [ref=e90] [cursor=pointer]
+            - generic [ref=e91]:
+              - generic [ref=e92]:
+                - heading "派生指标" [level=4] [ref=e93]
+                - button "新增" [ref=e94] [cursor=pointer]
+              - generic [ref=e95]:
+                - textbox [ref=e96]: 直接成本执行率
+                - textbox [ref=e97]: "[direct_cost_amount] / [contract_amount]"
+                - button "删除" [ref=e98] [cursor=pointer]
+            - generic [ref=e99]: 结果限制
+            - spinbutton "结果限制" [ref=e100]: "200"

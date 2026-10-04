@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0019-create-analytics_screen_version" author="dts">
+        <createTable tableName="analytics_screen_version">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="screen_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="width" type="integer" defaultValue="1920">
+                <constraints nullable="false"/>
+            </column>
+            <column name="height" type="integer" defaultValue="1080">
+                <constraints nullable="false"/>
+            </column>
+            <column name="background_color" type="varchar(32)" defaultValue="#0d1b2a"/>
+            <column name="background_image" type="text"/>
+            <column name="theme" type="varchar(32)"/>
+            <column name="components_json" type="text"/>
+            <column name="creator_id" type="bigint"/>
+            <column name="current_published" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_at" type="timestamp with time zone"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="analytics_screen_version"
+                             columnNames="screen_id, version_no"
+                             constraintName="uk_screen_version_screen_id_version_no"/>
+
+        <createIndex tableName="analytics_screen_version" indexName="idx_screen_version_screen_id">
+            <column name="screen_id"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_screen_version" indexName="idx_screen_version_current_published">
+            <column name="screen_id"/>
+            <column name="current_published"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

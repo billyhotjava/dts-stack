@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260316-01-create-infra-project-cockpit-batch" author="codex">
+        <createTable tableName="infra_project_cockpit_batch">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="external_exchange_file_id" type="${uuidType}">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="batch_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_file_name" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sheet_name" type="varchar(255)"/>
+            <column name="delimiter" type="varchar(8)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="uploaded_by" type="varchar(128)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="csv_path" type="varchar(2048)"/>
+            <column name="error_path" type="varchar(2048)"/>
+            <column name="row_count" type="integer"/>
+            <column name="issue_count" type="integer"/>
+            <column name="issue_row_count" type="integer"/>
+            <column name="loaded_at" type="${datetimeType}"/>
+            <column name="props" type="${clobType}"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+        <createIndex tableName="infra_project_cockpit_batch" indexName="idx_project_cockpit_batch_code">
+            <column name="batch_code"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260316-02-create-infra-project-cockpit-row" author="codex">
+        <createTable tableName="infra_project_cockpit_row">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="batch_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_no" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parse_status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="project_no" type="varchar(128)"/>
+            <column name="subsystem" type="varchar(255)"/>
+            <column name="node_task" type="varchar(512)"/>
+            <column name="dept" type="varchar(128)"/>
+            <column name="owner" type="varchar(128)"/>
+            <column name="project_manager" type="varchar(128)"/>
+            <column name="plan_date_raw" type="varchar(128)"/>
+            <column name="actual_date_raw" type="varchar(128)"/>
+            <column name="completion_status_raw" type="varchar(128)"/>
+            <column name="risk_level_raw" type="varchar(64)"/>
+            <column name="raw_payload" type="${clobType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="props" type="${clobType}"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+        <createIndex tableName="infra_project_cockpit_row" indexName="idx_project_cockpit_row_batch">
+            <column name="batch_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260316-03-create-infra-project-cockpit-issue" author="codex">
+        <createTable tableName="infra_project_cockpit_issue">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="batch_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_no" type="integer"/>
+            <column name="severity" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issue_code" type="varchar(64)"/>
+            <column name="issue_message" type="varchar(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="raw_payload" type="${clobType}"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+        <createIndex tableName="infra_project_cockpit_issue" indexName="idx_project_cockpit_issue_batch">
+            <column name="batch_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

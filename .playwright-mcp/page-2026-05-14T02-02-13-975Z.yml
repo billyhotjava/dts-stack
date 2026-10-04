@@ -1,0 +1,458 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - menu [ref=e7]:
+      - menuitem "总览图表" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: 总览图表
+      - menuitem "流水线进度" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 流水线进度
+      - menuitem "一键重跑" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: 一键重跑
+      - menuitem "最近运行" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 最近运行
+      - menuitem "演进路线" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 演进路线
+      - menuitem "批次重算" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 批次重算
+      - menuitem "批次结果" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 批次结果
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "Metro AppPack · 算法运行面板" [level=3] [ref=e30]
+          - generic [ref=e31]: LSTM-AE 异常检测 · 阈值调优 · 反馈驱动评估（一键重跑 + 数据上传）
+          - generic [ref=e33]:
+            - generic [ref=e35]: 包标识：metro-pack
+            - generic [ref=e37]: 版本：3.0.1
+            - generic [ref=e39]: 行业：地铁
+        - button "reload 刷新" [ref=e40] [cursor=pointer]:
+          - img "reload" [ref=e1239]:
+            - img [ref=e1240]
+          - generic [ref=e45]: 刷新
+      - generic [ref=e47]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: 目标分（target_score）
+          - generic [ref=e54]: 67.7%
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e60]:
+              - generic [ref=e62]: 当前最佳代理F1
+              - img "info-circle" [ref=e64]:
+                - img [ref=e65]
+            - generic [ref=e69]: 100.0%
+          - generic [ref=e70]: 差距：0.3230
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: 最新离线事件数
+            - generic [ref=e77]: "2"
+          - generic [ref=e78]: 训练阈值：3.030
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - generic [ref=e83]: 训练验证损失
+            - generic [ref=e85]: "0.299009"
+          - generic [ref=e86]: 最佳候选：trial-01
+      - generic [ref=e576]:
+        - generic [ref=e580]:
+          - strong [ref=e583]: 选择批次：
+          - generic [ref=e585] [cursor=pointer]:
+            - generic: 20260514T015006Z-9220d9 · 成功 · 文件 1 · 6/7 成功
+            - generic [ref=e587]:
+              - combobox [active] [ref=e589]
+              - generic "20260514T015006Z-9220d9 · 成功 · 文件 1 · 6/7 成功" [ref=e633]
+            - generic:
+              - img:
+                - img
+            - img [ref=e635]:
+              - img [ref=e636]
+          - button "重新加载" [ref=e639] [cursor=pointer]:
+            - generic [ref=e640]: 重新加载
+          - button "去批次列表" [ref=e642] [cursor=pointer]:
+            - generic [ref=e643]: 去批次列表
+        - generic [ref=e591]:
+          - generic [ref=e594]: 批次结果 · 20260514T015006Z-9220d9
+          - generic [ref=e644]:
+            - generic [ref=e646]:
+              - generic [ref=e648]: 成功
+              - generic [ref=e650]: DTS 导出
+              - generic [ref=e652]: 创建：2026-05-14 09:50:06
+              - generic [ref=e654]: 开始：2026-05-14 09:50:06
+              - generic [ref=e656]: 结束：2026-05-14 09:50:55
+            - generic [ref=e658]:
+              - text: /opt/prod/metro-app/sources/metro-stack/runtime/dts-export/demo-metro-20260513/metro_dwd_lstm_training_window.csv
+              - button "Copy" [ref=e659] [cursor=pointer]:
+                - img "copy" [ref=e660]:
+                  - img [ref=e661]
+            - generic [ref=e664]:
+              - generic [ref=e667]: 文件列表
+              - table [ref=e675]:
+                - rowgroup [ref=e676]:
+                  - row "文件名 大小 上传时间" [ref=e677]:
+                    - columnheader "文件名" [ref=e678]
+                    - columnheader "大小" [ref=e679]
+                    - columnheader "上传时间" [ref=e680]
+                - rowgroup [ref=e681]:
+                  - row "metro_dwd_lstm_training_window.csv 5.2 KB 2026-05-14 09:50:06" [ref=e682]:
+                    - cell "metro_dwd_lstm_training_window.csv" [ref=e683]
+                    - cell "5.2 KB" [ref=e684]
+                    - cell "2026-05-14 09:50:06" [ref=e685]
+            - generic [ref=e687]:
+              - generic [ref=e690]: 流水线进度
+              - generic [ref=e692]:
+                - generic [ref=e694]:
+                  - generic [ref=e696]: "1"
+                  - generic [ref=e697]:
+                    - generic [ref=e698]: P0-01 · 已跳过
+                    - generic [ref=e700]:
+                      - generic [ref=e702]: 2026-05-14 09:50:06 → 2026-05-14 09:50:06 · 退出码=0
+                      - generic [ref=e703]: DTS window export detected; raw Excel profiling skipped
+                      - button "查看日志" [ref=e705] [cursor=pointer]:
+                        - generic [ref=e706]: 查看日志
+                - generic [ref=e708]:
+                  - img "check" [ref=e712]:
+                    - img [ref=e713]
+                  - generic [ref=e715]:
+                    - generic [ref=e716]: P0-02 · 成功
+                    - generic [ref=e718]:
+                      - generic [ref=e720]: 2026-05-14 09:50:06 → 2026-05-14 09:50:06 · 退出码=0
+                      - button "查看日志" [ref=e722] [cursor=pointer]:
+                        - generic [ref=e723]: 查看日志
+                - generic [ref=e725]:
+                  - img "check" [ref=e729]:
+                    - img [ref=e730]
+                  - generic [ref=e732]:
+                    - generic [ref=e733]: P0-03 · 成功
+                    - generic [ref=e735]:
+                      - generic [ref=e737]: 2026-05-14 09:50:06 → 2026-05-14 09:50:25 · 退出码=0
+                      - button "查看日志" [ref=e739] [cursor=pointer]:
+                        - generic [ref=e740]: 查看日志
+                - generic [ref=e742]:
+                  - img "check" [ref=e746]:
+                    - img [ref=e747]
+                  - generic [ref=e749]:
+                    - generic [ref=e750]: P0-04 · 成功
+                    - generic [ref=e752]:
+                      - generic [ref=e754]: 2026-05-14 09:50:25 → 2026-05-14 09:50:28 · 退出码=0
+                      - button "查看日志" [ref=e756] [cursor=pointer]:
+                        - generic [ref=e757]: 查看日志
+                - generic [ref=e759]:
+                  - img "check" [ref=e763]:
+                    - img [ref=e764]
+                  - generic [ref=e766]:
+                    - generic [ref=e767]: P1-01 · 成功
+                    - generic [ref=e769]:
+                      - generic [ref=e771]: 2026-05-14 09:50:28 → 2026-05-14 09:50:30 · 退出码=0
+                      - button "查看日志" [ref=e773] [cursor=pointer]:
+                        - generic [ref=e774]: 查看日志
+                - generic [ref=e776]:
+                  - img "check" [ref=e780]:
+                    - img [ref=e781]
+                  - generic [ref=e783]:
+                    - generic [ref=e784]: P1-02 · 成功
+                    - generic [ref=e786]:
+                      - generic [ref=e788]: 2026-05-14 09:50:30 → 2026-05-14 09:50:31 · 退出码=0
+                      - button "查看日志" [ref=e790] [cursor=pointer]:
+                        - generic [ref=e791]: 查看日志
+                - generic [ref=e793]:
+                  - img "check" [ref=e796]:
+                    - img [ref=e797]
+                  - generic [ref=e799]:
+                    - generic [ref=e800]: P1-05 · 成功
+                    - generic [ref=e802]:
+                      - generic [ref=e804]: 2026-05-14 09:50:31 → 2026-05-14 09:50:55 · 退出码=0
+                      - button "查看日志" [ref=e806] [cursor=pointer]:
+                        - generic [ref=e807]: 查看日志
+            - generic [ref=e809]:
+              - generic [ref=e812]: 异常判定链路
+              - generic [ref=e814]:
+                - generic [ref=e817]:
+                  - generic [ref=e818]:
+                    - generic [ref=e819]: 原始窗口总数
+                    - generic [ref=e821]: "4"
+                  - text: LSTM-AE 按 120 步滑窗切分
+                - generic [ref=e822]: → 阈值过滤 →
+                - generic [ref=e825]:
+                  - generic [ref=e826]:
+                    - generic [ref=e827]: 告警窗口
+                    - generic [ref=e829]: "3"
+                  - generic [ref=e830]: score ≥ 2.145
+                - generic [ref=e831]: → 聚合 →
+                - generic [ref=e834]:
+                  - generic [ref=e835]:
+                    - generic [ref=e836]: 异常事件（P0-04 原始）
+                    - generic [ref=e838]: "1"
+                  - generic [ref=e839]: min_windows=2， max_gap=1
+                - generic [ref=e840]: → 滞回+策略 →
+                - generic [ref=e843]:
+                  - generic [ref=e844]:
+                    - generic [ref=e845]: 最终事件（P1-02 选定）
+                    - generic [ref=e847]: "0"
+                  - generic [ref=e848]: 策略 static， 退出比 0.85
+            - generic [ref=e850]:
+              - generic [ref=e853]: 判定参数（本批次实际使用）
+              - table [ref=e857]:
+                - rowgroup [ref=e858]:
+                  - row "初始阈值 2.1452 阈值来源 static_quantile_q995_from_training 选定策略 static" [ref=e859]:
+                    - rowheader "初始阈值" [ref=e860]
+                    - cell "2.1452" [ref=e861]
+                    - rowheader "阈值来源" [ref=e862]
+                    - cell "static_quantile_q995_from_training" [ref=e863]
+                    - rowheader "选定策略" [ref=e864]
+                    - cell "static" [ref=e865]
+                  - row "滞回低位比 0.85 事件最小窗口数 2 允许最大间隔窗口 1" [ref=e866]:
+                    - rowheader "滞回低位比" [ref=e867]
+                    - cell "0.85" [ref=e868]
+                    - rowheader "事件最小窗口数" [ref=e869]
+                    - cell "2" [ref=e870]
+                    - rowheader "允许最大间隔窗口" [ref=e871]
+                    - cell "1" [ref=e872]
+                  - row "严重等级 medium 比 1.50 严重等级 high 比 2.00 static 分位 0.995" [ref=e873]:
+                    - rowheader "严重等级 medium 比" [ref=e874]
+                    - cell "1.50" [ref=e875]
+                    - rowheader "严重等级 high 比" [ref=e876]
+                    - cell "2.00" [ref=e877]
+                    - rowheader "static 分位" [ref=e878]
+                    - cell "0.995" [ref=e879]
+                  - row "EWMA α 0.15 EWMA z 3.00 POT 尾分位 / 风险 0.980 / 0.010" [ref=e880]:
+                    - rowheader "EWMA α" [ref=e881]
+                    - cell "0.15" [ref=e882]
+                    - rowheader "EWMA z" [ref=e883]
+                    - cell "3.00" [ref=e884]
+                    - rowheader "POT 尾分位 / 风险" [ref=e885]
+                    - cell "0.980 / 0.010" [ref=e886]:
+                      - generic [ref=e887]: 0.980 / 0.010
+            - generic [ref=e889]:
+              - generic [ref=e891]:
+                - generic [ref=e892]: 异常事件明细
+                - generic [ref=e894]: 来源：p0-04/raw
+              - generic [ref=e898]:
+                - table [ref=e902]:
+                  - rowgroup [ref=e912]:
+                    - row "事件 ID 开始时间 结束时间 持续窗口数 最大 score 平均 score 严重程度 专家标注" [ref=e913]:
+                      - columnheader "事件 ID" [ref=e914]
+                      - columnheader "开始时间" [ref=e915]
+                      - columnheader "结束时间" [ref=e916]
+                      - columnheader "持续窗口数" [ref=e917]
+                      - columnheader "最大 score" [ref=e918]
+                      - columnheader "平均 score" [ref=e919]
+                      - columnheader "严重程度" [ref=e920]
+                      - columnheader "专家标注" [ref=e921]
+                  - rowgroup [ref=e922]:
+                    - row "1 2026-05-13 09:08:00 2026-05-13 09:10:00 3 29.667 19.568 high 真异常 误 报" [ref=e923]:
+                      - cell "1" [ref=e924]
+                      - cell "2026-05-13 09:08:00" [ref=e925]
+                      - cell "2026-05-13 09:10:00" [ref=e926]
+                      - cell "3" [ref=e927]
+                      - cell "29.667" [ref=e928]
+                      - cell "19.568" [ref=e929]
+                      - cell "high" [ref=e930]:
+                        - generic [ref=e931]: high
+                      - cell "真异常 误 报" [ref=e932]:
+                        - generic [ref=e933]:
+                          - button "真异常" [ref=e935] [cursor=pointer]:
+                            - generic [ref=e936]: 真异常
+                          - button "误 报" [ref=e938] [cursor=pointer]:
+                            - generic [ref=e939]: 误 报
+                - list [ref=e940]:
+                  - listitem "Previous Page" [ref=e941]:
+                    - button "left" [disabled] [ref=e942]:
+                      - img "left" [ref=e943]:
+                        - img [ref=e944]
+                  - listitem "1" [ref=e946] [cursor=pointer]:
+                    - generic [ref=e947]: "1"
+                  - listitem "Next Page" [ref=e948]:
+                    - button "right" [disabled] [ref=e949]:
+                      - img "right" [ref=e950]:
+                        - img [ref=e951]
+            - generic [ref=e954]:
+              - generic [ref=e956]:
+                - generic [ref=e957]: 专家反馈 A · 事件标注与真实指标
+                - button "用专家反馈重新评估" [disabled] [ref=e959]:
+                  - generic: 用专家反馈重新评估
+              - generic [ref=e960]:
+                - generic [ref=e961]: 两种标注方式任选：(1) 在"异常事件明细"表里手工点"真异常 / 误报"； (2) 下方导入一份专家历史故障记录（CSV / XLS），系统按时间重叠自动匹配。 累积到一定量后点右上角按钮计算真实 Precision/Recall/F1。
+                - button "inbox 拖拽或点击上传专家历史表（CSV / XLS） 字段需包含 start_time / end_time；可选 verdict / note" [ref=e964] [cursor=pointer]:
+                  - generic [ref=e965]:
+                    - paragraph [ref=e966]:
+                      - img "inbox" [ref=e967]:
+                        - img [ref=e968]
+                    - paragraph [ref=e970]: 拖拽或点击上传专家历史表（CSV / XLS）
+                    - paragraph [ref=e971]: 字段需包含 start_time / end_time；可选 verdict / note
+                - generic [ref=e972]:
+                  - img "No data" [ref=e974]
+                  - generic [ref=e986]: 尚未计算专家评估
+            - generic [ref=e988]:
+              - generic [ref=e990]:
+                - generic [ref=e991]: 专家反馈 B · 参数覆盖与重打分
+                - generic [ref=e993]:
+                  - button "按反馈自动推荐参数" [disabled] [ref=e995]:
+                    - generic: 按反馈自动推荐参数
+                  - button "保存参数并重跑 P1-02" [ref=e997] [cursor=pointer]:
+                    - generic [ref=e998]: 保存参数并重跑 P1-02
+              - generic [ref=e999]:
+                - generic [ref=e1000]: 编辑下列参数后点右上角按钮，会用新参数重跑 P1-02 阈值实验（不重训模型）。留空表示使用默认值。
+                - generic [ref=e1001]:
+                  - generic [ref=e1002]:
+                    - text: static_quantile
+                    - generic [ref=e1003]:
+                      - generic:
+                        - button "Increase Value" [ref=e1004] [cursor=pointer]:
+                          - img "up" [ref=e1005]:
+                            - img [ref=e1006]
+                        - button "Decrease Value" [ref=e1008] [cursor=pointer]:
+                          - img "down" [ref=e1009]:
+                            - img [ref=e1010]
+                      - spinbutton [ref=e1013]
+                  - generic [ref=e1014]:
+                    - text: ewma_alpha
+                    - generic [ref=e1015]:
+                      - generic:
+                        - button "Increase Value" [ref=e1016] [cursor=pointer]:
+                          - img "up" [ref=e1017]:
+                            - img [ref=e1018]
+                        - button "Decrease Value" [ref=e1020] [cursor=pointer]:
+                          - img "down" [ref=e1021]:
+                            - img [ref=e1022]
+                      - spinbutton [ref=e1025]
+                  - generic [ref=e1026]:
+                    - text: ewma_z
+                    - generic [ref=e1027]:
+                      - generic:
+                        - button "Increase Value" [ref=e1028] [cursor=pointer]:
+                          - img "up" [ref=e1029]:
+                            - img [ref=e1030]
+                        - button "Decrease Value" [ref=e1032] [cursor=pointer]:
+                          - img "down" [ref=e1033]:
+                            - img [ref=e1034]
+                      - spinbutton [ref=e1037]
+                  - generic [ref=e1038]:
+                    - text: pot_tail_quantile
+                    - generic [ref=e1039]:
+                      - generic:
+                        - button "Increase Value" [ref=e1040] [cursor=pointer]:
+                          - img "up" [ref=e1041]:
+                            - img [ref=e1042]
+                        - button "Decrease Value" [ref=e1044] [cursor=pointer]:
+                          - img "down" [ref=e1045]:
+                            - img [ref=e1046]
+                      - spinbutton [ref=e1049]
+                  - generic [ref=e1050]:
+                    - text: pot_risk
+                    - generic [ref=e1051]:
+                      - generic:
+                        - button "Increase Value" [ref=e1052] [cursor=pointer]:
+                          - img "up" [ref=e1053]:
+                            - img [ref=e1054]
+                        - button "Decrease Value" [ref=e1056] [cursor=pointer]:
+                          - img "down" [ref=e1057]:
+                            - img [ref=e1058]
+                      - spinbutton [ref=e1061]
+                  - generic [ref=e1062]:
+                    - text: hysteresis_low_ratio
+                    - generic [ref=e1063]:
+                      - generic:
+                        - button "Increase Value" [ref=e1064] [cursor=pointer]:
+                          - img "up" [ref=e1065]:
+                            - img [ref=e1066]
+                        - button "Decrease Value" [ref=e1068] [cursor=pointer]:
+                          - img "down" [ref=e1069]:
+                            - img [ref=e1070]
+                      - spinbutton [ref=e1073]
+                  - generic [ref=e1074]:
+                    - text: min_event_windows
+                    - generic [ref=e1075]:
+                      - generic:
+                        - button "Increase Value" [ref=e1076] [cursor=pointer]:
+                          - img "up" [ref=e1077]:
+                            - img [ref=e1078]
+                        - button "Decrease Value" [ref=e1080] [cursor=pointer]:
+                          - img "down" [ref=e1081]:
+                            - img [ref=e1082]
+                      - spinbutton [ref=e1085]
+                  - generic [ref=e1086]:
+                    - text: max_gap_windows
+                    - generic [ref=e1087]:
+                      - generic:
+                        - button "Increase Value" [ref=e1088] [cursor=pointer]:
+                          - img "up" [ref=e1089]:
+                            - img [ref=e1090]
+                        - button "Decrease Value" [ref=e1092] [cursor=pointer]:
+                          - img "down" [ref=e1093]:
+                            - img [ref=e1094]
+                      - spinbutton [ref=e1097]
+                  - generic [ref=e1098]:
+                    - text: target_alert_ratio
+                    - generic [ref=e1099]:
+                      - generic:
+                        - button "Increase Value" [ref=e1100] [cursor=pointer]:
+                          - img "up" [ref=e1101]:
+                            - img [ref=e1102]
+                        - button "Decrease Value" [ref=e1104] [cursor=pointer]:
+                          - img "down" [ref=e1105]:
+                            - img [ref=e1106]
+                      - spinbutton [ref=e1109]
+            - generic [ref=e1111]:
+              - generic [ref=e1113]:
+                - generic [ref=e1114]: 专家治理表导出
+                - button "export 导出 DTS 治理表" [ref=e1116] [cursor=pointer]:
+                  - img "export" [ref=e1118]:
+                    - img [ref=e1119]
+                  - generic [ref=e1121]: 导出 DTS 治理表
+              - generic [ref=e1123]:
+                - img "No data" [ref=e1125]
+                - generic [ref=e1131]: 尚未导出 DTS 治理表
+            - generic [ref=e1133]:
+              - generic [ref=e1135]:
+                - generic [ref=e1136]: 专家反馈 C · 元分类器（经验蒸馏）
+                - button "训练元分类器" [ref=e1138] [cursor=pointer]:
+                  - generic [ref=e1139]: 训练元分类器
+              - generic [ref=e1140]:
+                - generic [ref=e1141]: 累积 ≥ 10 条专家标注后可训练。模型学习"事件特征 → 专家判断"的隐性规则，用于二次过滤模型误报。
+                - generic [ref=e1142]:
+                  - img "No data" [ref=e1144]
+                  - generic [ref=e1156]: 尚未训练元分类器
+            - generic [ref=e1158]:
+              - generic [ref=e1160]:
+                - generic [ref=e1161]: 本批结果
+                - button "info-circle 指标说明" [ref=e1163] [cursor=pointer]:
+                  - img "info-circle" [ref=e1165]:
+                    - img [ref=e1166]
+                  - generic [ref=e1169]: 指标说明
+              - generic [ref=e1170]:
+                - generic [ref=e1171]:
+                  - generic [ref=e1173]:
+                    - generic [ref=e1174]: 离线告警事件数
+                    - generic [ref=e1176]: "1"
+                  - generic [ref=e1178]:
+                    - generic [ref=e1179]: 告警窗口
+                    - generic [ref=e1181]: "3"
+                  - generic [ref=e1183]:
+                    - generic [ref=e1184]: best proxy_accuracy
+                    - generic [ref=e1186]: 100.0%
+                - separator [ref=e1187]
+                - generic [ref=e1188]:
+                  - generic [ref=e1189]:
+                    - generic [ref=e1190]:
+                      - generic [ref=e1191]: weak_f1（最佳策略）
+                      - generic [ref=e1193]: 50.0%
+                    - generic [ref=e1194]: 策略：static
+                  - generic [ref=e1196]:
+                    - generic [ref=e1197]: 精确率 / 召回率
+                    - generic [ref=e1199]: 100.0% / 33.3%
+                  - generic [ref=e1201]:
+                    - generic [ref=e1202]: TP / FP / FN（真正 / 假正 / 假负）
+                    - generic [ref=e1204]: 1 / 0 / 2
+                  - generic [ref=e1206]:
+                    - generic [ref=e1207]: 参与计算的弱标签窗口
+                    - generic [ref=e1209]: "4"
+            - generic [ref=e1211]:
+              - generic [ref=e1214]: 对比上一次 (20260413T120623Z-b0773d)
+              - generic [ref=e1216]:
+                - generic [ref=e1218]:
+                  - generic [ref=e1219]: 事件数 Δ
+                  - generic [ref=e1222]: "-1"
+                - generic [ref=e1224]:
+                  - generic [ref=e1225]: 告警窗口 Δ
+                  - generic [ref=e1228]: "-8"
+                - generic [ref=e1230]:
+                  - generic [ref=e1231]: 最佳代理准确率 Δ
+                  - generic [ref=e1233]: "0.0000"

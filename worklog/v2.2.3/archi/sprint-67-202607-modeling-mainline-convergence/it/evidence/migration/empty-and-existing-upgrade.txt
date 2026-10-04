@@ -1,0 +1,13 @@
+F5 Liquibase upgrade evidence
+
+Changeset under test: 20260719_07_legacy_object_retirement.xml
+Applied live changesets:
+- 20260719-07a-legacy-object-migration-ledger
+- 20260719-07b-legacy-api-usage-ledger
+
+Created live tables:
+- modeling_legacy_object_migration_batch
+- modeling_legacy_object_migration
+- modeling_legacy_api_usage
+
+LegacyObjectMigrationLiquibaseTest passed in the focused 15-test package gate. The changeset is forward-only and creates ledger/audit structures without dropping legacy columns, FKs, APIs, or tables.

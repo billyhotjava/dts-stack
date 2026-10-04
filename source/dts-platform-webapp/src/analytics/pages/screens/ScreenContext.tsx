@@ -1,0 +1,748 @@
+import { createContext, useContext, useReducer, ReactNode, useCallback, useState, useMemo } from 'react';
+import type { ScreenState, ScreenAction, ScreenConfig, ScreenComponent } from './types';
+import { SCREEN_SCHEMA_VERSION } from './screenSpec';
+import { sanitizeParentContainerIds, wouldCreateParentCycle } from './componentHierarchy';
+import { ScreenDataFeedbackProvider } from './ScreenDataFeedbackContext';
+
+// ── ID generation (crypto.randomUUID for collision-resistance) ──────────────
+export function generateId(prefix = 'comp'): string {
+    return `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`;
+}
+
+// ── Undo history cap ────────────────────────────────────────────────────────
+const MAX_HISTORY = 80;
+
+/** Style keys copied by format painter */
+const FORMAT_PAINTER_STYLE_KEYS = [
+    'backgroundColor', 'borderColor', 'borderWidth', 'borderRadius', 'radius',
+    'fillColor', 'titleColor', 'valueColor', 'fontSize', 'fontWeight', 'color',
+    'headerColor', 'headerBackground', 'bodyColor', 'bodyBackground', 'oddRowBackground', 'evenRowBackground',
+    'textAlign', 'labelColor', 'inputBackground', 'inputBorderColor', 'inputTextColor',
+    'seriesColors', 'titleFontSize', 'valueFontSize',
+] as const;
+
+function pushHistory(
+    history: ScreenConfig[],
+    historyIndex: number,
+    newConfig: ScreenConfig,
+): { history: ScreenConfig[]; historyIndex: number } {
+    const trimmed = history.slice(
+        Math.max(0, historyIndex + 1 - MAX_HISTORY + 1),
+        historyIndex + 1,
+    );
+    trimmed.push(newConfig);
+    return { history: trimmed, historyIndex: trimmed.length - 1 };
+}
+
+// ── Defaults ────────────────────────────────────────────────────────────────
+const defaultConfig: ScreenConfig = {
+    schemaVersion: SCREEN_SCHEMA_VERSION,
+    id: '',
+    name: '未命名大屏',
+    width: 1920,
+    height: 1080,
+    backgroundColor: '#1e1f26',
+    backgroundImage: '',
+    components: [],
+    globalVariables: [],
+};
+
+const initialState: ScreenState = {
+    config: defaultConfig,
+    baselineConfig: defaultConfig,
+    selectedIds: [],
+    zoom: 100,
+    showGrid: true,
+    history: [defaultConfig],
+    historyIndex: 0,
+};
+
+function applyAutoContainerBinding(components: ScreenComponent[], movedIds: string[]): ScreenComponent[] {
+    if (!Array.isArray(components) || components.length === 0 || !Array.isArray(movedIds) || movedIds.length === 0) {
+        return components;
+    }
+    const movedIdSet = new Set(movedIds);
+    const containers = components
+        .filter((item) => item.type === 'container' && item.visible)
+        .sort((a, b) => b.zIndex - a.zIndex);
+
+    return components.map((item) => {
+        if (!movedIdSet.has(item.id) || item.type === 'container') {
+            return item;
+        }
+
+        const centerX = item.x + item.width / 2;
+        const centerY = item.y + item.height / 2;
+        const target = containers.find((container) => (
+            container.id !== item.id
+            && centerX >= container.x
+            && centerX <= container.x + container.width
+            && centerY >= container.y
+            && centerY <= container.y + container.height
+        ));
+        const nextParentId = target?.id;
+        if (nextParentId) {
+            if (wouldCreateParentCycle(components, item.id, nextParentId)) {
+                return item;
+            }
+            if (item.parentContainerId === nextParentId) {
+                return item;
+            }
+            return { ...item, parentContainerId: nextParentId };
+        }
+        if (!item.parentContainerId) {
+            return item;
+        }
+        const { parentContainerId: _parentContainerId, ...rest } = item;
+        return rest;
+    });
+}
+
+function toInteger(value: unknown, fallback: number, min?: number): number {
+    const numeric = Number(value);
+    const rounded = Number.isFinite(numeric) ? Math.round(numeric) : fallback;
+    return typeof min === 'number' ? Math.max(min, rounded) : rounded;
+}
+
+function normalizeComponentGeometry(component: ScreenComponent): ScreenComponent {
+    return {
+        ...component,
+        x: toInteger(component.x, 0),
+        y: toInteger(component.y, 0),
+        width: toInteger(component.width, 50, 1),
+        height: toInteger(component.height, 50, 1),
+    };
+}
+
+function sanitizeComponents(components: ScreenComponent[]): ScreenComponent[] {
+    return sanitizeParentContainerIds(components.map(normalizeComponentGeometry));
+}
+
+// ── Reducer ─────────────────────────────────────────────────────────────────
+function screenReducer(state: ScreenState, action: ScreenAction): ScreenState {
+    switch (action.type) {
+        case 'SET_CONFIG': {
+            const sanitizedConfig = {
+                ...action.payload,
+                components: sanitizeComponents(action.payload.components || []),
+            };
+            return {
+                ...state,
+                config: sanitizedConfig,
+                ...pushHistory(state.history, state.historyIndex, sanitizedConfig),
+            };
+        }
+
+        case 'LOAD_CONFIG': {
+            const sanitizedConfig = {
+                ...action.payload,
+                components: sanitizeComponents(action.payload.components || []),
+            };
+            // Load config without adding to history (used when loading from API)
+            return {
+                ...state,
+                config: sanitizedConfig,
+                baselineConfig: sanitizedConfig,
+                selectedIds: [],
+                history: [sanitizedConfig],
+                historyIndex: 0,
+            };
+        }
+
+        case 'MARK_BASELINE': {
+            return {
+                ...state,
+                baselineConfig: action.payload,
+            };
+        }
+
+        // Phase 1.3: MERGE_CONFIG – merge partial updates inside reducer (avoids stale closure)
+        case 'MERGE_CONFIG': {
+            const merged: ScreenConfig = {
+                ...state.config,
+                ...action.payload,
+                components: sanitizeComponents(
+                    action.payload.components ?? state.config.components,
+                ),
+            };
+            return {
+                ...state,
+                config: merged,
+                ...pushHistory(state.history, state.historyIndex, merged),
+            };
+        }
+
+        case 'ADD_COMPONENT': {
+            const newConfig = {
+                ...state.config,
+                components: sanitizeComponents([...state.config.components, action.payload]),
+            };
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: [action.payload.id],
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        case 'UPDATE_COMPONENT': {
+            // 支持函数式 updater：reducer 内部用"当前最新"的 comp 作为基线，
+            // 避免调用方在闭包里持有旧 config 时，合并后反向覆盖掉其他字段的最新值。
+            const nextComponents = state.config.components.map((comp) => {
+                if (comp.id !== action.payload.id) return comp;
+                const upd = typeof action.payload.updates === 'function'
+                    ? action.payload.updates(comp)
+                    : action.payload.updates;
+                return { ...comp, ...upd };
+            });
+            const newComponents = sanitizeComponents(nextComponents);
+            const newConfig = { ...state.config, components: newComponents };
+            return {
+                ...state,
+                config: newConfig,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        case 'DELETE_COMPONENTS': {
+            const deletedIds = new Set(action.payload);
+            const newComponents = state.config.components
+                .filter((comp) => !deletedIds.has(comp.id))
+                .map((comp) => {
+                    if (!comp.parentContainerId || !deletedIds.has(comp.parentContainerId)) {
+                        return comp;
+                    }
+                    const { parentContainerId: _parentContainerId, ...rest } = comp;
+                    return rest;
+                });
+            const sanitizedComponents = sanitizeComponents(newComponents);
+            const newConfig = { ...state.config, components: sanitizedComponents };
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: [],
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        // Phase 4.3: DUPLICATE_COMPONENTS – atomic copy+paste in reducer (no race condition)
+        case 'DUPLICATE_COMPONENTS': {
+            const { sourceIds } = action.payload;
+            const selected = state.config.components.filter((c) => sourceIds.includes(c.id));
+            if (selected.length === 0) return state;
+            const maxZ = Math.max(...state.config.components.map((c) => c.zIndex), 0);
+            const duplicated = selected.map((comp, idx) => ({
+                ...comp,
+                id: generateId(),
+                x: comp.x + 20,
+                y: comp.y + 20,
+                zIndex: maxZ + idx + 1,
+            }));
+            const newConfig = {
+                ...state.config,
+                components: sanitizeComponents([...state.config.components, ...duplicated]),
+            };
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: duplicated.map((c) => c.id),
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        case 'SELECT_COMPONENTS':
+            return { ...state, selectedIds: action.payload };
+
+        case 'PASTE_COMPONENTS': {
+            const { components, offsetX = 20, offsetY = 20 } = action.payload;
+            const maxZIndex = state.config.components.length > 0
+                ? Math.max(...state.config.components.map(c => c.zIndex))
+                : 0;
+
+            const newComponents = components.map((comp, idx) => ({
+                ...comp,
+                id: generateId(),
+                x: comp.x + offsetX,
+                y: comp.y + offsetY,
+                zIndex: maxZIndex + idx + 1,
+            }));
+
+            const newConfig = {
+                ...state.config,
+                components: sanitizeComponents([...state.config.components, ...newComponents]),
+            };
+            return {
+                ...state,
+                config: newConfig,
+                selectedIds: newComponents.map(c => c.id),
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        case 'MOVE_COMPONENT': {
+            const movedComponents = state.config.components.map((comp) =>
+                comp.id === action.payload.id
+                    ? { ...comp, x: action.payload.x, y: action.payload.y }
+                    : comp
+            );
+            const newComponents = sanitizeComponents(
+                applyAutoContainerBinding(movedComponents, [action.payload.id]),
+            );
+            const newConfig = { ...state.config, components: newComponents };
+            // Don't add to history on every move (too many entries)
+            return { ...state, config: newConfig };
+        }
+
+        case 'MOVE_COMPONENTS': {
+            const posMap = new Map(action.payload.map((item) => [item.id, item]));
+            const movedComponents = state.config.components.map((comp) => {
+                const next = posMap.get(comp.id);
+                if (!next) return comp;
+                return { ...comp, x: next.x, y: next.y };
+            });
+            const newComponents = sanitizeComponents(
+                applyAutoContainerBinding(
+                    movedComponents,
+                    action.payload.map((item) => item.id),
+                ),
+            );
+            const newConfig = { ...state.config, components: newComponents };
+            return { ...state, config: newConfig };
+        }
+
+        case 'TRANSFORM_COMPONENTS': {
+            const transformMap = new Map(action.payload.map((item) => [item.id, item]));
+            const newComponents = sanitizeComponents(state.config.components.map((comp) => {
+                const next = transformMap.get(comp.id);
+                if (!next) return comp;
+                return {
+                    ...comp,
+                    x: next.x,
+                    y: next.y,
+                    width: next.width,
+                    height: next.height,
+                };
+            }));
+            const newConfig = { ...state.config, components: newComponents };
+            return { ...state, config: newConfig };
+        }
+
+        case 'RESIZE_COMPONENT': {
+            const newComponents = sanitizeComponents(state.config.components.map((comp) =>
+                comp.id === action.payload.id
+                    ? { ...comp, width: action.payload.width, height: action.payload.height }
+                    : comp
+            ));
+            const newConfig = { ...state.config, components: newComponents };
+            return { ...state, config: newConfig };
+        }
+
+        case 'REORDER_LAYER': {
+            const { id, direction } = action.payload;
+            const components = [...state.config.components];
+            const index = components.findIndex((c) => c.id === id);
+            if (index === -1) return state;
+
+            const maxZIndex = Math.max(...components.map((c) => c.zIndex));
+            const minZIndex = Math.min(...components.map((c) => c.zIndex));
+
+            const newComponents = components.map((comp) => {
+                if (comp.id !== id) return comp;
+                switch (direction) {
+                    case 'up':
+                        return { ...comp, zIndex: Math.min(comp.zIndex + 1, maxZIndex + 1) };
+                    case 'down':
+                        return { ...comp, zIndex: Math.max(comp.zIndex - 1, 0) };
+                    case 'top':
+                        return { ...comp, zIndex: maxZIndex + 1 };
+                    case 'bottom':
+                        return { ...comp, zIndex: minZIndex - 1 };
+                    default:
+                        return comp;
+                }
+            });
+
+            const newConfig = { ...state.config, components: newComponents };
+            return {
+                ...state,
+                config: newConfig,
+                ...pushHistory(state.history, state.historyIndex, newConfig),
+            };
+        }
+
+        case 'SET_ZOOM':
+            return { ...state, zoom: action.payload };
+
+        case 'TOGGLE_GRID':
+            return { ...state, showGrid: !state.showGrid };
+
+        case 'UNDO': {
+            if (state.historyIndex <= 0) return state;
+            const newIndex = state.historyIndex - 1;
+            return {
+                ...state,
+                config: state.history[newIndex],
+                historyIndex: newIndex,
+            };
+        }
+
+        case 'REDO': {
+            if (state.historyIndex >= state.history.length - 1) return state;
+            const newIndex = state.historyIndex + 1;
+            return {
+                ...state,
+                config: state.history[newIndex],
+                historyIndex: newIndex,
+            };
+        }
+
+        case 'SNAPSHOT': {
+            if (state.history[state.historyIndex] === state.config) {
+                return state;
+            }
+            return {
+                ...state,
+                ...pushHistory(state.history, state.historyIndex, state.config),
+            };
+        }
+
+        default:
+            return state;
+    }
+}
+
+interface ScreenContextValue {
+    state: ScreenState;
+    dispatch: React.Dispatch<ScreenAction>;
+    editorReadonly: boolean;
+    setEditorReadonly: (isReadonly: boolean) => void;
+    addComponent: (component: ScreenComponent) => void;
+    updateComponent: (
+        id: string,
+        updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
+    ) => void;
+    deleteComponents: (ids: string[]) => void;
+    selectComponents: (ids: string[]) => void;
+    undo: () => void;
+    redo: () => void;
+    canUndo: boolean;
+    canRedo: boolean;
+    // Clipboard
+    clipboard: ScreenComponent[];
+    copyComponents: () => void;
+    pasteComponents: () => void;
+    // Format painter
+    formatSource: Record<string, unknown> | null;
+    pickFormatSource: () => void;
+    applyFormatToSelected: () => void;
+    // Save/Load
+    loadConfig: (config: ScreenConfig) => void;
+    markBaseline: (config: ScreenConfig) => void;
+    updateConfig: (updates: Partial<ScreenConfig>) => void;
+    updateSelectedComponents: (updates: Partial<ScreenComponent>) => void;
+    groupSelected: () => void;
+    ungroupSelected: () => void;
+    alignSelected: (mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => void;
+    distributeSelected: (mode: 'horizontal' | 'vertical') => void;
+    duplicateSelected: () => void;
+    snapshotTransform: () => void;
+    snapGuides: { x: number[]; y: number[] };
+    setSnapGuides: (guides: { x?: number[]; y?: number[] }) => void;
+    clearSnapGuides: () => void;
+    isSaving: boolean;
+    setIsSaving: (saving: boolean) => void;
+}
+
+const ScreenContext = createContext<ScreenContextValue | null>(null);
+
+export function ScreenProvider({ children }: { children: ReactNode }) {
+    const [state, dispatch] = useReducer(screenReducer, initialState);
+    const [clipboard, setClipboard] = useState<ScreenComponent[]>([]);
+    const [formatSource, setFormatSource] = useState<Record<string, unknown> | null>(null);
+    const [editorReadonly, setEditorReadonly] = useState(false);
+
+    const pickFormatSource = useCallback(() => {
+        if (state.selectedIds.length !== 1) return;
+        const comp = state.config.components.find((c) => c.id === state.selectedIds[0]);
+        if (!comp) return;
+        const style: Record<string, unknown> = {};
+        for (const key of FORMAT_PAINTER_STYLE_KEYS) {
+            if (comp.config[key] !== undefined) style[key] = comp.config[key];
+        }
+        setFormatSource(style);
+    }, [state.selectedIds, state.config.components]);
+
+    const applyFormatToSelected = useCallback(() => {
+        if (editorReadonly) return;
+        if (!formatSource || state.selectedIds.length === 0) return;
+        for (const id of state.selectedIds) {
+            const comp = state.config.components.find((c) => c.id === id);
+            if (!comp) continue;
+            dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates: { config: { ...comp.config, ...formatSource } } } });
+        }
+        dispatch({ type: 'SNAPSHOT' });
+        setFormatSource(null);
+    }, [editorReadonly, formatSource, state.selectedIds, state.config.components, dispatch]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [snapGuides, setSnapGuidesState] = useState<{ x: number[]; y: number[] }>({ x: [], y: [] });
+
+    const addComponent = useCallback((component: ScreenComponent) => {
+        if (editorReadonly) return;
+        dispatch({ type: 'ADD_COMPONENT', payload: component });
+    }, [editorReadonly]);
+
+    const updateComponent = useCallback(
+        (
+            id: string,
+            updates: Partial<ScreenComponent> | ((prev: ScreenComponent) => Partial<ScreenComponent>),
+        ) => {
+            if (editorReadonly) return;
+            dispatch({ type: 'UPDATE_COMPONENT', payload: { id, updates } });
+        },
+        [editorReadonly],
+    );
+
+    const deleteComponents = useCallback((ids: string[]) => {
+        if (editorReadonly) return;
+        dispatch({ type: 'DELETE_COMPONENTS', payload: ids });
+    }, [editorReadonly]);
+
+    const selectComponents = useCallback((ids: string[]) => {
+        dispatch({ type: 'SELECT_COMPONENTS', payload: ids });
+    }, []);
+
+    const undo = useCallback(() => {
+        if (editorReadonly) return;
+        dispatch({ type: 'UNDO' });
+    }, [editorReadonly]);
+
+    const redo = useCallback(() => {
+        if (editorReadonly) return;
+        dispatch({ type: 'REDO' });
+    }, [editorReadonly]);
+
+    const copyComponents = useCallback(() => {
+        const selectedComps = state.config.components.filter(c => state.selectedIds.includes(c.id));
+        if (selectedComps.length > 0) {
+            setClipboard(selectedComps);
+        }
+    }, [state.config.components, state.selectedIds]);
+
+    const pasteComponents = useCallback(() => {
+        if (editorReadonly) return;
+        if (clipboard.length > 0) {
+            dispatch({ type: 'PASTE_COMPONENTS', payload: { components: clipboard } });
+        }
+    }, [clipboard, editorReadonly]);
+
+    const loadConfig = useCallback((config: ScreenConfig) => {
+        dispatch({ type: 'LOAD_CONFIG', payload: config });
+    }, []);
+
+    // Phase 1.3: updateConfig dispatches MERGE_CONFIG to avoid stale closure
+    const updateConfig = useCallback((updates: Partial<ScreenConfig>) => {
+        if (editorReadonly) return;
+        dispatch({ type: 'MERGE_CONFIG', payload: updates });
+    }, [editorReadonly]);
+
+    const markBaseline = useCallback((config: ScreenConfig) => {
+        dispatch({ type: 'MARK_BASELINE', payload: config });
+    }, []);
+
+    const updateSelectedComponents = useCallback((updates: Partial<ScreenComponent>) => {
+        if (editorReadonly) return;
+        if (state.selectedIds.length === 0) return;
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) =>
+            idSet.has(comp.id) ? { ...comp, ...updates } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [editorReadonly, state.config, state.selectedIds]);
+
+    const groupSelected = useCallback(() => {
+        if (editorReadonly) return;
+        if (state.selectedIds.length < 2) return;
+        const idSet = new Set(state.selectedIds);
+        const groupId = generateId('grp');
+        const newComponents = state.config.components.map((comp) =>
+            idSet.has(comp.id) ? { ...comp, groupId } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [editorReadonly, state.config, state.selectedIds]);
+
+    const ungroupSelected = useCallback(() => {
+        if (editorReadonly) return;
+        if (state.selectedIds.length === 0) return;
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) => {
+            if (!idSet.has(comp.id) || !comp.groupId) {
+                return comp;
+            }
+            const { groupId: _groupId, ...rest } = comp;
+            return rest;
+        });
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [editorReadonly, state.config, state.selectedIds]);
+
+    const alignSelected = useCallback((mode: 'left' | 'right' | 'top' | 'bottom' | 'h-center' | 'v-center') => {
+        if (editorReadonly) return;
+        const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
+        if (selected.length < 2) return;
+
+        const target = {
+            left: Math.min(...selected.map((comp) => comp.x)),
+            right: Math.max(...selected.map((comp) => comp.x + comp.width)),
+            top: Math.min(...selected.map((comp) => comp.y)),
+            bottom: Math.max(...selected.map((comp) => comp.y + comp.height)),
+        };
+        const center = {
+            x: selected.reduce((sum, comp) => sum + comp.x + comp.width / 2, 0) / selected.length,
+            y: selected.reduce((sum, comp) => sum + comp.y + comp.height / 2, 0) / selected.length,
+        };
+
+        const idSet = new Set(state.selectedIds);
+        const newComponents = state.config.components.map((comp) => {
+            if (!idSet.has(comp.id)) return comp;
+            if (mode === 'left') return { ...comp, x: target.left };
+            if (mode === 'right') return { ...comp, x: target.right - comp.width };
+            if (mode === 'top') return { ...comp, y: target.top };
+            if (mode === 'bottom') return { ...comp, y: target.bottom - comp.height };
+            if (mode === 'h-center') return { ...comp, x: Math.round(center.x - comp.width / 2) };
+            return { ...comp, y: Math.round(center.y - comp.height / 2) };
+        });
+
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [editorReadonly, state.config, state.selectedIds]);
+
+    const distributeSelected = useCallback((mode: 'horizontal' | 'vertical') => {
+        if (editorReadonly) return;
+        const selected = state.config.components.filter((comp) => state.selectedIds.includes(comp.id));
+        if (selected.length < 3) return;
+
+        const sorted = [...selected].sort((a, b) => (mode === 'horizontal' ? a.x - b.x : a.y - b.y));
+        if (mode === 'horizontal') {
+            const start = sorted[0].x;
+            const end = sorted[sorted.length - 1].x + sorted[sorted.length - 1].width;
+            const totalWidth = sorted.reduce((sum, comp) => sum + comp.width, 0);
+            const gap = (end - start - totalWidth) / (sorted.length - 1);
+            let cursor = start;
+            const nextPos = new Map<string, number>();
+            for (const comp of sorted) {
+                nextPos.set(comp.id, Math.round(cursor));
+                cursor += comp.width + gap;
+            }
+            const newComponents = state.config.components.map((comp) =>
+                nextPos.has(comp.id) ? { ...comp, x: nextPos.get(comp.id) as number } : comp,
+            );
+            dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+            return;
+        }
+
+        const start = sorted[0].y;
+        const end = sorted[sorted.length - 1].y + sorted[sorted.length - 1].height;
+        const totalHeight = sorted.reduce((sum, comp) => sum + comp.height, 0);
+        const gap = (end - start - totalHeight) / (sorted.length - 1);
+        let cursor = start;
+        const nextPos = new Map<string, number>();
+        for (const comp of sorted) {
+            nextPos.set(comp.id, Math.round(cursor));
+            cursor += comp.height + gap;
+        }
+        const newComponents = state.config.components.map((comp) =>
+            nextPos.has(comp.id) ? { ...comp, y: nextPos.get(comp.id) as number } : comp,
+        );
+        dispatch({ type: 'SET_CONFIG', payload: { ...state.config, components: newComponents } });
+    }, [editorReadonly, state.config, state.selectedIds]);
+
+    // Phase 4.3: atomic duplicate – no clipboard race condition
+    const duplicateSelected = useCallback(() => {
+        if (editorReadonly) return;
+        if (state.selectedIds.length === 0) return;
+        dispatch({ type: 'DUPLICATE_COMPONENTS', payload: { sourceIds: state.selectedIds } });
+    }, [editorReadonly, state.selectedIds]);
+
+    const snapshotTransform = useCallback(() => {
+        dispatch({ type: 'SNAPSHOT' });
+    }, []);
+
+    const setSnapGuides = useCallback((guides: { x?: number[]; y?: number[] }) => {
+        setSnapGuidesState({
+            x: guides.x ?? [],
+            y: guides.y ?? [],
+        });
+    }, []);
+
+    const clearSnapGuides = useCallback(() => {
+        setSnapGuidesState({ x: [], y: [] });
+    }, []);
+
+    const canUndo = state.historyIndex > 0;
+    const canRedo = state.historyIndex < state.history.length - 1;
+
+    // Phase 1.1: useMemo around Provider value
+    const contextValue = useMemo<ScreenContextValue>(() => ({
+        state,
+        dispatch,
+        editorReadonly,
+        setEditorReadonly,
+        addComponent,
+        updateComponent,
+        deleteComponents,
+        selectComponents,
+        undo,
+        redo,
+        canUndo,
+        canRedo,
+        clipboard,
+        copyComponents,
+        pasteComponents,
+        formatSource,
+        pickFormatSource,
+        applyFormatToSelected,
+        loadConfig,
+        markBaseline,
+        updateConfig,
+        updateSelectedComponents,
+        groupSelected,
+        ungroupSelected,
+        alignSelected,
+        distributeSelected,
+        duplicateSelected,
+        snapshotTransform,
+        snapGuides,
+        setSnapGuides,
+        clearSnapGuides,
+        isSaving,
+        setIsSaving,
+    }), [
+        state, canUndo, canRedo, clipboard, formatSource, snapGuides, isSaving, editorReadonly,
+        // useCallback refs are stable and won't trigger extra renders
+        addComponent, updateComponent, deleteComponents, selectComponents,
+        undo, redo, copyComponents, pasteComponents, pickFormatSource, applyFormatToSelected, loadConfig,
+        markBaseline, updateConfig, updateSelectedComponents,
+        groupSelected, ungroupSelected, alignSelected, distributeSelected,
+        duplicateSelected, snapshotTransform, setSnapGuides, clearSnapGuides, setIsSaving, dispatch,
+    ]);
+
+    return (
+        <ScreenContext.Provider value={contextValue}>
+            <ScreenDataFeedbackProvider>{children}</ScreenDataFeedbackProvider>
+        </ScreenContext.Provider>
+    );
+}
+
+export function useScreen() {
+    const context = useContext(ScreenContext);
+    if (!context) {
+        throw new Error('useScreen must be used within a ScreenProvider');
+    }
+    return context;
+}
+
+/**
+ * 与 useScreen 等价,但在 Provider 之外不抛错而是返回 null。
+ * 适合无关键路径的 UI 组件(如颜色预设面板)在测试/独立场景中安全运行。
+ */
+export function useScreenOptional() {
+    return useContext(ScreenContext);
+}

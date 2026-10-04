@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-05-audit-ingest-idempotency" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="audit_entry"/>
+        </preConditions>
+        <modifyDataType tableName="audit_entry" columnName="module_key" newDataType="varchar(128)"/>
+        <addColumn tableName="audit_entry">
+            <column name="ingest_producer" type="varchar(64)"/>
+            <column name="ingest_event_id" type="varchar(128)"/>
+            <column name="ingest_payload_hash" type="char(64)"/>
+        </addColumn>
+        <sql dbms="postgresql">
+            ALTER TABLE audit_entry
+                ADD CONSTRAINT ck_audit_entry_ingest_identity_complete
+                CHECK (
+                    (ingest_event_id IS NULL AND ingest_producer IS NULL AND ingest_payload_hash IS NULL)
+                    OR
+                    (
+                        ingest_event_id IS NOT NULL
+                        AND btrim(ingest_event_id) &lt;&gt; ''
+                        AND ingest_producer IS NOT NULL
+                        AND ingest_producer ~ '^dts-[a-z0-9-]+$'
+                        AND ingest_payload_hash IS NOT NULL
+                        AND ingest_payload_hash ~ '^[0-9a-f]{64}$'
+                    )
+                );
+        </sql>
+        <sql dbms="postgresql">
+            CREATE UNIQUE INDEX ux_audit_entry_ingest_identity
+                ON audit_entry (ingest_producer, ingest_event_id)
+                WHERE ingest_event_id IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql dbms="postgresql">DROP INDEX IF EXISTS ux_audit_entry_ingest_identity;</sql>
+            <sql dbms="postgresql">ALTER TABLE audit_entry DROP CONSTRAINT IF EXISTS ck_audit_entry_ingest_identity_complete;</sql>
+            <dropColumn tableName="audit_entry" columnName="ingest_payload_hash"/>
+            <dropColumn tableName="audit_entry" columnName="ingest_event_id"/>
+            <dropColumn tableName="audit_entry" columnName="ingest_producer"/>
+            <modifyDataType tableName="audit_entry" columnName="module_key" newDataType="varchar(64)"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

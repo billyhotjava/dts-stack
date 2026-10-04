@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260518-03-asset-permission-policy-injection" author="codex">
+        <createTable tableName="asset_permission_policy_injection">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="actor" type="varchar(128)"/>
+            <column name="asset_type" type="varchar(32)"/>
+            <column name="asset_id" type="varchar(256)"/>
+            <column name="action" type="varchar(32)"/>
+            <column name="predicates" type="text"/>
+            <column name="masked_columns" type="text"/>
+            <column name="policy_source" type="varchar(128)"/>
+            <column name="predicate_hash" type="varchar(96)"/>
+            <column name="direction" type="varchar(16)"/>
+            <column name="pack_id" type="varchar(128)"/>
+            <column name="occurred_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex indexName="idx_asset_policy_injection_asset_time" tableName="asset_permission_policy_injection">
+            <column name="asset_type"/>
+            <column name="asset_id"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex indexName="idx_asset_policy_injection_pack_time" tableName="asset_permission_policy_injection">
+            <column name="pack_id"/>
+            <column name="occurred_at"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

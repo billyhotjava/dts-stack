@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260116-01-workflow-config-tables" author="codex">
+        <comment>Platform 审批流配置（由 sysadmin 管理）</comment>
+
+        <createTable tableName="admin_workflow_template">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="workflow_type" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="priority" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 资产归属范围：ANY/INST/DEPT -->
+            <column name="owner_scope" type="VARCHAR(16)" defaultValue="ANY">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 密级匹配范围（可空）：PUBLIC/INTERNAL/SECRET/CONFIDENTIAL（支持中文别名，Platform 统一解析） -->
+            <column name="classification_min" type="VARCHAR(32)"/>
+            <column name="classification_max" type="VARCHAR(32)"/>
+
+            <column name="created_by" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="TIMESTAMPTZ"/>
+            <column name="last_modified_by" type="VARCHAR(50)"/>
+            <column name="last_modified_date" type="TIMESTAMPTZ"/>
+        </createTable>
+
+        <createIndex tableName="admin_workflow_template" indexName="idx_admin_workflow_template_type_enabled">
+            <column name="workflow_type"/>
+            <column name="enabled"/>
+        </createIndex>
+        <createIndex tableName="admin_workflow_template" indexName="idx_admin_workflow_template_priority">
+            <column name="workflow_type"/>
+            <column name="priority"/>
+        </createIndex>
+
+        <createTable tableName="admin_workflow_step">
+            <column name="id" type="UUID">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="UUID">
+                <constraints nullable="false"/>
+            </column>
+            <column name="step_order" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="approver_role" type="VARCHAR(64)">
+                <constraints nullable="false"/>
+            </column>
+            <!-- 是否绑定部门：true 时需匹配 ownerDept(deptCode) -->
+            <column name="dept_binding" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_by" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="TIMESTAMPTZ"/>
+            <column name="last_modified_by" type="VARCHAR(50)"/>
+            <column name="last_modified_date" type="TIMESTAMPTZ"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+                baseTableName="admin_workflow_step"
+                baseColumnNames="template_id"
+                constraintName="fk_admin_workflow_step_template"
+                referencedTableName="admin_workflow_template"
+                referencedColumnNames="id"
+                onDelete="CASCADE"/>
+
+        <createIndex tableName="admin_workflow_step" indexName="idx_admin_workflow_step_template_order">
+            <column name="template_id"/>
+            <column name="step_order"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

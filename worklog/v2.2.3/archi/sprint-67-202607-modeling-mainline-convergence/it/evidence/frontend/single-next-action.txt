@@ -1,0 +1,14 @@
+Sprint-67 F2-T04 single next-action evidence
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+- Workbench and plan detail consume server StageProjection; neither calculates completion locally.
+- Plan detail hides the header next action while an editable baseline form owns its save action.
+- Specialist capabilities remain deep links and do not copy a second journey navigator.
+- Live F2 Chrome95 response after category and implementation-ready policy:
+  currentStage=MODEL_DESIGN
+  primaryBlocker.code=MODEL_SPEC_REQUIRED
+  nextAction.path=/modeling/models?planId=<server-plan-id>
+  stages.length=9
+- Desktop and 390x844 views had no document/body horizontal overflow.
+- pageerror=0, requestfailed=0, unexpected HTTP >=400=0.

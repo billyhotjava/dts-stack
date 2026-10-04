@@ -1,0 +1,85 @@
+{
+  "revision": "f1be305c43094447ab518c7016721ca611434dad",
+  "ua": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/95.0.4638.0 Safari/537.36",
+  "errors": [],
+  "requests": [
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"904f41976effb15faf5d82dc3364cb0a93ce2136439e62f7a106c6e0e6930777\",\"canStart\":true,\"requestedModelSpecIds\":[\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\"],\"orderedEntries\":[{\"modelSpecId\":\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\",\"modelName\":\"S104 文件保护复验 0830\",\"modelRevision\":3,\"modelChecksum\":\"81b71830991e00f7f6e726f8f08e04c1114ab1d02ebb5427377c450217c64472\",\"implementationRevision\":1,\"implementationChecksum\":\"346f2f24e853431ed71222c156c169d6f8714ad6b7aef531d21f62bb945ea30f\",\"dependencyChecksum\":\"311280ebba8d84f2a60cfa2c6233e7db08f40f0118da80299ef01ac25c51e40f\",\"layer\":\"ODS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"904f41976effb15faf5d82dc3364cb0a93ce2136439e62f7a106c6e0e6930777\",\"canStart\":true,\"requestedModelSpecIds\":[\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\"],\"orderedEntries\":[{\"modelSpecId\":\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\",\"modelName\":\"S104 文件保护复验 0830\",\"modelRevision\":3,\"modelChecksum\":\"81b71830991e00f7f6e726f8f08e04c1114ab1d02ebb5427377c450217c64472\",\"implementationRevision\":1,\"implementationChecksum\":\"346f2f24e853431ed71222c156c169d6f8714ad6b7aef531d21f62bb945ea30f\",\"dependencyChecksum\":\"311280ebba8d84f2a60cfa2c6233e7db08f40f0118da80299ef01ac25c51e40f\",\"layer\":\"ODS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"904f41976effb15faf5d82dc3364cb0a93ce2136439e62f7a106c6e0e6930777\",\"canStart\":true,\"requestedModelSpecIds\":[\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\"],\"orderedEntries\":[{\"modelSpecId\":\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\",\"modelName\":\"S104 文件保护复验 0830\",\"modelRevision\":3,\"modelChecksum\":\"81b71830991e00f7f6e726f8f08e04c1114ab1d02ebb5427377c450217c64472\",\"implementationRevision\":1,\"implementationChecksum\":\"346f2f24e853431ed71222c156c169d6f8714ad6b7aef531d21f62bb945ea30f\",\"dependencyChecksum\":\"311280ebba8d84f2a60cfa2c6233e7db08f40f0118da80299ef01ac25c51e40f\",\"layer\":\"ODS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/plans/d01c183f-3067-41f4-af50-27e33e7c7c81/materialization-plans/preview",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":{\"planId\":\"d01c183f-3067-41f4-af50-27e33e7c7c81\",\"environment\":\"dev\",\"strategy\":\"WITH_MISSING_UPSTREAMS\",\"planChecksum\":\"904f41976effb15faf5d82dc3364cb0a93ce2136439e62f7a106c6e0e6930777\",\"canStart\":true,\"requestedModelSpecIds\":[\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\"],\"orderedEntries\":[{\"modelSpecId\":\"0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb\",\"modelName\":\"S104 文件保护复验 0830\",\"modelRevision\":3,\"modelChecksum\":\"81b71830991e00f7f6e726f8f08e04c1114ab1d02ebb5427377c450217c64472\",\"implementationRevision\":1,\"implementationChecksum\":\"346f2f24e853431ed71222c156c169d6f8714ad6b7aef531d21f62bb945ea30f\",\"dependencyChecksum\":\"311280ebba8d84f2a60cfa2c6233e7db08f40f0118da80299ef01ac25c51e40f\",\"layer\":\"ODS\",\"dependencyRole\":\"ROOT\",\"topologyLevel\":0,\"action\":\"BUILD\",\"reasonCode\":\"REQUESTED_MODEL\",\"relationEvidenceId\":null,\"targetRelation\":null}],\"blockers\":[]}}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6",
+      "status": 200,
+      "method": "PUT",
+      "applicationStatus": 200,
+      "message": "ok",
+      "code": null
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6/admit",
+      "status": 200,
+      "method": "POST",
+      "applicationStatus": 409,
+      "message": "ingestion service error",
+      "code": null
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/modeling/model-specs/0ed841a5-b4d5-4ba0-8ba4-e611471e5eeb/data-registration",
+      "status": 200,
+      "method": "POST",
+      "body": "{\"status\":200,\"message\":\"OK\",\"code\":null,\"data\":[\"75ca5fce-6cad-4d0b-8b0d-35dc983ec417\"]}"
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6",
+      "status": 200,
+      "method": "PUT",
+      "applicationStatus": 200,
+      "message": "ok",
+      "code": null
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6/admit",
+      "status": 200,
+      "method": "POST",
+      "applicationStatus": 200,
+      "message": "ok",
+      "code": null
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/tasks/6/execute/async",
+      "status": 200,
+      "method": "POST",
+      "applicationStatus": 200,
+      "message": "任务已提交，正在后台触发执行",
+      "code": null
+    },
+    {
+      "url": "https://bi.yuzhicloud.com/api/ingestion/files/upload-and-parse",
+      "status": 200,
+      "method": "POST",
+      "applicationStatus": 200,
+      "message": "ok",
+      "code": null
+    }
+  ]
+}

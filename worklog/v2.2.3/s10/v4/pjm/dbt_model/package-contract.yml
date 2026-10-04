@@ -1,0 +1,82 @@
+version: 1
+package:
+  name: pjm-dbt-model
+  dbtProject: pm_analytics_v3
+  dbtProjectVersion: 2.1.0
+  deliveryMode: SOURCE_AND_OFFLINE_ARTIFACTS
+  rootEntry: dbt_project.yml
+
+inventory:
+  sources: 10
+  sourceColumns: 357
+  models: 63
+  modelColumns: 1329
+  dbtTests: 135
+  technicalNodes:
+    stg: 10
+    dwdAliases: 10
+    total: 20
+  businessModels:
+    dimensions: 8
+    facts: 10
+    summaries: 10
+    applications: 15
+    total: 43
+
+requiredEntries:
+  - dbt_project.yml
+  - models/
+  - macros/
+  - tests/
+  - target/manifest.json
+  - target/catalog.json
+  - package-contract.yml
+  - docs/metric-handbook.md
+  - docs/metric-registry.json
+
+forbiddenEntries:
+  - profiles.yml
+  - .env
+  - logs/
+  - dbt_packages/
+  - target/index.html
+  - target/run_results.json
+  - target/partial_parse.msgpack
+
+reverseModeling:
+  modelSpecs: 43
+  technicalNodes: 20
+  requiresTargetPlanningMapping: true
+  targetPlanningMappings:
+    - dataDomain
+    - businessProcess
+    - dimensionDefinition
+    - dataMart
+    - subjectDomain
+  targetGovernanceMappings:
+    - fieldClassification
+  governanceMappingPolicy: EXPLICIT_OPERATOR_CONFIRMATION_NO_INFERENCE
+  doesNotExecuteSqlDuringInspection: true
+  semanticRules:
+    applicationConsumptionScenarioRequired: true
+    factAndSummaryConsumptionScenarioRequired: false
+    factSourceLayerRequired: true
+    staticDimensionSourcePolicy: DBT_SQL_GENERATION_WITH_PINNED_DIMENSION_DEFINITION
+
+indicators:
+  catalogEntry: docs/metric-handbook.md
+  registryEntry: docs/metric-registry.json
+  stableCodes: 77
+  creatableDefinitions: 76
+  contextualChartHelpers: 1
+  creationMode: MANUAL_AFTER_MODEL_ONLINE
+  autoCreatedByReverseModeling: false
+
+acceptance:
+  - manual and reverse-modeling paths resolve to the same dbt unique_id and dependency graph
+  - every business model has a pinned implementation revision before release
+  - every fact maps to a confirmed target business process and every application maps to a current data mart and subject domain
+  - every selected model has explicit field classification or sealed upstream evidence before publication
+  - build and test evidence belong to the same model and implementation checksums
+  - ONLINE requires a verified, existing physical relation
+  - assets are projected only after the corresponding model or relation is actually available

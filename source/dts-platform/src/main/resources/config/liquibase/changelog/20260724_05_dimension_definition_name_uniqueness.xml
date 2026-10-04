@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet
+        id="20260724-05a0-drop-invalid-dimension-definition-name-index"
+        author="codex"
+        dbms="postgresql"
+        runAlways="true"
+        runInTransaction="false">
+        <preConditions onFail="CONTINUE">
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'uk_dimension_definition_tenant_domain_name_ci'
+                   AND NOT index_state.indisvalid
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            A failed CREATE UNIQUE INDEX CONCURRENTLY leaves an invalid index relation. Recheck this cleanup on
+            every Liquibase run so repeated failures remain recoverable without dropping a valid index.
+        </comment>
+        <sql splitStatements="false">
+            DROP INDEX CONCURRENTLY IF EXISTS uk_dimension_definition_tenant_domain_name_ci
+        </sql>
+    </changeSet>
+
+    <changeSet
+        id="20260724-05a-dimension-definition-tenant-domain-name-unique"
+        author="codex"
+        dbms="postgresql"
+        runInTransaction="false">
+        <preConditions
+            onFail="HALT"
+            onFailMessage="DIMENSION_DEFINITION_NAME_CONFLICT_AUDIT_REQUIRED: duplicate tenant/domain/lower(name) groups exist. Run the audit query from this changeset; rename the incorrect definition, or explicitly delete it after proving zero usage, then rerun Liquibase.">
+            <tableExists tableName="modeling_dimension_definition"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM (
+                        SELECT tenant_id, domain_id, lower(name)
+                          FROM modeling_dimension_definition
+                         GROUP BY tenant_id, domain_id, lower(name)
+                        HAVING count(*) > 1
+                       ) conflicts
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_class index_relation
+                  JOIN pg_catalog.pg_index index_state
+                    ON index_state.indexrelid = index_relation.oid
+                  JOIN pg_catalog.pg_namespace index_schema
+                    ON index_schema.oid = index_relation.relnamespace
+                 WHERE index_schema.nspname = current_schema()
+                   AND index_relation.relname = 'uk_dimension_definition_tenant_domain_name_ci'
+                   AND NOT index_state.indisvalid
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Prevent concurrent duplicate names in one tenant/domain. Precondition audit query:
+            SELECT tenant_id, domain_id, lower(name), array_agg(id ORDER BY created_date, id)
+            FROM modeling_dimension_definition GROUP BY tenant_id, domain_id, lower(name) HAVING count(*) > 1.
+            Operators must explicitly choose which semantic definition to retain and rename the others, or delete
+            them only after proving zero usage;
+            this migration never merges definitions by name. Canonical index signature:
+            CREATE UNIQUE INDEX uk_dimension_definition_tenant_domain_name_ci
+            ON modeling_dimension_definition (tenant_id, domain_id, lower(name)); it is created concurrently below.
+        </comment>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS uk_dimension_definition_tenant_domain_name_ci
+                ON modeling_dimension_definition (tenant_id, domain_id, lower(name));
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_DIMENSION_DEFINITION_NAME_UNIQUENESS_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260724-05b-dimension-definition-migration-batch-ledger" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_dimension_definition"/>
+            <tableExists tableName="modeling_dimension_definition_revision"/>
+            <tableExists tableName="modeling_dimension_definition_legacy_map"/>
+        </preConditions>
+        <comment>
+            Add tenant-scoped, auditable dry-run/execute/rollback state and mark only definitions created by
+            a migration batch as rollback candidates. Existing map rows remain readable but are deliberately
+            not rollbackable without a recorded checksum.
+        </comment>
+
+        <createTable tableName="modeling_dimension_definition_migration_batch">
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="migration_batch_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="migration_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="dry_run_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="execution_json" type="jsonb"/>
+            <column name="rollback_json" type="jsonb"/>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="modeling_dimension_definition_migration_batch"
+            columnNames="tenant_id, migration_batch_id"
+            constraintName="pk_dimension_definition_migration_batch"/>
+        <addUniqueConstraint
+            tableName="modeling_dimension_definition_migration_batch"
+            columnNames="tenant_id, migration_batch_id, migration_checksum"
+            constraintName="uk_dimension_definition_migration_batch_checksum"/>
+
+        <addColumn tableName="modeling_dimension_definition_legacy_map">
+            <column name="migration_checksum" type="varchar(64)"/>
+            <column name="definition_created_by_batch" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="modeling_dimension_definition_legacy_map"
+            baseColumnNames="tenant_id, migration_batch_id, migration_checksum"
+            constraintName="fk_dimension_definition_legacy_batch"
+            referencedTableName="modeling_dimension_definition_migration_batch"
+            referencedColumnNames="tenant_id, migration_batch_id, migration_checksum"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_dimension_definition_migration_batch
+                ADD CONSTRAINT ck_dimension_definition_migration_batch_checksum
+                CHECK (migration_checksum ~ '^[0-9a-f]{64}$');
+            ALTER TABLE modeling_dimension_definition_migration_batch
+                ADD CONSTRAINT ck_dimension_definition_migration_batch_status
+                CHECK (status IN ('DRY_RUN', 'EXECUTED', 'ROLLED_BACK'));
+            ALTER TABLE modeling_dimension_definition_migration_batch
+                ADD CONSTRAINT ck_dimension_definition_migration_batch_evidence
+                CHECK (
+                    jsonb_typeof(dry_run_json) = 'object'
+                    AND (
+                        (status = 'DRY_RUN' AND execution_json IS NULL AND rollback_json IS NULL)
+                        OR (
+                            status = 'EXECUTED'
+                            AND jsonb_typeof(execution_json) = 'object'
+                            AND rollback_json IS NULL
+                        )
+                        OR (
+                            status = 'ROLLED_BACK'
+                            AND jsonb_typeof(execution_json) = 'object'
+                            AND jsonb_typeof(rollback_json) = 'object'
+                        )
+                    )
+                );
+            ALTER TABLE modeling_dimension_definition_legacy_map
+                ADD CONSTRAINT ck_dimension_definition_legacy_checksum
+                CHECK (
+                    (migration_checksum IS NULL OR migration_checksum ~ '^[0-9a-f]{64}$')
+                    AND (NOT definition_created_by_batch OR migration_checksum IS NOT NULL)
+                );
+            ALTER TABLE modeling_dimension_definition_revision
+                ALTER CONSTRAINT fk_dimension_definition_revision_head
+                DEFERRABLE INITIALLY DEFERRED;
+            ALTER TABLE modeling_dimension_definition
+                ALTER CONSTRAINT fk_dimension_definition_current_revision
+                DEFERRABLE INITIALLY DEFERRED;
+            CREATE INDEX idx_dimension_definition_migration_batch_status
+                ON modeling_dimension_definition_migration_batch (tenant_id, status, last_modified_date DESC);
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_DIMENSION_DEFINITION_MIGRATION_BATCH_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260726-05-consumer-classification-dependency" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            create table catalog_classification_consumer_state (
+                id uuid primary key,
+                consumer_type varchar(32) not null,
+                consumer_key varchar(512) not null,
+                manual_floor varchar(32),
+                effective_level varchar(32) not null,
+                status varchar(32) not null,
+                snapshot_id uuid not null references catalog_classification_snapshot(id),
+                snapshot_version bigint not null,
+                evidence_checksum varchar(64) not null,
+                last_error varchar(2048),
+                record_version bigint not null default 0,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint uk_catalog_classification_consumer unique (consumer_type, consumer_key),
+                constraint ck_catalog_classification_consumer_status check (
+                    status in ('CURRENT','RECOMPUTE_PENDING','BLOCKED','FAILED')
+                )
+            );
+
+            create table catalog_classification_dependency (
+                id uuid primary key,
+                consumer_type varchar(32) not null,
+                consumer_key varchar(512) not null,
+                upstream_subject_type varchar(32) not null,
+                upstream_subject_key varchar(512) not null,
+                upstream_snapshot_id uuid not null references catalog_classification_snapshot(id),
+                upstream_snapshot_version bigint not null,
+                upstream_effective_level varchar(32) not null,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                constraint uk_catalog_classification_dependency unique (
+                    consumer_type, consumer_key, upstream_subject_type, upstream_subject_key
+                )
+            );
+            create index idx_catalog_classification_dependency_upstream
+                on catalog_classification_dependency(upstream_subject_type, upstream_subject_key);
+
+            create table catalog_classification_consumer_job (
+                id uuid primary key,
+                idempotency_key varchar(64) not null unique,
+                consumer_type varchar(32) not null,
+                consumer_key varchar(512) not null,
+                status varchar(32) not null,
+                attempts int not null default 0,
+                next_attempt_at timestamp,
+                last_error varchar(2048),
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp
+            );
+            create index idx_catalog_classification_consumer_job_poll
+                on catalog_classification_consumer_job(status, next_attempt_at);
+
+            create table catalog_classification_access_binding (
+                id uuid primary key,
+                binding_type varchar(32) not null,
+                binding_key varchar(512) not null,
+                consumer_type varchar(32) not null,
+                consumer_key varchar(512) not null,
+                snapshot_id uuid not null references catalog_classification_snapshot(id),
+                snapshot_version bigint not null,
+                effective_level varchar(32) not null,
+                status varchar(32) not null,
+                valid_to timestamp,
+                suspended_reason varchar(1024),
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint uk_catalog_classification_access_binding unique (binding_type, binding_key),
+                constraint ck_catalog_classification_access_binding_status check (
+                    status in ('ACTIVE','SUSPENDED','REVOKED','EXPIRED')
+                )
+            );
+            create index idx_catalog_classification_access_consumer
+                on catalog_classification_access_binding(consumer_type, consumer_key, status);
+
+            create table catalog_classification_invalidation_outbox (
+                id uuid primary key,
+                aggregate_key varchar(512) not null,
+                event_type varchar(64) not null,
+                payload jsonb not null,
+                status varchar(32) not null,
+                attempts int not null default 0,
+                next_attempt_at timestamp,
+                last_error varchar(2048),
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp
+            );
+            create index idx_catalog_classification_invalidation_poll
+                on catalog_classification_invalidation_outbox(status, next_attempt_at);
+        ]]></sql>
+        <rollback>
+            <dropTable tableName="catalog_classification_invalidation_outbox"/>
+            <dropTable tableName="catalog_classification_access_binding"/>
+            <dropTable tableName="catalog_classification_consumer_job"/>
+            <dropTable tableName="catalog_classification_dependency"/>
+            <dropTable tableName="catalog_classification_consumer_state"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0026-create-screen-asset-audit-log" author="dts">
+        <createTable tableName="analytics_screen_asset_audit_log">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_id" type="bigint"/>
+            <column name="action" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor_id" type="bigint"/>
+            <column name="source" type="varchar(128)"/>
+            <column name="result" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="details_json" type="text"/>
+            <column name="request_id" type="varchar(128)"/>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_screen_asset_audit_log" indexName="idx_screen_asset_audit_asset">
+            <column name="asset_type"/>
+            <column name="asset_id"/>
+            <column name="created_at"/>
+        </createIndex>
+
+        <createIndex tableName="analytics_screen_asset_audit_log" indexName="idx_screen_asset_audit_actor_time">
+            <column name="actor_id"/>
+            <column name="created_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

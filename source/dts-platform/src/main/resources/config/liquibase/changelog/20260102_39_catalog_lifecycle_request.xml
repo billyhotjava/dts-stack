@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_39_catalog_lifecycle_request" author="platform">
+        <createTable tableName="catalog_lifecycle_request">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="request_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notes" type="varchar(1024)"/>
+            <column name="previous_lifecycle_status" type="varchar(32)"/>
+            <column name="requested_lifecycle_status" type="varchar(32)"/>
+            <column name="previous_retention_days" type="int"/>
+            <column name="requested_retention_days" type="int"/>
+            <column name="previous_expires_at" type="timestamp"/>
+            <column name="requested_expires_at" type="timestamp"/>
+            <column name="decided_by" type="varchar(50)"/>
+            <column name="decided_at" type="timestamp"/>
+            <column name="decision_notes" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="catalog_lifecycle_request"
+            baseColumnNames="dataset_id"
+            referencedTableName="catalog_dataset"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_lifecycle_request_dataset"
+            onDelete="CASCADE"
+        />
+
+        <createIndex tableName="catalog_lifecycle_request" indexName="idx_catalog_lifecycle_request_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="catalog_lifecycle_request" indexName="idx_catalog_lifecycle_request_dataset">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_lifecycle_request" indexName="idx_catalog_lifecycle_request_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
+

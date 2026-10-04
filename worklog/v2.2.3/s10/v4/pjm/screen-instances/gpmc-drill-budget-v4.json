@@ -1,0 +1,835 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-budget-v4",
+  "name": "执行层-经费预算执行明细",
+  "description": "经费预算钻取页面，分区展示预算全量清单、预算执行汇总摘要及超支预算明细。当前快照口径。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目号",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "deptId",
+      "label": "研究室",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "subtopic",
+      "label": "所属子课题",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-budget-header-bar",
+      "type": "shape",
+      "name": "drill-risk-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-budget-title",
+      "type": "title",
+      "name": "执行层-风险与预警中心明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-经费预算执行明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(88, 180, 255, 0.20)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-budget-back-shape",
+      "type": "shape",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.20)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-budget-back-label",
+      "type": "title",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回预算看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-budget-kpi-1",
+      "type": "number-card",
+      "name": "预算总额",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算总额",
+        "value": "0",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_budg_total",
+          "displayName": "预算总额(调整后)",
+          "domain": "预算",
+          "category": "基础",
+          "unit": "万元",
+          "direction": "NEUTRAL",
+          "definition": "调整后批复预算总额(时点快照)",
+          "formula": "Σ 预算金额(调整后)",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": null,
+          "excelRef": "(预算台账)预算金额(调整后)"
+        },
+        "metricCode": "pjm_budg_total"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(budget_amount),0) AS \"预算总额\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-kpi-2",
+      "type": "number-card",
+      "name": "已执行金额",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "已执行金额",
+        "value": "0",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#27d8ff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_budg_executed",
+          "displayName": "已执行金额",
+          "domain": "预算",
+          "category": "基础",
+          "unit": "万元",
+          "direction": "NEUTRAL",
+          "definition": "已占用预算(三本账合计:预付+账面+应付)",
+          "formula": "预付账款 + 账面成本 + 应付账款",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": null,
+          "excelRef": "(预算台账)派生:已执行"
+        },
+        "metricCode": "pjm_budg_executed"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(executed_amount),0) AS \"已执行金额\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-kpi-3",
+      "type": "number-card",
+      "name": "超支条目数",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "超支条目数",
+        "value": "0",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ff5d73",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_budg_overrun_cnt",
+          "displayName": "超支条目数",
+          "domain": "预算",
+          "category": "预警",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "已执行超出预算的预算条目数",
+          "formula": "COUNT(单条已执行 > 单条预算)",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": {
+            "warning": 0.0,
+            "critical": 0.0,
+            "rule": ">"
+          },
+          "excelRef": "(预算台账)派生:超支条目数"
+        },
+        "metricCode": "pjm_budg_overrun_cnt"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(SUM(CASE WHEN is_overrun THEN 1 ELSE 0 END),0) AS \"超支条目数\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-kpi-4",
+      "type": "number-card",
+      "name": "预算健康度",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "预算健康度",
+        "value": "0",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#2ee6a6",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_budg_health_score",
+          "displayName": "预算健康度评分",
+          "domain": "预算",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合超支控制与资金支付健康的预算评分(0-100)",
+          "formula": "预算控制(无超支)×0.7 + 资金支付健康(应付占比低)×0.3",
+          "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+          "sourceTable": "预算执行台账表",
+          "frequency": "随入湖批次刷新(时点快照)",
+          "thresholds": {
+            "warning": 70.0,
+            "critical": 50.0,
+            "rule": "<"
+          },
+          "excelRef": "(预算台账)派生:健康分"
+        },
+        "metricCode": "pjm_budg_health_score"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT ROUND( (100-LEAST(100, CASE WHEN COALESCE(SUM(budget_amount),0)=0 THEN 0 ELSE SUM(overrun_amount)::numeric/NULLIF(SUM(budget_amount),0)::numeric*100 END))*0.7 + (100-LEAST(100, CASE WHEN COALESCE(SUM(executed_amount),0)=0 THEN 0 ELSE SUM(payable_amount)::numeric/NULLIF(SUM(executed_amount),0)::numeric*100 END))*0.3 ,2) AS \"预算健康度\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-detail-table",
+      "type": "table",
+      "name": "预算执行全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险全量清单",
+        "header": [
+          "项目号",
+          "预算编号",
+          "所属子课题",
+          "研究室",
+          "预算金额",
+          "预付账款",
+          "账面成本",
+          "应付账款",
+          "已执行",
+          "剩余",
+          "执行率%",
+          "状态"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "执行率%": {
+            "code": "pjm_budg_execution_rate",
+            "displayName": "预算执行率",
+            "domain": "预算",
+            "category": "率",
+            "unit": "%",
+            "direction": "NEUTRAL",
+            "definition": "已执行占预算的比率,≥100% 即超支",
+            "formula": "已执行 ÷ 预算总额 × 100%",
+            "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+            "sourceTable": "预算执行台账表",
+            "frequency": "随入湖批次刷新(时点快照)",
+            "thresholds": {
+              "warning": 90.0,
+              "critical": 100.0,
+              "rule": ">"
+            },
+            "excelRef": "(预算台账)派生:执行率"
+          },
+          "已执行": {
+            "code": "pjm_budg_executed",
+            "displayName": "已执行金额",
+            "domain": "预算",
+            "category": "基础",
+            "unit": "万元",
+            "direction": "NEUTRAL",
+            "definition": "已占用预算(三本账合计:预付+账面+应付)",
+            "formula": "预付账款 + 账面成本 + 应付账款",
+            "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+            "sourceTable": "预算执行台账表",
+            "frequency": "随入湖批次刷新(时点快照)",
+            "thresholds": null,
+            "excelRef": "(预算台账)派生:已执行"
+          }
+        },
+        "description": "事实明细表：展示统计周期内风险事实、等级、类别、状态、应对措施和滞留天数。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目号\", COALESCE(budget_no,'-') AS \"预算编号\", COALESCE(subtopic,'-') AS \"所属子课题\", COALESCE(research_lab,'-') AS \"研究室\", budget_amount AS \"预算金额\", prepaid_amount AS \"预付账款\", book_cost_amount AS \"账面成本\", payable_amount AS \"应付账款\", executed_amount AS \"已执行\", remaining_amount AS \"剩余\", COALESCE(execution_rate_line,0) AS \"执行率%\", CASE WHEN is_overrun THEN '超支' ELSE '正常' END AS \"状态\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]] ORDER BY overrun_amount DESC, budget_amount DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-side-panel",
+      "type": "table",
+      "name": "预算执行汇总摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险分类与释放摘要",
+        "header": [
+          "指标",
+          "数值",
+          "说明"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {},
+        "description": "指标摘要表：按风险月度汇总展示总量、等级分布、已释放和未释放规模。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(budget_amount),0)::numeric AS budget, COALESCE(SUM(executed_amount),0)::numeric AS executed, COALESCE(SUM(prepaid_amount),0)::numeric AS prepaid, COALESCE(SUM(book_cost_amount),0)::numeric AS book_cost, COALESCE(SUM(payable_amount),0)::numeric AS payable, COALESCE(SUM(remaining_amount),0)::numeric AS remaining, COALESCE(SUM(overrun_amount),0)::numeric AS overrun, COALESCE(SUM(CASE WHEN is_overrun THEN 1 ELSE 0 END),0)::numeric AS overrun_cnt FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('预算总额', agg.budget, '调整后批复预算总额'), ('已执行', agg.executed, '预付+账面+应付(三本账合计)'), ('预付账款', agg.prepaid, '已付未验收未报销无发票'), ('账面成本', agg.book_cost, '已验收有发票的已确认支出'), ('应付账款', agg.payable, '有发票暂未付款'), ('预算剩余', agg.remaining, '预算总额−已执行'), ('超支金额', agg.overrun, '单条max(0,已执行−预算)之和'), ('超支条目数', agg.overrun_cnt, '已执行>预算的条目数')) AS v(metric,value,note)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-support-table",
+      "type": "table",
+      "name": "超支预算明细表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未释放风险应对措施表",
+        "header": [
+          "项目号",
+          "预算编号",
+          "所属子课题",
+          "研究室",
+          "预算金额",
+          "已执行",
+          "超支金额",
+          "执行率%"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "超支金额": {
+            "code": "pjm_budg_overrun_amount",
+            "displayName": "超支金额",
+            "domain": "预算",
+            "category": "预警",
+            "unit": "万元",
+            "direction": "DOWN",
+            "definition": "单条预算已执行超出预算部分的合计",
+            "formula": "Σ max(0, 单条已执行 − 单条预算)",
+            "scope": "当前快照口径,不受时间筛选;受研究室/项目筛选控制",
+            "sourceTable": "预算执行台账表",
+            "frequency": "随入湖批次刷新(时点快照)",
+            "thresholds": {
+              "warning": 0.0,
+              "critical": 0.0,
+              "rule": ">"
+            },
+            "excelRef": "(预算台账)派生:超支金额"
+          }
+        },
+        "description": "跟进处置表：聚焦仍未释放风险的应对措施、月度管控和周度释放计划。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 130,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目号\", COALESCE(budget_no,'-') AS \"预算编号\", COALESCE(subtopic,'-') AS \"所属子课题\", COALESCE(research_lab,'-') AS \"研究室\", budget_amount AS \"预算金额\", executed_amount AS \"已执行\", overrun_amount AS \"超支金额\", COALESCE(execution_rate_line,0) AS \"执行率%\" FROM biz_dwd_budget_v2 WHERE 1=1 [[AND research_lab = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND subtopic = {{subtopic}}]] AND is_overrun = true ORDER BY overrun_amount DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "subtopic",
+              "variableKey": "subtopic"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-budget-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-budget-detail-section-title",
+      "type": "title",
+      "name": "风险全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "预算执行全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-detail-section-desc",
+      "type": "title",
+      "name": "风险全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示当前预算台账明细、三本账金额、已执行/剩余、执行率与超支状态。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-budget-side-section-title",
+      "type": "title",
+      "name": "风险分类与释放摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "预算执行汇总摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-side-section-desc",
+      "type": "title",
+      "name": "风险分类与释放摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：展示预算总额、已执行(三本账)、剩余与超支规模。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-budget-support-section-title",
+      "type": "title",
+      "name": "未释放风险应对措施表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "超支预算明细表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-budget-support-section-desc",
+      "type": "title",
+      "name": "未释放风险应对措施表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦已执行超出预算的预算条目及超支金额。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

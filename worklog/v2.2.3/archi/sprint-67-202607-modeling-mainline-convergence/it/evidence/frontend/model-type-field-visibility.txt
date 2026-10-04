@@ -1,0 +1,24 @@
+Sprint-67 F1-T03 model-type field visibility evidence
+Date: 2026-07-19
+Status: VERIFIED - CANONICAL FORM AND COMMAND CONTRACT
+
+What this slice proves
+- The shared pure rule states that businessActivityRef is optional context for FACT only.
+- DIMENSION, SUMMARY and APPLICATION reject a supplied businessActivityRef with a stable field-level ERROR.
+- The TypeScript contract compiles in the Chrome 95 production build.
+
+Closure refresh: 2026-07-20
+- `ModelSpecEditorFields.tsx` renders `businessActivityRef` only inside the `modelType === "FACT"` branch and labels it as optional business context.
+- `modelSpecWorkbench.ts` serializes the field only for FACT and omits it for DIMENSION, SUMMARY and APPLICATION.
+- canonical page contracts confirm the retired object/process flow is not restored as a creation prerequisite.
+- Browser-level full-journey coverage remains F6-T03 scope and is not claimed by this source evidence.
+
+Current frontend verification
+- `node --test src/pages/modeling/canonicalModelingPages.source-contract.test.ts src/pages/modeling/modelSpecWorkbench.test.ts`
+- Result: 15 passed, 0 failed.
+- Combined F1 source-contract batch: 53 passed, 0 failed.
+- `pnpm exec vitest run src/pages/modeling/modelingCompatibilityRoute.test.ts`: 5 passed, 0 failed.
+
+Supporting build only
+- LEGACY_BROWSER_BUILD=1 pnpm build
+- Result: exit 0, 10,586 modules transformed, built in 2m 10s.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Metric Visualization Development"
+  short_description: "Design DTS metrics, DWS/ADS datasets, and dashboards"
+  default_prompt: "Use $dts-metric-visualization-development to design this DTS metric visualization workflow."

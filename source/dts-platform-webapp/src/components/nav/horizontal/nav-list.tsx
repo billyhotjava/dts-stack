@@ -1,0 +1,51 @@
+import { useLocation } from "react-router";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/ui/hover-card";
+import type { NavListProps } from "../types";
+import { isNavItemActive } from "../utils/is-active";
+import { NavItem } from "./nav-item";
+
+export function NavList({ data, depth = 0 }: NavListProps) {
+	const hasChild = Boolean(data.children && data.children.length > 0);
+	const location = useLocation();
+	const isActive = isNavItemActive(location.pathname, data.path, hasChild, location.search);
+
+	if (data.hidden) {
+		return null;
+	}
+
+	const renderNavItem = () => {
+		return (
+			<NavItem
+				key={data.title}
+				// data
+				path={data.path}
+				title={data.title}
+				caption={data.caption}
+				info={data.info}
+				icon={data.icon}
+				auth={data.auth}
+				// state
+				disabled={data.disabled}
+				active={isActive}
+				// options
+				hasChild={hasChild}
+				depth={depth}
+			/>
+		);
+	};
+
+	const renderRootItemWithHoverCard = () => {
+		return (
+			<HoverCard openDelay={100}>
+				<HoverCardTrigger>{renderNavItem()}</HoverCardTrigger>
+				<HoverCardContent side={depth === 1 ? "bottom" : "right"} sideOffset={10} className="p-1">
+					{data.children?.map((child) => (
+						<NavList key={child.title} data={child} depth={depth + 1} />
+					))}
+				</HoverCardContent>
+			</HoverCard>
+		);
+	};
+
+	return <li className="list-none">{hasChild ? renderRootItemWithHoverCard() : renderNavItem()}</li>;
+}

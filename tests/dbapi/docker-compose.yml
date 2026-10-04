@@ -1,0 +1,33 @@
+services:
+  dbapi:
+    build: .
+    container_name: dts-dbapi-test
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      DBAPI_API_KEY_FILE: /run/secrets/dbapi_api_key
+    ports:
+      - "${DBAPI_BIND_ADDRESS:-127.0.0.1}:${DBAPI_EXTERNAL_PORT:-8081}:8000"
+    volumes:
+      - type: bind
+        source: "${DB_PASSWORD_FILE:?set DB_PASSWORD_FILE in .env}"
+        target: /run/secrets/db_password
+        read_only: true
+      - type: bind
+        source: "${DBAPI_API_KEY_FILE:?set DBAPI_API_KEY_FILE in .env}"
+        target: /run/secrets/dbapi_api_key
+        read_only: true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mysql_api_network
+
+networks:
+  mysql_api_network:
+    external: true
+    name: ${MYSQL_DOCKER_NETWORK:-mysql_api_app_mysql_api_network}

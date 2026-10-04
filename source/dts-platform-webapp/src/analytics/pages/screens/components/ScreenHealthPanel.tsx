@@ -1,0 +1,244 @@
+import { useEffect, useMemo, useState } from 'react';
+import { analyticsApi, type ScreenHealthReport, type ScreenHealthStats } from '../../../api/analyticsApi';
+import { Modal } from 'antd';
+
+interface ScreenHealthPanelProps {
+	open: boolean;
+	screenId?: string | number;
+	onClose: () => void;
+}
+
+type BrowserCheck = {
+	name: string;
+	version?: number;
+	status: 'pass' | 'warn' | 'fail' | 'unknown';
+	message: string;
+};
+
+function detectBrowserCheck(): BrowserCheck {
+	if (typeof navigator === 'undefined') {
+		return { name: 'Unknown', status: 'unknown', message: '无法识别浏览器环境' };
+	}
+	const ua = navigator.userAgent || '';
+	const edge = /Edg\/(\d+)/.exec(ua);
+	const chrome = /Chrome\/(\d+)/.exec(ua);
+
+	if (edge) {
+		const version = Number(edge[1]);
+		if (Number.isFinite(version) && version >= 95) {
+			return { name: 'Edge', version, status: version >= 109 ? 'pass' : 'warn', message: version >= 109 ? '兼容性良好' : '满足最低基线，建议升级到 109+' };
+		}
+		return { name: 'Edge', version, status: 'fail', message: '低于 Chrome 95 兼容基线' };
+	}
+
+	if (chrome) {
+		const version = Number(chrome[1]);
+		if (!Number.isFinite(version)) {
+			return { name: 'Chrome', status: 'unknown', message: '无法识别 Chrome 版本' };
+		}
+		if (version >= 109) {
+			return { name: 'Chrome', version, status: 'pass', message: '兼容性良好' };
+		}
+		if (version >= 95) {
+			return { name: 'Chrome', version, status: 'warn', message: '满足最低基线，建议升级到 109+' };
+		}
+		return { name: 'Chrome', version, status: 'fail', message: '低于 Chrome 95 兼容基线' };
+	}
+
+	return { name: 'Other', status: 'warn', message: '非 Chrome/Edge 浏览器，建议回归验证核心功能' };
+}
+
+function StatusPill({ status }: { status: BrowserCheck['status'] }) {
+	const color = status === 'pass'
+		? '#22c55e'
+		: status === 'warn'
+			? '#f59e0b'
+			: status === 'fail'
+				? '#ef4444'
+				: '#94a3b8';
+	return (
+		<span
+			className="inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold"
+			style={{ background: `${color}20`, color, border: `1px solid ${color}66` }}
+		>
+			{status.toUpperCase()}
+		</span>
+	);
+}
+
+function MetricRow({ label, value }: { label: string; value: string | number }) {
+	return (
+		<div className="flex justify-between text-xs py-0.5">
+			<span className="opacity-80">{label}</span>
+			<span className="font-semibold">{value}</span>
+		</div>
+	);
+}
+
+function StatsCard({ title, stats }: { title: string; stats?: ScreenHealthStats }) {
+	if (!stats) {
+		return (
+			<div className="border border-border-default rounded-[10px] p-3">
+				<div className="font-semibold mb-1.5">{title}</div>
+				<div className="text-xs opacity-75">暂无数据</div>
+			</div>
+		);
+	}
+	return (
+		<div className="border border-border-default rounded-[10px] p-3">
+			<div className="flex items-center justify-between mb-1.5">
+				<div className="font-semibold">{title}</div>
+				<StatusPill status={stats.pass ? 'pass' : 'warn'} />
+			</div>
+			<MetricRow label="组件数" value={stats.componentCount ?? 0} />
+			<MetricRow label="数据绑定组件" value={stats.dataBoundComponentCount ?? 0} />
+			<MetricRow label="可刷新组件" value={stats.refreshableComponentCount ?? 0} />
+			<MetricRow label="交互组件" value={stats.interactiveComponentCount ?? 0} />
+			<MetricRow label="重组件" value={stats.heavyComponentCount ?? 0} />
+			<MetricRow label="可预热数据库源" value={stats.warmupEligibleDatabaseSources ?? 0} />
+			<MetricRow label="类型数" value={stats.uniqueComponentTypes ?? 0} />
+			<MetricRow label="复杂度分" value={stats.estimatedComplexity ?? 0} />
+			<div className="mt-2 text-xs opacity-90 leading-relaxed">
+				{(stats.recommendations || []).map((item, idx) => (
+					<div key={`${item}-${idx}`}>- {item}</div>
+				))}
+			</div>
+		</div>
+	);
+}
+
+export function ScreenHealthPanel({ open, screenId, onClose }: ScreenHealthPanelProps) {
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [report, setReport] = useState<ScreenHealthReport | null>(null);
+	const [benchmarkRunning, setBenchmarkRunning] = useState(false);
+	const [benchmark, setBenchmark] = useState<{
+		frameAvgMs: number;
+		frameP95Ms: number;
+		sampleCount: number;
+		pass: boolean;
+	} | null>(null);
+	const browserCheck = useMemo(() => detectBrowserCheck(), []);
+
+	const reload = async () => {
+		if (!screenId) return;
+		setLoading(true);
+		setError(null);
+		try {
+			const data = await analyticsApi.getScreenHealth(screenId);
+			setReport(data);
+		} catch (e) {
+			setReport(null);
+			setError(e instanceof Error ? e.message : '加载体检报告失败');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	useEffect(() => {
+		if (!open || !screenId) return;
+		reload();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [open, screenId]);
+
+	const runClientBenchmark = async () => {
+		if (benchmarkRunning) return;
+		setBenchmarkRunning(true);
+		try {
+			const frameDurations: number[] = [];
+			let last = performance.now();
+			await new Promise<void>((resolve) => {
+				const loop = (count: number) => {
+					requestAnimationFrame((now) => {
+						frameDurations.push(now - last);
+						last = now;
+						if (count >= 60) {
+							resolve();
+							return;
+						}
+						loop(count + 1);
+					});
+				};
+				loop(1);
+			});
+			const sorted = [...frameDurations].sort((a, b) => a - b);
+			const p95Index = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
+			const frameP95Ms = sorted[p95Index] || 0;
+			const frameAvgMs = frameDurations.length > 0
+				? frameDurations.reduce((sum, item) => sum + item, 0) / frameDurations.length
+				: 0;
+			const pass = frameP95Ms <= 50;
+			setBenchmark({
+				frameAvgMs: Number(frameAvgMs.toFixed(2)),
+				frameP95Ms: Number(frameP95Ms.toFixed(2)),
+				sampleCount: frameDurations.length,
+				pass,
+			});
+		} finally {
+			setBenchmarkRunning(false);
+		}
+	};
+
+	return (
+		<Modal open={open} onCancel={onClose} title="兼容与性能体检" width={960}>
+			<div className="flex justify-between mb-2.5 items-center">
+				<div className="text-xs opacity-80">
+					requestId: {report?.requestId || '-'} | baseline: {report?.baselineTargetComponents || 100} 组件
+				</div>
+				<button
+					type="button"
+					className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed"
+					onClick={reload}
+					disabled={loading || !screenId}
+				>
+					{loading ? '刷新中...' : '刷新体检'}
+				</button>
+			</div>
+
+			<div className="border border-border-default rounded-[10px] p-3 mb-3">
+				<div className="flex items-center gap-2 mb-1">
+					<div className="font-semibold">浏览器兼容基线（Chrome 95+）</div>
+					<StatusPill status={browserCheck.status} />
+				</div>
+				<div className="text-xs opacity-85">
+					当前: {browserCheck.name}{browserCheck.version ? ` ${browserCheck.version}` : ''}，{browserCheck.message}
+				</div>
+			</div>
+
+			{error && (
+				<div className="border border-error bg-error/10 text-error rounded-lg p-2.5 mb-3 text-xs whitespace-pre-wrap">
+					{error}
+				</div>
+			)}
+
+			<div className="grid grid-cols-2 gap-2.5">
+				<StatsCard title="草稿态" stats={report?.draft} />
+				<StatsCard title="发布态" stats={report?.published} />
+			</div>
+
+			<div className="border border-border-default rounded-[10px] p-3 mt-3">
+				<div className="flex items-center justify-between mb-2">
+					<div className="font-semibold">本地浏览器帧稳定性</div>
+					<button
+						type="button"
+						className="min-h-8 rounded-md border border-white/10 bg-white/5 text-text-primary px-3.5 text-xs hover:border-brand/30 hover:bg-brand/10 disabled:opacity-45"
+						disabled={benchmarkRunning}
+						onClick={runClientBenchmark}
+					>
+						{benchmarkRunning ? '测量中...' : '运行测量'}
+					</button>
+				</div>
+				{benchmark ? (
+					<div className="text-xs leading-[1.8]">
+						<div>样本数: <b>{benchmark.sampleCount}</b></div>
+						<div>平均帧时延: <b>{benchmark.frameAvgMs} ms</b></div>
+						<div>帧时延 P95: <b>{benchmark.frameP95Ms} ms</b></div>
+						<div>判定: <StatusPill status={benchmark.pass ? 'pass' : 'warn'} /></div>
+					</div>
+				) : (
+					<div className="text-xs opacity-75">点击"运行测量"获取当前浏览器的真实帧稳定性样本，不再构造模拟组件数据。</div>
+				)}
+			</div>
+		</Modal>
+	);
+}

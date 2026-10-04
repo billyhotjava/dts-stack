@@ -1,0 +1,168 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "DTS 团队交付流程（约定）",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "legend": {
+      "mode": "hidden"
+    }
+  },
+  "lanes": [
+    {
+      "id": "development",
+      "label": "源码协作"
+    },
+    {
+      "id": "handoff",
+      "label": "验证与交付"
+    }
+  ],
+  "mainPath": [
+    "code-review",
+    "git-push",
+    "pull-sha",
+    "formal-package",
+    "compose-release",
+    "business-acceptance"
+  ],
+  "nodes": [
+    {
+      "id": "code-review",
+      "lane": "development",
+      "col": 0,
+      "type": "backend",
+      "label": "修改与评审",
+      "sublabel": "源码与静态检查",
+      "width": 132
+    },
+    {
+      "id": "git-push",
+      "lane": "development",
+      "col": 1,
+      "type": "messagebus",
+      "label": "提交与推送",
+      "sublabel": "commit / push",
+      "width": 132
+    },
+    {
+      "id": "pull-sha",
+      "lane": "handoff",
+      "col": 2,
+      "type": "security",
+      "label": "拉取并核对",
+      "sublabel": "ff-only / SHA",
+      "width": 132
+    },
+    {
+      "id": "formal-package",
+      "lane": "handoff",
+      "col": 3,
+      "type": "backend",
+      "label": "测试与打包",
+      "sublabel": "正式入口与镜像",
+      "width": 132
+    },
+    {
+      "id": "compose-release",
+      "lane": "handoff",
+      "col": 4,
+      "type": "cloud",
+      "label": "正式发布",
+      "sublabel": "部署配置与交付包",
+      "width": 132
+    },
+    {
+      "id": "business-acceptance",
+      "lane": "handoff",
+      "col": 5,
+      "type": "frontend",
+      "label": "业务验收",
+      "sublabel": "登录与真实数据",
+      "width": 132
+    }
+  ],
+  "edges": [
+    {
+      "id": "review-to-push",
+      "from": "code-review",
+      "to": "git-push",
+      "role": "main"
+    },
+    {
+      "id": "push-to-pull",
+      "from": "git-push",
+      "to": "pull-sha",
+      "role": "main"
+    },
+    {
+      "id": "sha-to-package",
+      "from": "pull-sha",
+      "to": "formal-package",
+      "role": "main"
+    },
+    {
+      "id": "package-to-release",
+      "from": "formal-package",
+      "to": "compose-release",
+      "role": "main"
+    },
+    {
+      "id": "release-to-acceptance",
+      "from": "compose-release",
+      "to": "business-acceptance",
+      "role": "main"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "目录边界",
+      "items": [
+        "开发：/opt/prod/s10/v2.2.3",
+        "构建测试：/data/dts-stack",
+        "运行目录按正式部署配置确认"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "交接证据",
+      "items": [
+        "关联同一提交 SHA",
+        "记录镜像 ID 与包校验和",
+        "保留验收结果与回退记录"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "依据项目 AGENTS.md 绘制",
+        "表示团队约定的交付顺序",
+        "不代表本次已执行发布或验收"
+      ]
+    }
+  ],
+  "phases": [
+    {
+      "id": "development",
+      "label": "开发协作",
+      "fromCol": 0,
+      "toCol": 1
+    },
+    {
+      "id": "buildtest",
+      "label": "构建测试",
+      "fromCol": 2,
+      "toCol": 3
+    },
+    {
+      "id": "runtime",
+      "label": "发布验收",
+      "fromCol": 4,
+      "toCol": 5
+    }
+  ]
+}

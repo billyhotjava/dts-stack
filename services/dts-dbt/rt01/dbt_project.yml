@@ -1,0 +1,26 @@
+name: dts_rt01
+version: 1.0.0
+config-version: 2
+
+profile: dts_rt01
+
+model-paths:
+  - models
+seed-paths:
+  - seeds
+macro-paths: []
+analysis-paths: []
+test-paths: []
+snapshot-paths: []
+
+target-path: target
+clean-targets:
+  - target
+  - dbt_packages
+
+models:
+  dts_rt01:
+    staging:
+      +materialized: view
+    marts:
+      +materialized: table

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260222-01-governance-status-archived-unification" author="codex">
+        <comment>Normalize governance archived status to ARCHIVED (legacy DEPRECATED compatibility)</comment>
+        <sql>
+            UPDATE gov_indicator_definition
+            SET status = 'ARCHIVED'
+            WHERE upper(status) = 'DEPRECATED';
+        </sql>
+        <sql>
+            UPDATE gov_indicator_version
+            SET status = 'ARCHIVED'
+            WHERE upper(status) = 'DEPRECATED';
+        </sql>
+        <sql>
+            UPDATE gov_dimension_dictionary
+            SET status = 'ARCHIVED'
+            WHERE upper(status) = 'DEPRECATED';
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

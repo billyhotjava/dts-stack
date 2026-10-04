@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-02-retire-legacy-modeling-layer-groups" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+        <comment>
+            软下线数据架构迁移后遗留在“数据建模 / 数仓规划”下的公共层、应用层空父节点，
+            避免两个无独立目标的菜单入口落到同一规划页面；原菜单行和旧深链继续保留以支持回滚与兼容访问。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'sprint87-retire-modeling-layer-groups';
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:retire-modeling-layer-groups:20260810-02', 0));
+
+                WITH RECURSIVE orphaned_groups AS (
+                    SELECT id
+                      FROM portal_menu
+                     WHERE deleted = FALSE
+                       AND (
+                           name IN (
+                               'sys.nav.portal.planningPublicLayer',
+                               'sys.nav.portal.planningApplicationLayer'
+                           )
+                           OR metadata::jsonb ->> 'key' IN ('planning-public', 'planning-application')
+                           OR metadata::jsonb ->> 'titleKey' IN (
+                               'sys.nav.portal.planningPublicLayer',
+                               'sys.nav.portal.planningApplicationLayer'
+                           )
+                       )
+                    UNION ALL
+                    SELECT child.id
+                      FROM portal_menu child
+                      JOIN orphaned_groups parent ON child.parent_id = parent.id
+                     WHERE child.deleted = FALSE
+                )
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = actor || '-retired',
+                       last_modified_date = now()
+                 WHERE deleted = FALSE
+                   AND id IN (SELECT id FROM orphaned_groups);
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'sprint87-retire-modeling-layer-groups';
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:retire-modeling-layer-groups:20260810-02', 0));
+
+                    UPDATE portal_menu
+                       SET deleted = FALSE,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE deleted = TRUE
+                       AND last_modified_by = actor || '-retired';
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

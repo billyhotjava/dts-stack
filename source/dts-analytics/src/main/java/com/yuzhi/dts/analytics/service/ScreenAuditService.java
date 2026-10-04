@@ -1,0 +1,401 @@
+package com.yuzhi.dts.analytics.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.analytics.config.DtsAdminProperties;
+import com.yuzhi.dts.analytics.service.audit.AdminAuditHttpHeadersFactory;
+import com.yuzhi.dts.analytics.domain.AnalyticsScreenAuditLog;
+import com.yuzhi.dts.analytics.domain.AnalyticsUser;
+import com.yuzhi.dts.analytics.repository.AnalyticsScreenAuditLogRepository;
+import com.yuzhi.dts.analytics.repository.AnalyticsUserRepository;
+import java.net.URI;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.web.client.RestTemplateBuilder;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
+import com.yuzhi.dts.analytics.web.support.RequestContext;
+import com.yuzhi.dts.analytics.web.support.RequestContextHolder;
+
+@Service
+@Transactional
+public class ScreenAuditService {
+
+    private static final Logger LOG = LoggerFactory.getLogger(ScreenAuditService.class);
+    private static final String SOURCE_SYSTEM = "analytics";
+    private static final int FAILOVER_QUEUE_MAX_SIZE = 5_000;
+    private static final int RETRY_BATCH_SIZE = 50;
+
+    private final AnalyticsScreenAuditLogRepository screenAuditLogRepository;
+    private final AnalyticsUserRepository userRepository;
+    private final ObjectMapper objectMapper;
+    private final RestTemplate restTemplate;
+    private final URI ingestEndpoint;
+    private final DtsAdminProperties adminProperties;
+    private final ConcurrentLinkedQueue<Map<String, Object>> failedEventQueue = new ConcurrentLinkedQueue<>();
+    private final AtomicLong droppedEventCount = new AtomicLong(0);
+
+    public ScreenAuditService(
+        AnalyticsScreenAuditLogRepository screenAuditLogRepository,
+        AnalyticsUserRepository userRepository,
+        ObjectMapper objectMapper,
+        RestTemplateBuilder restTemplateBuilder,
+        DtsAdminProperties adminProperties
+    ) {
+        this.screenAuditLogRepository = screenAuditLogRepository;
+        this.userRepository = userRepository;
+        this.objectMapper = objectMapper;
+        this.restTemplate = restTemplateBuilder
+            .setConnectTimeout(Duration.ofSeconds(3))
+            .setReadTimeout(Duration.ofSeconds(5))
+            .build();
+        this.adminProperties = adminProperties;
+        this.ingestEndpoint = resolveEndpoint(adminProperties);
+        if (this.ingestEndpoint == null) {
+            LOG.warn("dts-admin base URL is not configured; screen audit forwarding to central audit will be disabled");
+        } else {
+            LOG.info("Screen audit forwarding enabled, endpoint={}", this.ingestEndpoint);
+        }
+    }
+
+    public void log(Long screenId, Long actorId, String action, Object before, Object after, String requestId) {
+        // 容错：audit 永远不应让业务崩。本地 INSERT 失败（表缺失 / 约束冲突 / DB 故障）时
+        // 仅 WARN，业务调用方继续正常返回。dts-platform AuditService 使用同样的防御策略。
+        try {
+            logAndReturn(screenId, actorId, action, before, after, requestId);
+        } catch (Exception ex) {
+            LOG.warn("Screen audit log write failed action={} screenId={}: {}",
+                action, screenId, ex.getMessage());
+        }
+    }
+
+    /**
+     * Sprint-24 F4：跨大屏的合规事件审计（如「大屏密级合规盘点」端点访问），没有具体 screen
+     * 上下文。`analytics_screen_audit_log.screen_id` 是 NOT NULL，所以这条不进本地表，
+     * 仅同步到 dts-admin 中央审计中心，那里 sourceSystem=analytics+module=SCREEN+
+     * action 已能唯一定位事件。
+     */
+    public void logCrossScreenEvent(Long actorId, String action, Object payload, String requestId) {
+        if (action == null || action.isBlank()) {
+            return;
+        }
+        if (ingestEndpoint == null) {
+            // 没配置中央审计端点时仅 log 一行，不阻塞业务
+            LOG.info("[cross-screen audit skipped: no admin endpoint] action={} actor={}", action, actorId);
+            return;
+        }
+        try {
+            String clientIp = resolveCurrentClientIp();
+            Instant occurredAt = Instant.now();
+            String actor = resolveActorUsername(actorId);
+            String buttonCode = mapActionToButtonCode(action);
+
+            Map<String, Object> body = new HashMap<>();
+            body.put("sourceSystem", SOURCE_SYSTEM);
+            body.put("occurredAt", occurredAt.toString());
+            body.put("actor", actor);
+            body.put("module", "SCREEN");
+            body.put("action", action);
+            body.put("resourceType", "SCREEN_COMPLIANCE");
+            body.put("resourceId", "*");
+            body.put("targetIds", List.of("*"));
+            body.put("targetTable", "analytics_screen");
+            body.put("result", "SUCCESS");
+            if (buttonCode != null) {
+                body.put("buttonCode", buttonCode);
+                body.put("operationCode", buttonCode);
+            }
+            String payloadJson = toJson(payload);
+            if (payloadJson != null) {
+                body.put("payload", payloadJson);
+            }
+            String reqId = trimToNull(requestId);
+            if (reqId != null) {
+                body.put("requestId", reqId);
+            }
+            if (StringUtils.hasText(clientIp)) {
+                body.put("clientIp", clientIp);
+            }
+            postEvent(body);
+        } catch (Exception ex) {
+            LOG.warn("Failed to forward cross-screen audit event action={}: {}", action, ex.getMessage());
+        }
+    }
+
+    public AnalyticsScreenAuditLog logAndReturn(
+            Long screenId,
+            Long actorId,
+            String action,
+            Object before,
+            Object after,
+            String requestId) {
+        if (screenId == null || action == null || action.isBlank()) {
+            return null;
+        }
+
+        // Capture client IP from request thread before @Async dispatch
+        String clientIp = resolveCurrentClientIp();
+
+        AnalyticsScreenAuditLog log = new AnalyticsScreenAuditLog();
+        log.setScreenId(screenId);
+        log.setActorId(actorId);
+        log.setAction(action);
+        log.setBeforeJson(toJson(before));
+        log.setAfterJson(toJson(after));
+        log.setRequestId(trimToNull(requestId));
+        AnalyticsScreenAuditLog saved = screenAuditLogRepository.save(log);
+
+        // Forward to dts-admin audit center asynchronously
+        forwardToAdmin(saved, clientIp);
+
+        return saved;
+    }
+
+    private String resolveCurrentClientIp() {
+        RequestContext ctx = RequestContextHolder.current();
+        return ctx != null ? ctx.clientIp() : null;
+    }
+
+    @Transactional(readOnly = true)
+    public List<AnalyticsScreenAuditLog> listByScreenId(Long screenId, int limit) {
+        if (screenId == null) {
+            return List.of();
+        }
+        int safeLimit = Math.max(1, Math.min(limit, 1000));
+        List<AnalyticsScreenAuditLog> all = screenAuditLogRepository.findAllByScreenIdOrderByCreatedAtDesc(screenId);
+        if (all.size() <= safeLimit) {
+            return all;
+        }
+        return new ArrayList<>(all.subList(0, safeLimit));
+    }
+
+    // ---- Admin audit forwarding ----
+
+    @Async
+    void forwardToAdmin(AnalyticsScreenAuditLog auditLog, String clientIp) {
+        if (ingestEndpoint == null || auditLog == null) {
+            return;
+        }
+        try {
+            Map<String, Object> body = buildForwardPayload(auditLog, clientIp);
+            postEvent(body);
+        } catch (Exception ex) {
+            LOG.warn("Failed to forward screen audit event action={} screenId={}: {}",
+                auditLog.getAction(), auditLog.getScreenId(), ex.getMessage());
+        }
+    }
+
+    private Map<String, Object> buildForwardPayload(AnalyticsScreenAuditLog auditLog, String clientIp) {
+        Instant occurredAt = auditLog.getCreatedAt() != null ? auditLog.getCreatedAt() : Instant.now();
+        String actor = resolveActorUsername(auditLog.getActorId());
+        String action = auditLog.getAction();
+        String buttonCode = mapActionToButtonCode(action);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("sourceSystem", SOURCE_SYSTEM);
+        body.put("occurredAt", occurredAt.toString());
+        body.put("actor", actor);
+        body.put("module", "SCREEN");
+        body.put("action", action);
+        body.put("resourceType", "SCREEN");
+        body.put("resourceId", String.valueOf(auditLog.getScreenId()));
+        body.put("targetIds", List.of(String.valueOf(auditLog.getScreenId())));
+        body.put("targetTable", "SCREEN");
+        body.put("result", "SUCCESS");
+        if (buttonCode != null) {
+            body.put("buttonCode", buttonCode);
+            body.put("operationCode", buttonCode);
+        }
+        if (StringUtils.hasText(clientIp)) {
+            body.put("clientIp", clientIp);
+        }
+        return body;
+    }
+
+    private String resolveActorUsername(Long actorId) {
+        if (actorId == null) {
+            return "unknown";
+        }
+        try {
+            return userRepository.findById(actorId)
+                .map(user -> firstNonBlank(user.getPlatformUsername(), user.getEmail(), "user:" + actorId))
+                .orElse("user:" + actorId);
+        } catch (Exception ex) {
+            return "user:" + actorId;
+        }
+    }
+
+    private String firstNonBlank(String... values) {
+        if (values == null) {
+            return null;
+        }
+        for (String value : values) {
+            String trimmed = trimToNull(value);
+            if (trimmed != null) {
+                return trimmed;
+            }
+        }
+        return null;
+    }
+
+    private String mapActionToButtonCode(String action) {
+        if (action == null) {
+            return null;
+        }
+        return switch (action.toLowerCase(Locale.ROOT)) {
+            case "screen.create" -> "SCREEN_CREATE";
+            case "screen.update" -> "SCREEN_UPDATE";
+            case "screen.delete" -> "SCREEN_DELETE";
+            case "screen.publish" -> "SCREEN_PUBLISH";
+            case "screen.rollback" -> "SCREEN_ROLLBACK";
+            case "screen.migrate" -> "SCREEN_MIGRATE";
+            case "screen.export.prepare" -> "SCREEN_EXPORT_PREPARE";
+            case "screen.export.denied" -> "SCREEN_EXPORT_DENIED";
+            case "screen.export.success" -> "SCREEN_EXPORT_SUCCESS";
+            case "screen.export.fallback" -> "SCREEN_EXPORT_FALLBACK";
+            case "screen.export.failed" -> "SCREEN_EXPORT_FAILED";
+            case "screen.export.report" -> "SCREEN_EXPORT_REPORT";
+            case "screen.export.server.render" -> "SCREEN_EXPORT_SERVER_RENDER";
+            case "screen.export.server.render.failed" -> "SCREEN_EXPORT_SERVER_RENDER_FAILED";
+            case "screen.export.json" -> "SCREEN_EXPORT_JSON";
+            case "screen.export.image" -> "SCREEN_EXPORT_IMAGE";
+            case "screen.export.pdf" -> "SCREEN_EXPORT_PDF";
+            case "screen.public_link.create", "screen.public_link.policy" -> "SCREEN_PUBLIC_LINK_ENABLE";
+            case "screen.public_link.delete" -> "SCREEN_PUBLIC_LINK_DISABLE";
+            case "screen.public_link.enable" -> "SCREEN_PUBLIC_LINK_ENABLE";
+            case "screen.public_link.disable" -> "SCREEN_PUBLIC_LINK_DISABLE";
+            case "grant.add" -> "SCREEN_ACL_GRANT";
+            case "grant.revoke" -> "SCREEN_ACL_REVOKE";
+            case "screen.acl.grant" -> "SCREEN_ACL_GRANT";
+            case "screen.acl.revoke" -> "SCREEN_ACL_REVOKE";
+            case "screen.classification.update" -> "SCREEN_CLASSIFICATION_UPDATE";
+            case "screen.permission.local_fallback" -> "SCREEN_PERMISSION_LOCAL_FALLBACK";
+            case "screen.comment.add" -> "SCREEN_COMMENT_ADD";
+            case "screen.comment.resolve" -> "SCREEN_COMMENT_RESOLVE";
+            case "screen.comment.reopen" -> "SCREEN_COMMENT_REOPEN";
+            default -> {
+                // Fallback: uppercase and replace dots with underscores
+                yield action.toUpperCase(Locale.ROOT).replace('.', '_');
+            }
+        };
+    }
+
+    private void postEvent(Map<String, Object> body) {
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
+        try {
+            ResponseEntity<Void> response = restTemplate.postForEntity(
+                ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
+            if (!response.getStatusCode().is2xxSuccessful()) {
+                LOG.warn("Forwarded screen audit event but received non-success status {} (action={})",
+                    response.getStatusCode(), body.get("action"));
+            }
+        } catch (RestClientException ex) {
+            LOG.warn("Failed to forward screen audit event action={}: {}", body.get("action"), ex.getMessage());
+            enqueueFailedEvent(body);
+        }
+    }
+
+    private void enqueueFailedEvent(Map<String, Object> body) {
+        while (failedEventQueue.size() >= FAILOVER_QUEUE_MAX_SIZE) {
+            Map<String, Object> dropped = failedEventQueue.poll();
+            if (dropped != null) {
+                long total = droppedEventCount.incrementAndGet();
+                if (total % 100 == 1) {
+                    LOG.warn("Screen audit failover queue full (max={}), dropping oldest. Total dropped: {}",
+                        FAILOVER_QUEUE_MAX_SIZE, total);
+                }
+            }
+        }
+        failedEventQueue.offer(body);
+    }
+
+    @Scheduled(fixedDelay = 30_000)
+    public void retryFailedEvents() {
+        if (ingestEndpoint == null) {
+            return;
+        }
+        int queueSize = failedEventQueue.size();
+        if (queueSize == 0) {
+            return;
+        }
+
+        int toProcess = Math.min(queueSize, RETRY_BATCH_SIZE);
+        List<Map<String, Object>> batch = new ArrayList<>(toProcess);
+        for (int i = 0; i < toProcess; i++) {
+            Map<String, Object> event = failedEventQueue.poll();
+            if (event == null) {
+                break;
+            }
+            batch.add(event);
+        }
+
+        HttpHeaders headers = AdminAuditHttpHeadersFactory.build(adminProperties);
+
+        int succeeded = 0;
+        for (Map<String, Object> body : batch) {
+            try {
+                ResponseEntity<Void> response = restTemplate.postForEntity(
+                    ingestEndpoint, new HttpEntity<>(body, headers), Void.class);
+                if (response.getStatusCode().is2xxSuccessful()) {
+                    succeeded++;
+                } else {
+                    enqueueFailedEvent(body);
+                }
+            } catch (RestClientException ex) {
+                enqueueFailedEvent(body);
+            }
+        }
+
+        LOG.info("Retried {} screen audit events, {} succeeded, {} still pending",
+            batch.size(), succeeded, failedEventQueue.size());
+    }
+
+    // ---- Utility ----
+
+    private URI resolveEndpoint(DtsAdminProperties adminProperties) {
+        if (adminProperties == null || !adminProperties.isEnabled() || !StringUtils.hasText(adminProperties.getBaseUrl())) {
+            return null;
+        }
+        String base = adminProperties.getBaseUrl().replaceAll("/+$", "");
+        String apiPath = adminProperties.getApiPath();
+        String normalizedPath = StringUtils.hasText(apiPath)
+            ? "/" + apiPath.replaceAll("^/+", "").replaceAll("/+$", "")
+            : "";
+        return URI.create(base + normalizedPath + "/audit-events");
+    }
+
+    private String toJson(Object value) {
+        if (value == null) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isBlank() ? null : trimmed;
+    }
+}

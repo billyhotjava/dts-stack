@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260131-01-infra-jdbc-driver" author="platform">
+        <createTable tableName="infra_jdbc_driver">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="file_name" type="varchar(256)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="file_path" type="varchar(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="driver_class" type="varchar(256)"/>
+            <column name="version" type="varchar(64)"/>
+            <column name="jdk_spec" type="varchar(64)"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="infra_jdbc_driver" indexName="idx_infra_jdbc_driver_file">
+            <column name="file_name"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,302 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "dts-platform 模块关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1300,
+      560
+    ]
+  },
+  "components": [
+    {
+      "id": "internal",
+      "type": "security",
+      "label": "内部接口",
+      "sublabel": "web/rest/internal",
+      "pos": [
+        37,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "sql",
+      "type": "backend",
+      "label": "查询数据集与 SQL",
+      "sublabel": "service/sql",
+      "pos": [
+        377,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "governance",
+      "type": "backend",
+      "label": "治理与质量",
+      "sublabel": "service/governance",
+      "pos": [
+        718,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "security",
+      "type": "security",
+      "label": "访问控制与脱敏",
+      "sublabel": "service/security",
+      "pos": [
+        1058,
+        60
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "rest",
+      "type": "frontend",
+      "label": "业务 REST 入口",
+      "sublabel": "web/rest · *Resource",
+      "pos": [
+        37,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "modeling",
+      "type": "backend",
+      "label": "建模与发布",
+      "sublabel": "service/modeling",
+      "pos": [
+        377,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ],
+      "tag": "289 类"
+    },
+    {
+      "id": "catalog",
+      "type": "database",
+      "label": "资产目录与分类",
+      "sublabel": "service/catalog",
+      "pos": [
+        718,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ],
+      "tag": "135 类"
+    },
+    {
+      "id": "permission",
+      "type": "security",
+      "label": "资产权限",
+      "sublabel": "service/permission",
+      "pos": [
+        1058,
+        230
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "admin_gw",
+      "type": "external",
+      "label": "管理端网关",
+      "sublabel": "service/admin/gateway",
+      "pos": [
+        37,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "etl",
+      "type": "backend",
+      "label": "构建调度",
+      "sublabel": "service/etl · dbt",
+      "pos": [
+        377,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    },
+    {
+      "id": "services",
+      "type": "backend",
+      "label": "数据服务",
+      "sublabel": "service/services",
+      "pos": [
+        1058,
+        400
+      ],
+      "size": [
+        200,
+        68
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "对外接口层",
+      "wraps": [
+        "internal",
+        "rest"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "rest-modeling",
+      "from": "rest",
+      "to": "modeling",
+      "label": "建模 API",
+      "variant": "emphasis"
+    },
+    {
+      "id": "internal-sql",
+      "from": "internal",
+      "to": "sql",
+      "label": "契约读取"
+    },
+    {
+      "id": "internal-modeling",
+      "from": "internal",
+      "to": "modeling",
+      "label": "运行回写",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "modeling-sql",
+      "from": "modeling",
+      "to": "sql",
+      "label": "数据集投影",
+      "labelAt": [
+        540,
+        179
+      ]
+    },
+    {
+      "id": "modeling-catalog",
+      "from": "modeling",
+      "to": "catalog",
+      "label": "资产键 · 分类门禁",
+      "variant": "emphasis",
+      "labelAt": [
+        647,
+        312
+      ]
+    },
+    {
+      "id": "modeling-governance",
+      "from": "modeling",
+      "to": "governance",
+      "label": "指标 · 质量复跑"
+    },
+    {
+      "id": "modeling-etl",
+      "from": "modeling",
+      "to": "etl",
+      "label": "构建计划",
+      "labelAt": [
+        477,
+        349
+      ]
+    },
+    {
+      "id": "modeling-admin_gw",
+      "from": "modeling",
+      "to": "admin_gw",
+      "label": "部门 · 人员目录"
+    },
+    {
+      "id": "governance-security",
+      "from": "governance",
+      "to": "security",
+      "label": "访问检查 · SQL 改写"
+    },
+    {
+      "id": "catalog-permission",
+      "from": "catalog",
+      "to": "permission",
+      "label": "资产授权"
+    },
+    {
+      "id": "catalog-security",
+      "from": "catalog",
+      "to": "security",
+      "label": "访问检查",
+      "fromSide": "top",
+      "toSide": "bottom"
+    },
+    {
+      "id": "etl-catalog",
+      "from": "etl",
+      "to": "catalog",
+      "label": "dbt 资产同步",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "services-catalog",
+      "from": "services",
+      "to": "catalog",
+      "label": "分类派生"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "未画出的次要依赖",
+      "items": [
+        "services → security：脱敏与数据集 SQL",
+        "sql → query：JdbcQueryGateway（@Primary）",
+        "internal → permission / catalog：权限校验、OpenLineage"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "箭头 = import 方向（调用方 → 被依赖方）",
+        "internal 为分析、接入、Airflow 回调入口",
+        "service/ingestion 接入代理见系统全景"
+      ]
+    }
+  ]
+}

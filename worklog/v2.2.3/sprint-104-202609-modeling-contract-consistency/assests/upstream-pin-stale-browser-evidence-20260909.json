@@ -1,0 +1,221 @@
+{
+  "capturedAt": "2026-09-09T06:46:00Z",
+  "method": "Chrome browser UI through Playwright connector; actual UI request and response bodies, no direct database changes",
+  "modelId": "8898d08d-2ac2-47c8-b6e8-22bd6425e20b",
+  "draftId": "a4738134-4dbf-4654-b000-4e04398602a1",
+  "request": {
+    "method": "PUT",
+    "path": "/api/modeling/model-specs/8898d08d-2ac2-47c8-b6e8-22bd6425e20b/authoring-drafts/a4738134-4dbf-4654-b000-4e04398602a1",
+    "body": {
+      "expectedEtag": "ea72cd48-c446-438d-9239-86ffa046d081",
+      "modelSpecSnapshot": {
+        "schemaVersion": 1,
+        "modelSpec": {
+          "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+          "domainId": "ec5fd336-5fd2-43ff-bb58-c8ca1ea97f41",
+          "modelType": "SUMMARY",
+          "layer": "DWS",
+          "warehouseLayerCode": "DWS",
+          "name": "项目进度汇总",
+          "description": "按项目和快照日期汇总任务数量、平均进度和实际成本",
+          "implementationMode": "DESIGNER_GENERATED",
+          "materialization": "table",
+          "businessActivityRef": null,
+          "businessProcessId": null,
+          "consumptionScenario": null,
+          "grain": {
+            "statement": "一个项目在一个快照日期一行",
+            "keys": [
+              "project_snapshot_id"
+            ]
+          },
+          "factShape": null,
+          "timeSemantics": null,
+          "generationStrategy": null,
+          "dimensionProfile": null,
+          "dataMartId": null,
+          "subjectDomainId": null,
+          "variantCode": null,
+          "fields": [
+            {
+              "name": "project_snapshot_id",
+              "role": "KEY",
+              "dataType": "STRING",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "项目快照标识",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "snapshot_date",
+              "role": "TIME",
+              "dataType": "DATE",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "快照日期",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "project_code",
+              "role": "ATTRIBUTE",
+              "dataType": "STRING",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "项目编码",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "project_name",
+              "role": "ATTRIBUTE",
+              "dataType": "STRING",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "项目名称",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "task_total",
+              "role": "MEASURE",
+              "dataType": "BIGINT",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "任务总数",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "avg_progress_pct",
+              "role": "MEASURE",
+              "dataType": "DECIMAL",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "平均完成进度",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            },
+            {
+              "name": "actual_cost_amount",
+              "role": "MEASURE",
+              "dataType": "DECIMAL",
+              "nullable": false,
+              "redundant": false,
+              "displayName": "实际成本金额",
+              "securityLevel": null,
+              "sourceFieldRef": null,
+              "redundancySourceRef": null,
+              "dimensionAttributeCode": null
+            }
+          ],
+          "sourceRefs": [],
+          "dependsOn": [
+            {
+              "revision": 3,
+              "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a"
+            }
+          ],
+          "dimensionRefs": [],
+          "metricRefs": [],
+          "standardBindings": []
+        },
+        "visualImplementation": {
+          "inputMode": "UPSTREAM_MODEL",
+          "inputs": [
+            {
+              "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+              "revision": 3,
+              "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6"
+            }
+          ],
+          "fieldMappings": [],
+          "settings": {
+            "targetPhysicalName": "dws_prjtest_090901",
+            "loadStrategy": "FULL",
+            "partitionFields": []
+          },
+          "ownership": "DESIGNER_GENERATED",
+          "materialization": "table",
+          "projectKey": "dts_model_8898d08d2ac2",
+          "dbtUniqueId": "model.dts_model_8898d08d2ac2.dws_prjtest_090901",
+          "idempotencyKey": "4564118e-7726-41f6-b0f6-f781f19ae7c2"
+        }
+      },
+      "files": [
+        {
+          "path": "dbt_project.yml",
+          "content": "name: dts_model_8898d08d2ac2\nversion: '1.0'\nconfig-version: 2\nmodel-paths:\n  - models\nmodels:\n  dts_model_8898d08d2ac2:\n    +materialized: table\n"
+        },
+        {
+          "path": "models/.dts_dependencies/dts_ref_57bfaab58c4c.sql",
+          "content": "{{ config(materialized='ephemeral', tags=['dts-managed-dependency']) }}\n-- Managed dependency proxy for model.dts_model_57bfaab58c4c.dwd_test_prj. Do not rename or delete.\nselect 1 as _dts_dependency_placeholder where 1 = 0\n"
+        },
+        {
+          "path": "models/dws_test_prj0909.sql",
+          "content": "-- DTS managed dependency skeleton. Keep every source/ref until ModelSpec is changed.\nwith\n_dts_dependency_1 as (select * from {{ ref('dts_ref_57bfaab58c4c') }})\nselect _dts_dependency_1.*\n  from _dts_dependency_1\n where 1 = 0\n"
+        }
+      ],
+      "activeView": "VISUAL"
+    }
+  },
+  "response": {
+    "httpStatus": 409,
+    "body": {
+      "status": -1,
+      "message": "An upstream implementation input pin has drifted",
+      "code": "MODEL_IMPLEMENTATION_DEPENDENCY_PIN_STALE",
+      "data": {
+        "correlationId": "b3618a5c-1bf9-491a-9bcf-5086bc65cd6a"
+      }
+    }
+  },
+  "originalDependencySnapshot": {
+    "modelSpecId": "8898d08d-2ac2-47c8-b6e8-22bd6425e20b",
+    "modelRevision": 2,
+    "modelChecksum": "603511a42cca6033597b9425c7b208a063b5bc5e9a7b98b011071b44c8f3471c",
+    "implementationRevision": 1,
+    "implementationChecksum": "0000000000000000000000000000000000000000000000000000000000000000",
+    "physicalSources": [],
+    "modelInputs": [
+      {
+        "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+        "revision": 3,
+        "checksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+        "implementationRevision": 1,
+        "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+        "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj",
+        "role": "UPSTREAM"
+      }
+    ],
+    "dependencyChecksum": "787b22889aae124fcb3ea924ed093edbb69df87ee9bc21055624397e9131a22b"
+  },
+  "currentUpstreamImplementation": {
+    "modelSpecId": "57bfaab5-8c4c-4af6-b035-bd1110422b4a",
+    "revision": 3,
+    "modelChecksum": "3fda50a4ad735a2342c330e87686ce721773524b9cbc1c741b7588c1f99098d6",
+    "status": "ACTIVE",
+    "implementationRevision": 1,
+    "implementationChecksum": "458b6f807b6cb5d7f8541c00eb2f8777188c867601f08a8a3ebbde6e05f17631",
+    "dbtUniqueId": "model.dts_model_57bfaab58c4c.dwd_test_prj"
+  },
+  "notes": [
+    "Opened existing summary r2; target physical name was blank after reopen; filled screenshot value dws_prjtest_090901; kept upstream selection and mappings unchanged.",
+    "Before filling target name, submit issued validate and returned 422 DBT_DRAFT_FILES_REQUIRED.",
+    "After filling target name, submit issued PUT save; 409 prevented validation and commit.",
+    "Preserved unsaved summary page; cancelled navigation discard dialog. Upstream opened in separate tab read-only."
+  ]
+}

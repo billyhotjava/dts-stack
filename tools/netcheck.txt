@@ -1,0 +1,160 @@
+Network connectivity troubleshooting (offline) — DTS containers → Inceptor/Kerberos
+
+Scope and goal
+- Target: Diagnose and fix container timeouts when dts-admin/dts-platform connect to Inceptor (HS2, usually 10000) and Kerberos KDC (usually 1088) in offline, locked-down environments.
+- Topology (legacy compose):
+  - Services are on Docker bridge network `dts-core` (e.g., 172.30.1.0/24).
+  - Inceptor lives on external hosts (e.g., tdh01 10.10.131.134). Kerberos KDC on tdh02/tdh03:1088.
+  - Compose uses extra_hosts or DNS to resolve tdh01/02/03. No Trino in legacy stack; platform/admin connect via vendor JDBC driver and Kerberos.
+
+Typical symptoms
+- Host can connect to tdh01:10000 and tdh02/tdh03:1088, but containers timeout.
+- Inside container, `/etc/hosts` has tdh01/02/03 entries (extra_hosts), `getent hosts` resolves, but `/dev/tcp/tdh01/10000` times out.
+- Kerberos login fails or hangs; logs may say KDC unreachable/timeouts.
+
+Quick decision tree
+1) Name resolution
+   - Inside container: `getent hosts tdh01 tdh02 tdh03` must show the expected IPv4 addresses.
+   - If missing/wrong → add/update extra_hosts for dts-admin and dts-platform.
+2) Connectivity from host
+   - On host: `timeout 3 bash -lc ': </dev/tcp/10.10.131.134/10000' && echo OK || echo FAIL`.
+   - If host FAIL → target port not listening or routed; fix outside Docker first.
+3) Connectivity from container
+   - In container: `timeout 3 bash -lc ': </dev/tcp/tdh01/10000' && echo OK || echo FAIL`.
+   - Host OK, container FAIL → Docker bridge egress blocked (FORWARD/masquerade rules) by nftables/iptables/K8s/firewalld.
+4) Kerberos ports
+   - In container: test `tdh02/1088` and `tdh03/1088`. If these timeout, Kerberos cannot acquire TGT, JDBC will fail.
+
+Minimal diagnostics (no internet, no nc requirement)
+- Container checks (run in both dts-admin and dts-platform):
+  - `getent hosts tdh01 tdh02 tdh03`
+  - `timeout 3 bash -lc ': </dev/tcp/tdh01/10000' && echo OK || echo FAIL`
+  - `timeout 3 bash -lc ': </dev/tcp/tdh02/1088' && echo OK || echo FAIL`
+  - `timeout 3 bash -lc ': </dev/tcp/tdh03/1088' && echo OK || echo FAIL`
+- Host checks:
+  - `sysctl -n net.ipv4.ip_forward` (expect 1)
+  - `docker network inspect dts-core -f '{{(index .IPAM.Config 0).Subnet}}'` (e.g., 172.30.1.0/24)
+  - `ip route get 10.10.131.134` (note egress interface, e.g., eth5)
+  - If iptables is available: `iptables -S FORWARD` and `iptables -t nat -S POSTROUTING`
+  - If nftables is in use: `sudo nft list chain inet filter forward` and `sudo nft list chain ip nat postrouting` (or `inet nat postrouting`)
+- One-shot host-network validation (proves bridge/NAT issue if OK):
+  - `docker run --rm --network host alpine:3.20 sh -lc "timeout 3 sh -c ': </dev/tcp/10.10.131.134/10000' && echo OK || echo FAIL"`
+
+Name resolution fixes (containers)
+- extra_hosts (recommended, explicit IPv4 to avoid IPv6 pitfalls):
+  - For service dts-admin:
+    extra_hosts:
+      - "tdh01:10.10.131.134"
+      - "tdh02:10.10.131.135"
+      - "tdh03:10.10.131.136"
+  - For service dts-platform: same as above.
+- Validate inside container after redeploy: `getent hosts tdh01`.
+- Optional: if DNS is needed globally, configure Compose `dns:` with corporate resolver. In offline plants, prefer extra_hosts.
+
+Bridge egress blocked (most common) — solutions
+
+Background
+- Docker bridge containers need both:
+  1) FORWARD chain to allow forwarding container egress and established return traffic.
+  2) NAT (MASQUERADE) in postrouting to SNAT private container IPs to host egress IP.
+- Kubernetes or firewalld/nftables often override these, causing timeouts from containers while host remains OK.
+
+Option A: iptables-based hosts
+1) Identify variables (host):
+   - `SUBNET=$(docker network inspect dts-core -f '{{(index .IPAM.Config 0).Subnet}}')`
+   - `IFACE=$(ip route get 10.10.131.134 | awk '/dev/{for(i=1;i<=NF;i++) if($i=="dev"){print $(i+1); exit}}')`
+2) Allow forward and return path (add to FORWARD and DOCKER-USER):
+   - `iptables -C FORWARD -s $SUBNET -o $IFACE -j ACCEPT || iptables -I FORWARD -s $SUBNET -o $IFACE -j ACCEPT`
+   - `iptables -C FORWARD -i $IFACE -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || iptables -I FORWARD -i $IFACE -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT`
+   - `iptables -C DOCKER-USER -s $SUBNET -o $IFACE -j ACCEPT || iptables -I DOCKER-USER 1 -s $SUBNET -o $IFACE -j ACCEPT`
+   - `iptables -C DOCKER-USER -i $IFACE -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT || iptables -I DOCKER-USER 2 -i $IFACE -d $SUBNET -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT`
+3) Ensure SNAT/MASQUERADE:
+   - `iptables -t nat -C POSTROUTING -s $SUBNET -o $IFACE -j MASQUERADE || iptables -t nat -A POSTROUTING -s $SUBNET -o $IFACE -j MASQUERADE`
+4) Re-test in containers using `/dev/tcp` probes.
+5) Persist (if using iptables-services):
+   - `service iptables save` or `iptables-save > /etc/sysconfig/iptables` (distro-dependent). Prefer managed firewall tooling if present.
+
+Option B: nftables-based hosts (common with K8s & firewalld)
+1) Identify variables: container `SUBNET` and egress `IFACE` (same commands as above).
+2) Add NAT table/chain and MASQUERADE rule (idempotent):
+   - `sudo nft add table ip nat 2>/dev/null || true`
+   - `sudo nft add chain ip nat postrouting '{ type nat hook postrouting priority 100; }' 2>/dev/null || true`
+   - `sudo nft add rule ip nat postrouting ip saddr 172.30.1.0/24 oifname "eth5" masquerade`
+     (replace subnet and iface with your actual values)
+3) Allow forwarding (inet family) and return traffic:
+   - `sudo nft add table inet filter 2>/dev/null || true`
+   - `sudo nft add chain inet filter forward '{ type filter hook forward priority 0; }' 2>/dev/null || true`
+   - `sudo nft add rule inet filter forward ct state related,established accept 2>/dev/null || true`
+   - `sudo nft add rule inet filter forward ip saddr 172.30.1.0/24 oifname "eth5" accept`
+   - `sudo nft add rule inet filter forward iifname "eth5" ip daddr 172.30.1.0/24 ct state related,established accept`
+4) Inspect current rules with handles (for rollback):
+   - `sudo nft -a list chain inet filter forward`
+   - `sudo nft -a list chain ip nat postrouting` (or `inet nat postrouting`)
+   - To delete a rule: `sudo nft delete rule inet filter forward handle <N>`
+5) Persist rules:
+   - Save to `/etc/nftables.conf` and enable service: `systemctl enable --now nftables`.
+
+Temporary bypass (to isolate NAT issues)
+- Launch a one-off host-network container probe:
+  - `docker run --rm --network host alpine:3.20 sh -lc "timeout 3 sh -c ': </dev/tcp/10.10.131.134/10000' && echo OK || echo FAIL"`
+- If it prints OK while your bridge containers FAIL, the problem is definitively in bridge/NAT/forwarding rules.
+- As a short-lived workaround (not for long-term): set `network_mode: host` for dts-admin (and dts-platform if needed) to validate app flows. Be aware:
+  - Traefik router/service discovery via Docker provider may not see host-mode containers as expected; do not keep this in production unless you align ingress.
+
+Kerberos-specific notes
+- krb5.conf is provided via admin UI and written to a temp file inside dts-platform at runtime; no need to pre-mount krb5.conf.
+- With `dns_lookup_kdc=false`, KDC endpoints (tdh02/tdh03:1088) must resolve and be reachable from containers.
+- If KDC timeouts occur, JDBC Kerberos login will fail regardless of HS2 reachability.
+- For deep diagnostics (temporary): append to JAVA_TOOL_OPTIONS
+  - `-Dsun.security.krb5.debug=true`
+  Remove after verification to avoid verbose logs.
+
+Compose snippets (reference)
+- extra_hosts for both services (use exact indentation in YAML):
+  dts-admin:
+    extra_hosts:
+      - "tdh01:10.10.131.134"
+      - "tdh02:10.10.131.135"
+      - "tdh03:10.10.131.136"
+  dts-platform:
+    extra_hosts:
+      - "tdh01:10.10.131.134"
+      - "tdh02:10.10.131.135"
+      - "tdh03:10.10.131.136"
+- After editing: `docker compose -f docker-compose.legacy.yml up -d dts-admin dts-platform`
+
+IPv4 vs IPv6
+- Prefer explicit IPv4 via extra_hosts to avoid AAAA resolution leading to IPv6 attempts.
+- As a last resort for JVM clients: `-Djava.net.preferIPv4Stack=true` (append to JAVA_TOOL_OPTIONS); fix networking first if possible.
+
+What to collect when asking for help (offline)
+- Host:
+  - `sysctl -n net.ipv4.ip_forward`
+  - `docker network inspect dts-core`
+  - `ip route get 10.10.131.134`
+  - iptables path: `iptables -S FORWARD` and `iptables -t nat -S POSTROUTING`
+  - nftables path: `sudo nft list chain inet filter forward` and `sudo nft list chain ip nat postrouting`
+- Container (dts-admin & dts-platform):
+  - `cat /etc/hosts | grep -E 'tdh0[123]'`
+  - `getent hosts tdh01 tdh02 tdh03`
+  - `/dev/tcp` probes shown above for 10000 and 1088
+
+Rollback hints
+- iptables: mirror `-I`/`-A` with `-D` to remove; order matters.
+- nftables: list with `-a` to get rule handles, then `nft delete rule <table> <family> <chain> handle <N>`.
+
+Known K8s interactions
+- K8s often sets strict FORWARD policies and manages conntrack/NAT via CNI.
+- Prefer adding precise allow rules in DOCKER-USER (iptables) or inet filter forward (nftables) without changing global policies.
+- Ensure Docker bridge subnet is SNATed on the correct egress interface actually used to reach the Inceptor subnet.
+
+Verification checklist (expected OK before testing app)
+1) Container `getent hosts tdh01` shows 10.10.131.134 (and tdh02/tdh03 accordingly).
+2) Container `/dev/tcp/tdh01/10000` returns OK.
+3) Container `/dev/tcp/tdh02/1088` and `/dev/tcp/tdh03/1088` return OK.
+4) Then test admin UI’s Inceptor connection test; enable Kerberos debug only if needed.
+
+Appendix: Why ip_forward=1 alone is not enough
+- ip_forward enables routing capability but does not override firewall chains.
+- You still need FORWARD accept rules for container subnet and a NAT (MASQUERADE) rule for source address translation.
+

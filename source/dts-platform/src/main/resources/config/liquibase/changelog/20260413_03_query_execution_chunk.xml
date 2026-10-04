@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260413_03_query_execution_chunk" author="platform">
+        <createTable tableName="query_execution_chunk">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="execution_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="chunk_index" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rows_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_start" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="row_end" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex indexName="idx_qec_exec_idx" tableName="query_execution_chunk" unique="true">
+            <column name="execution_id"/>
+            <column name="chunk_index"/>
+        </createIndex>
+
+        <createIndex indexName="idx_qec_created" tableName="query_execution_chunk">
+            <column name="created_date"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="query_execution_chunk" indexName="idx_qec_created"/>
+            <dropIndex tableName="query_execution_chunk" indexName="idx_qec_exec_idx"/>
+            <dropTable tableName="query_execution_chunk"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

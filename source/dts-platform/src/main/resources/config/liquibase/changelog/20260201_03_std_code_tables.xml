@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20260201-03-std-code-directory" author="platform">
+        <createTable tableName="std_code_directory">
+            <column name="code_type_id" type="varchar(64)">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code_type_code" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="code_type_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="std_level" type="varchar(64)"/>
+            <column name="biz_catalog" type="varchar(128)"/>
+            <column name="data_type" type="varchar(64)"/>
+            <column name="status" type="int"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="version" type="varchar(32)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_std_code_directory_code" tableName="std_code_directory">
+            <column name="code_type_code"/>
+        </createIndex>
+        <createIndex indexName="idx_std_code_directory_owner" tableName="std_code_directory">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex indexName="idx_std_code_directory_status" tableName="std_code_directory">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260201-04-std-code-value" author="platform">
+        <createTable tableName="std_code_value">
+            <column name="item_id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code_type_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_value" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(1024)"/>
+            <column name="sort_num" type="int"/>
+            <column name="parent_code" type="varchar(128)"/>
+            <column name="is_default" type="boolean"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="std_code_value"
+            baseColumnNames="code_type_id"
+            referencedTableName="std_code_directory"
+            referencedColumnNames="code_type_id"
+            constraintName="fk_std_code_value_directory"
+            onDelete="CASCADE"
+        />
+        <addUniqueConstraint
+            tableName="std_code_value"
+            columnNames="code_type_id,code_value"
+            constraintName="uk_std_code_value_code"
+        />
+        <createIndex indexName="idx_std_code_value_type" tableName="std_code_value">
+            <column name="code_type_id"/>
+        </createIndex>
+        <createIndex indexName="idx_std_code_value_parent" tableName="std_code_value">
+            <column name="parent_code"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260201-05-std-code-mapping" author="platform">
+        <createTable tableName="std_code_mapping">
+            <column name="map_id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code_type_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_sys" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="src_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="std_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="std_code_mapping"
+            baseColumnNames="code_type_id"
+            referencedTableName="std_code_directory"
+            referencedColumnNames="code_type_id"
+            constraintName="fk_std_code_mapping_directory"
+            onDelete="CASCADE"
+        />
+        <addUniqueConstraint
+            tableName="std_code_mapping"
+            columnNames="code_type_id,source_sys,src_code"
+            constraintName="uk_std_code_mapping_source"
+        />
+        <createIndex indexName="idx_std_code_mapping_type" tableName="std_code_mapping">
+            <column name="code_type_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,64 @@
+name	layer	sql_path	source_data_source_id	alias	schema_name	materialized	tags	status	enabled	owner_dept	description	csv_path
+stg_pm__project_subject_domain_v2	STG	models/stg/stg_pm__project_subject_domain_v2.sql			public	view	project-management,stg,progress	DRAFT	true		进度 STG 结构化层：类型转换+占位符收敛+字段改名，业务派生下沉 DWD
+stg_pm__quality_issue_v2	STG	models/stg/stg_pm__quality_issue_v2.sql			public	view	project-management,stg,quality	DRAFT	true		质量 STG 结构化层：类型转换+占位符收敛，归一化与派生下沉 DWD
+stg_pm__tech_state_v2	STG	models/stg/stg_pm__tech_state_v2.sql			public	view	project-management,stg,tech-state	DRAFT	true		技术状态 STG 结构化层：类型转换+占位符收敛，签署状态上下文判断与派生下沉 DWD
+stg_pm__risk_info_v2	STG	models/stg/stg_pm__risk_info_v2.sql			public	view	project-management,stg,risk	DRAFT	true		风险 STG 结构化层：类型转换+占位符收敛，归一化与派生下沉 DWD
+dim_completion_status_v2	DWD	models/dwd/dim_completion_status_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		完成情况维度表（稳定ID+中文标签）
+dim_node_type_v2	DWD	models/dwd/dim_node_type_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		节点类型维度表（稳定ID+中文标签）
+dim_risk_level_v2	DWD	models/dwd/dim_risk_level_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		风险等级维度表（稳定ID+中文标签）
+dim_quality_status_v2	DWD	models/dwd/dim_quality_status_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		质量归零状态维度表（稳定ID+中文标签）
+dim_change_category_v2	DWD	models/dwd/dim_change_category_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		更改类别维度表（稳定ID+中文标签）
+dim_signature_status_v2	DWD	models/dwd/dim_signature_status_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		文件签署状态维度表（稳定ID+中文标签）
+dim_quality_category_v2	DWD	models/dwd/dim_quality_category_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		质量问题原因分类字典（稳定ID+中文标签）
+dim_risk_category_v2	DWD	models/dwd/dim_risk_category_v2.sql			public	table	project-management,dim,dwd	DRAFT	true		风险类型字典（稳定ID+中文标签）
+dim_node_type_alias	DWD	models/dwd/dim_node_type_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		节点类型别名表：一般/一般节点等→canonical code
+dim_risk_level_alias	DWD	models/dwd/dim_risk_level_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		风险等级别名表：高/高风险等→canonical code
+dim_risk_category_alias	DWD	models/dwd/dim_risk_category_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		风险分类别名表→canonical code（供应链/管理/资源统一归入进度风险）
+dim_risk_status_alias	DWD	models/dwd/dim_risk_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		风险状态别名表（仅收录已释放，未命中由DWD层coalesce到未释放）
+dim_quality_category_alias	DWD	models/dwd/dim_quality_category_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		质量问题原因别名表→canonical code
+dim_quality_status_alias	DWD	models/dwd/dim_quality_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		质量归零状态别名表→canonical code
+dim_change_category_alias	DWD	models/dwd/dim_change_category_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		更改类别别名表：罗马数字/阿拉伯数字/汉字等变体→I/II/III
+dim_boolean_alias	DWD	models/dwd/dim_boolean_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		通用布尔别名表：Y/YES/TRUE/是等→是；否定值→否
+dim_reform_status_alias	DWD	models/dwd/dim_reform_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		整改状态别名表→canonical code
+dim_signature_status_alias	DWD	models/dwd/dim_signature_status_alias.sql			public	table	project-management,dim,dwd,alias	DRAFT	true		文件签署状态别名表（上下文相关）→canonical code
+biz_dwd_project_node_v2	DWD	models/dwd/biz_dwd_project_node_v2.sql			public	table	project-management,biz,dwd,progress	DRAFT	true		进度节点事实表—从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径
+biz_dwd_quality_issue_v2	DWD	models/dwd/biz_dwd_quality_issue_v2.sql			public	table	project-management,biz,dwd,quality	DRAFT	true		质量问题事实表—归零状态+分类+计划标志
+biz_dwd_tech_state_v2	DWD	models/dwd/biz_dwd_tech_state_v2.sql			public	table	project-management,biz,dwd,tech-state	DRAFT	true		技术状态事实表—更改类别标准化+签署/整改状态
+biz_dwd_risk_info_v2	DWD	models/dwd/biz_dwd_risk_info_v2.sql			public	table	project-management,biz,dwd,risk	DRAFT	true		风险事实表—风险台账清洗+等级标准化+释放标志
+biz_dws_progress_monthly_v2	DWS	models/dws/biz_dws_progress_monthly_v2.sql			public	table	project-management,biz,dws,progress	DRAFT	true		进度域月度汇总—按project×month聚合，对齐原始指标#1-33
+biz_dws_quality_monthly_v2	DWS	models/dws/biz_dws_quality_monthly_v2.sql			public	table	project-management,biz,dws,quality	DRAFT	true		质量域月度汇总—按project×dept×month聚合，对齐原始指标#34-48
+biz_dws_tech_state_monthly_v2	DWS	models/dws/biz_dws_tech_state_monthly_v2.sql			public	table	project-management,biz,dws,tech-state	DRAFT	true		技术状态域月度汇总—按project×dept×month聚合，对齐原始指标#49-67
+biz_dws_risk_monthly_v2	DWS	models/dws/biz_dws_risk_monthly_v2.sql			public	table	project-management,biz,dws,risk	DRAFT	true		风险域月度汇总—按project×dept×month聚合
+biz_ads_progress_kpi_v2	ADS	models/ads/biz_ads_progress_kpi_v2.sql			public	table	project-management,biz,ads,kpi,progress	DRAFT	true		进度域原始指标—33个指标月度聚合，含分子/分母
+biz_ads_quality_kpi_v2	ADS	models/ads/biz_ads_quality_kpi_v2.sql			public	table	project-management,biz,ads,kpi,quality	DRAFT	true		质量域原始指标—15个指标月度聚合
+biz_ads_tech_state_kpi_v2	ADS	models/ads/biz_ads_tech_state_kpi_v2.sql			public	table	project-management,biz,ads,kpi,tech-state	DRAFT	true		技术状态域原始指标—19个指标月度聚合
+biz_ads_risk_kpi_v2	ADS	models/ads/biz_ads_risk_kpi_v2.sql			public	table	project-management,biz,ads,kpi,risk	DRAFT	true		风险域KPI—风险总数/高中低/释放率月度聚合
+biz_ads_progress_derived_v2	ADS	models/ads/biz_ads_progress_derived_v2.sql			public	table	project-management,biz,ads,derived,progress	DRAFT	true		进度域二次指标—6个（按时完成率/超期率/异常率/里程碑率/高风险占比/健康分）
+biz_ads_quality_derived_v2	ADS	models/ads/biz_ads_quality_derived_v2.sql			public	table	project-management,biz,ads,derived,quality	DRAFT	true		质量域二次指标—5个（归零率/现存率/计划提交率/设计类占比/健康分）
+biz_ads_tech_state_derived_v2	ADS	models/ads/biz_ads_tech_state_derived_v2.sql			public	table	project-management,biz,ads,derived,tech-state	DRAFT	true		技术状态域二次指标—5个（签署率/整改率/I类占比/未签署率/健康分）
+biz_ads_composite_derived_v2	ADS	models/ads/biz_ads_composite_derived_v2.sql			public	table	project-management,biz,ads,derived,composite	DRAFT	true		综合域二次指标—2个（项目综合健康度/风险预警指数）
+stg_pm__budget_v2	STG	models/stg/stg_pm__budget_v2.sql			public	view	project-management,stg,budget	DRAFT	true		预算 STG 结构化层：四金额 parse_numeric+占位符收敛，三本账派生下沉 DWD
+biz_dwd_budget_v2	DWD	models/dwd/biz_dwd_budget_v2.sql			public	table	project-management,biz,dwd,budget	DRAFT	true		预算事实表—三本账快照清洗，已执行=预付+账面+应付，派生剩余/超支
+biz_dws_budget_v2	DWS	models/dws/biz_dws_budget_v2.sql			public	table	project-management,biz,dws,budget	DRAFT	true		预算域汇总—按snapshot_date×project×research_lab聚合三本账金额
+biz_ads_budget_kpi_v2	ADS	models/ads/biz_ads_budget_kpi_v2.sql			public	table	project-management,biz,ads,kpi,budget	DRAFT	true		预算域原始指标—预算/预付/账面/应付/已执行/剩余/超支（每个业务快照日一行）
+biz_ads_budget_derived_v2	ADS	models/ads/biz_ads_budget_derived_v2.sql			public	table	project-management,biz,ads,derived,budget	DRAFT	true		预算域二次指标—5个（执行率/账面入账率/应付占比/剩余率/健康分）
+stg_pm__progress_measure_v2	STG	models/stg/stg_pm__progress_measure_v2.sql			public	view	project-management,stg,progress-measure	DRAFT	true		项目跟进措施 STG—空值收敛、日期转换和来源追溯
+stg_pm__quality_measure_v2	STG	models/stg/stg_pm__quality_measure_v2.sql			public	view	project-management,stg,quality-measure	DRAFT	true		质量措施 STG—空值收敛、日期转换和来源追溯
+stg_pm__tech_state_measure_v2	STG	models/stg/stg_pm__tech_state_measure_v2.sql			public	view	project-management,stg,tech-state-measure	DRAFT	true		技术状态措施 STG—空值收敛、日期转换和来源追溯
+stg_pm__risk_measure_v2	STG	models/stg/stg_pm__risk_measure_v2.sql			public	view	project-management,stg,risk-measure	DRAFT	true		风险措施 STG—空值收敛、日期转换和来源追溯
+stg_pm__material_info_v2	STG	models/stg/stg_pm__material_info_v2.sql			public	view	project-management,stg,material	DRAFT	true		重要物料 STG—空值收敛、日期转换和来源追溯
+biz_dwd_project_follow_up_v2	DWD	models/dwd/biz_dwd_project_follow_up_v2.sql			public	table	project-management,biz,dwd,progress-measure	DRAFT	true		项目跟进措施事实表—闭环状态、闭环时长和待办时长
+biz_dwd_quality_measure_v2	DWD	models/dwd/biz_dwd_quality_measure_v2.sql			public	table	project-management,biz,dwd,quality-measure	DRAFT	true		质量措施事实表—问题上下文、闭环状态和闭环时长
+biz_dwd_tech_state_measure_v2	DWD	models/dwd/biz_dwd_tech_state_measure_v2.sql			public	table	project-management,biz,dwd,tech-state-measure	DRAFT	true		技术状态措施事实表—更改上下文、闭环状态和闭环时长
+biz_dwd_risk_measure_v2	DWD	models/dwd/biz_dwd_risk_measure_v2.sql			public	table	project-management,biz,dwd,risk-measure	DRAFT	true		风险措施事实表—风险上下文、闭环状态和闭环时长
+biz_dwd_material_delivery_v2	DWD	models/dwd/biz_dwd_material_delivery_v2.sql			public	table	project-management,biz,dwd,material	DRAFT	true		重要物料交付事实表—合同交付、检验、上装和风险状态
+biz_dws_project_follow_up_monthly_v2	DWS	models/dws/biz_dws_project_follow_up_monthly_v2.sql			public	table	project-management,biz,dws,progress-measure	DRAFT	true		项目跟进措施月度汇总—项目×跟进月份
+biz_dws_quality_measure_monthly_v2	DWS	models/dws/biz_dws_quality_measure_monthly_v2.sql			public	table	project-management,biz,dws,quality-measure	DRAFT	true		质量措施月度汇总—项目×责任单位×跟进月份
+biz_dws_tech_state_measure_monthly_v2	DWS	models/dws/biz_dws_tech_state_measure_monthly_v2.sql			public	table	project-management,biz,dws,tech-state-measure	DRAFT	true		技术状态措施月度汇总—项目×责任单位×跟进月份
+biz_dws_risk_measure_monthly_v2	DWS	models/dws/biz_dws_risk_measure_monthly_v2.sql			public	table	project-management,biz,dws,risk-measure	DRAFT	true		风险措施月度汇总—项目×责任单位×跟进月份
+biz_dws_material_delivery_monthly_v2	DWS	models/dws/biz_dws_material_delivery_monthly_v2.sql			public	table	project-management,biz,dws,material	DRAFT	true		重要物料交付月度汇总—项目×责任单位×合同交付月份
+biz_ads_project_follow_up_kpi_v2	ADS	models/ads/biz_ads_project_follow_up_kpi_v2.sql			public	table	project-management,biz,ads,progress-measure	DRAFT	true		项目跟进措施闭环应用表—措施数、闭环率和闭环时长
+biz_ads_quality_measure_kpi_v2	ADS	models/ads/biz_ads_quality_measure_kpi_v2.sql			public	table	project-management,biz,ads,quality-measure	DRAFT	true		质量措施闭环应用表—措施数、闭环率和闭环时长
+biz_ads_tech_state_measure_kpi_v2	ADS	models/ads/biz_ads_tech_state_measure_kpi_v2.sql			public	table	project-management,biz,ads,tech-state-measure	DRAFT	true		技术状态措施闭环应用表—措施数、闭环率和闭环时长
+biz_ads_risk_measure_kpi_v2	ADS	models/ads/biz_ads_risk_measure_kpi_v2.sql			public	table	project-management,biz,ads,risk-measure	DRAFT	true		风险措施闭环应用表—措施数、闭环率和高风险待办
+biz_ads_material_delivery_kpi_v2	ADS	models/ads/biz_ads_material_delivery_kpi_v2.sql			public	table	project-management,biz,ads,material	DRAFT	true		物料采购与交付应用表—到货、逾期、检验和高风险计数

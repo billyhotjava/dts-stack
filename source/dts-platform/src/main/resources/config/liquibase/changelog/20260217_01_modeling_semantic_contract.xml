@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260217_01_modeling_semantic_contract_text" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_sql_model"/>
+            <not>
+                <columnExists tableName="modeling_sql_model" columnName="semantic_contract"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="modeling_sql_model">
+            <column name="semantic_contract" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260217_01_modeling_semantic_contract_version" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_sql_model"/>
+            <not>
+                <columnExists tableName="modeling_sql_model" columnName="contract_version"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="modeling_sql_model">
+            <column name="contract_version" type="varchar(64)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260217_01_modeling_semantic_contract_updated_at" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_sql_model"/>
+            <not>
+                <columnExists tableName="modeling_sql_model" columnName="contract_updated_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="modeling_sql_model">
+            <column name="contract_updated_at" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260217_01_modeling_semantic_contract_index" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="modeling_sql_model"/>
+            <columnExists tableName="modeling_sql_model" columnName="contract_version"/>
+            <not>
+                <indexExists tableName="modeling_sql_model" indexName="idx_modeling_sql_model_contract_version"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="modeling_sql_model" indexName="idx_modeling_sql_model_contract_version">
+            <column name="contract_version"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

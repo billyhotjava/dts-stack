@@ -1,0 +1,1164 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-quality-v4",
+  "name": "执行层-质量问题与跟进明细",
+  "description": "质量问题钻取页面，分区展示质量问题全量清单、闭环指标摘要及未归零问题跟进表。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-quality-header-bar",
+      "type": "shape",
+      "name": "drill-quality-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-quality-title",
+      "type": "title",
+      "name": "执行层-质量问题与跟进明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-质量问题与跟进明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(88, 180, 255, 0.20)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-quality-back-shape",
+      "type": "shape",
+      "name": "返回质量看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.20)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-quality-back-label",
+      "type": "title",
+      "name": "返回质量看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回质量看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-quality-kpi-1",
+      "type": "number-card",
+      "name": "归零率",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "质量问题归零率",
+        "value": "68.3",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_zero_rate",
+          "displayName": "质量问题归零率",
+          "domain": "质量",
+          "category": "归零率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内新增质量问题中已完成归零的占比",
+          "formula": "已完成归零数 ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 60,
+            "critical": 50,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #7 pjm_qual_zero_rate"
+        },
+        "metricCode": "pjm_qual_zero_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-kpi-2",
+      "type": "number-card",
+      "name": "现存率",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "现存质量问题比率",
+        "value": "47",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_remaining_ratio",
+          "displayName": "现存质量问题比率",
+          "domain": "质量",
+          "category": "现存率",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "现存未归零问题相对新增问题的比率,反映问题积压情况",
+          "formula": "现存质量问题数 ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制(分母);分子为全量未归零",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 50,
+            "critical": 80,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #8 pjm_qual_remaining_ratio"
+        },
+        "metricCode": "pjm_qual_remaining_ratio"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-kpi-3",
+      "type": "number-card",
+      "name": "计划提交率",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "归零计划提交率",
+        "value": "80.0",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_plan_submit_rate",
+          "displayName": "归零计划提交率",
+          "domain": "质量",
+          "category": "管理响应",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "新增质量问题中已制定归零计划的占比",
+          "formula": "(新增质量问题数 − 未提交归零计划数) ÷ 新增质量问题数 × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80,
+            "critical": 60,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #9 pjm_qual_plan_submit_rate"
+        },
+        "metricCode": "pjm_qual_plan_submit_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-kpi-4",
+      "type": "number-card",
+      "name": "质量健康度",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "质量健康度评分",
+        "value": "72",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_qual_health_score",
+          "displayName": "质量健康度评分",
+          "domain": "质量",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合 3 个质量子指标的加权评分,满分 100 分",
+          "formula": "归零率 × 50% + 归零计划提交率 × 30% + (100 − 现存率) × 20%",
+          "scope": "需质量三项子指标均有数据",
+          "sourceTable": "质量信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80,
+            "critical": 70,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #11 pjm_qual_health_score"
+        },
+        "metricCode": "pjm_qual_health_score"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(new_issue_cnt) AS new_issue_cnt, SUM(zero_completed_cnt) AS zero_completed_cnt, SUM(open_issue_cnt) AS open_issue_cnt, SUM(no_zero_plan_cnt) AS no_zero_plan_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(zero_completed_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"归零率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND(open_issue_cnt::numeric/new_issue_cnt::numeric*100,2) END AS \"现存率\", CASE WHEN new_issue_cnt=0 THEN 0 ELSE ROUND((new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100,2) END AS \"计划提交率\", ROUND((CASE WHEN new_issue_cnt=0 THEN 0 ELSE zero_completed_cnt::numeric/new_issue_cnt::numeric*100 END)*0.5 + (CASE WHEN new_issue_cnt=0 THEN 0 ELSE (new_issue_cnt-no_zero_plan_cnt)::numeric/new_issue_cnt::numeric*100 END)*0.3 + (100 - CASE WHEN new_issue_cnt=0 THEN 0 ELSE open_issue_cnt::numeric/new_issue_cnt::numeric*100 END)*0.2, 2) AS \"质量健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-detail-table",
+      "type": "table",
+      "name": "质量问题全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "质量问题全量清单",
+        "header": [
+          "项目编号",
+          "分系统",
+          "问题名称",
+          "责任科室",
+          "问题分类",
+          "归零计划",
+          "状态",
+          "当前进展",
+          "问题日期",
+          "归零完成日期",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30,
+              "critical": 60,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "问题分类": {
+            "kind": "field",
+            "displayName": "质量问题分类",
+            "definition": "质量问题按发生原因的分类。",
+            "enumValues": [
+              {
+                "code": "设计",
+                "label": "设计",
+                "description": "设计阶段引入的问题"
+              },
+              {
+                "code": "工艺",
+                "label": "工艺",
+                "description": "工艺设计或执行偏差"
+              },
+              {
+                "code": "管理",
+                "label": "管理",
+                "description": "流程/制度执行不到位"
+              },
+              {
+                "code": "元器件",
+                "label": "元器件",
+                "description": "元器件本体质量"
+              },
+              {
+                "code": "操作",
+                "label": "操作",
+                "description": "人员操作失误"
+              },
+              {
+                "code": "外协",
+                "label": "外协外购",
+                "description": "外协外购件质量"
+              },
+              {
+                "code": "软件",
+                "label": "软件",
+                "description": "软件缺陷"
+              },
+              {
+                "code": "环境",
+                "label": "环境",
+                "description": "环境因素引起"
+              },
+              {
+                "code": "其他",
+                "label": "其他",
+                "description": "未归入以上分类"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": null
+          },
+          "归零计划": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          },
+          "状态": {
+            "kind": "field",
+            "displayName": "质量问题状态",
+            "definition": "质量问题的归零状态。'归零'指问题完全闭环。",
+            "enumValues": [
+              {
+                "code": "未完成归零",
+                "label": "未完成归零",
+                "description": "问题未闭环,仍在处理中"
+              },
+              {
+                "code": "已完成技术归零",
+                "label": "已完成技术归零",
+                "description": "通过技术手段完成归零"
+              },
+              {
+                "code": "已完成管理归零",
+                "label": "已完成管理归零",
+                "description": "通过管理手段完成归零"
+              },
+              {
+                "code": "已完成技术和管理归零",
+                "label": "已完成技术和管理归零",
+                "description": "同时完成技术与管理双归零"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
+          }
+        },
+        "description": "事实明细表：展示统计周期内质量问题的项目、分类、归零状态、当前进展和滞留天数。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", zero_complete_date AS \"归零完成日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-side-panel",
+      "type": "table",
+      "name": "质量闭环指标摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "质量闭环指标摘要",
+        "header": [
+          "指标",
+          "数值",
+          "说明"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "新增质量问题": {
+            "code": "pjm_qual_new_issues",
+            "displayName": "新增质量问题数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内新发生的质量问题总数",
+            "formula": "质量问题发生时间在[开始日期,结束日期]内的问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #34"
+          },
+          "现存质量问题": {
+            "code": "pjm_qual_open_issues",
+            "displayName": "现存质量问题数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "目前状态为'未完成归零'的质量问题总数",
+            "formula": "状态='未完成归零' 的质量问题计数",
+            "scope": "全量统计,不受时间筛选限制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #35"
+          },
+          "已归零数": {
+            "code": "pjm_qual_zero_completed",
+            "displayName": "已完成归零数",
+            "domain": "质量",
+            "category": "基础",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内完成归零(含技术/管理/两者)的质量问题数",
+            "formula": "已完成技术归零 + 已完成管理归零 + 已完成技术和管理归零",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #39"
+          },
+          "未提交归零计划": {
+            "code": "pjm_qual_no_plan",
+            "displayName": "未提交归零计划数",
+            "domain": "质量",
+            "category": "管理响应",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内已发生但尚未提交归零计划的质量问题数",
+            "formula": "归零计划='无' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #40"
+          },
+          "技术归零": {
+            "code": "pjm_qual_tech_zero",
+            "displayName": "已完成技术归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内通过技术手段完成归零的质量问题数",
+            "formula": "状态='已完成技术归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #36"
+          },
+          "管理归零": {
+            "code": "pjm_qual_mgmt_zero",
+            "displayName": "已完成管理归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内通过管理手段完成归零的质量问题数",
+            "formula": "状态='已完成管理归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #37"
+          },
+          "双归零": {
+            "code": "pjm_qual_both_zero",
+            "displayName": "已完成技术和管理归零数",
+            "domain": "质量",
+            "category": "归零",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内同时完成技术归零和管理归零的质量问题数",
+            "formula": "状态='已完成技术和管理归零' 的质量问题计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "质量信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #38"
+          }
+        },
+        "description": "指标摘要表：将质量月度汇总指标转成纵向摘要，快速判断新增、现存、归零和计划提交情况。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(new_issue_cnt),0)::numeric AS new_issue_cnt, COALESCE(SUM(open_issue_cnt),0)::numeric AS open_issue_cnt, COALESCE(SUM(zero_completed_cnt),0)::numeric AS zero_completed_cnt, COALESCE(SUM(no_zero_plan_cnt),0)::numeric AS no_zero_plan_cnt, COALESCE(SUM(tech_zero_cnt),0)::numeric AS tech_zero_cnt, COALESCE(SUM(mgmt_zero_cnt),0)::numeric AS mgmt_zero_cnt, COALESCE(SUM(both_zero_cnt),0)::numeric AS both_zero_cnt FROM biz_dws_quality_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('新增质量问题', agg.new_issue_cnt, '统计周期内新增质量问题数量'), ('现存质量问题', agg.open_issue_cnt, '截至统计周期仍未归零的问题数量'), ('已归零数', agg.zero_completed_cnt, '统计周期内完成归零闭环的问题数量'), ('未提交归零计划', agg.no_zero_plan_cnt, '尚未形成归零计划的问题数量'), ('技术归零', agg.tech_zero_cnt, '按技术归零方式闭环的问题数量'), ('管理归零', agg.mgmt_zero_cnt, '按管理归零方式闭环的问题数量'), ('双归零', agg.both_zero_cnt, '同时完成技术与管理归零的问题数量')) AS v(metric,value,note)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-support-table",
+      "type": "table",
+      "name": "未归零质量问题跟进表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未归零质量问题跟进表",
+        "header": [
+          "项目编号",
+          "分系统",
+          "问题名称",
+          "责任科室",
+          "问题分类",
+          "归零计划",
+          "状态",
+          "当前进展",
+          "问题日期",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30,
+              "critical": 60,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "问题分类": {
+            "kind": "field",
+            "displayName": "质量问题分类",
+            "definition": "质量问题按发生原因的分类。",
+            "enumValues": [
+              {
+                "code": "设计",
+                "label": "设计",
+                "description": "设计阶段引入的问题"
+              },
+              {
+                "code": "工艺",
+                "label": "工艺",
+                "description": "工艺设计或执行偏差"
+              },
+              {
+                "code": "管理",
+                "label": "管理",
+                "description": "流程/制度执行不到位"
+              },
+              {
+                "code": "元器件",
+                "label": "元器件",
+                "description": "元器件本体质量"
+              },
+              {
+                "code": "操作",
+                "label": "操作",
+                "description": "人员操作失误"
+              },
+              {
+                "code": "外协",
+                "label": "外协外购",
+                "description": "外协外购件质量"
+              },
+              {
+                "code": "软件",
+                "label": "软件",
+                "description": "软件缺陷"
+              },
+              {
+                "code": "环境",
+                "label": "环境",
+                "description": "环境因素引起"
+              },
+              {
+                "code": "其他",
+                "label": "其他",
+                "description": "未归入以上分类"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": null
+          },
+          "归零计划": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          },
+          "状态": {
+            "kind": "field",
+            "displayName": "质量问题状态",
+            "definition": "质量问题的归零状态。'归零'指问题完全闭环。",
+            "enumValues": [
+              {
+                "code": "未完成归零",
+                "label": "未完成归零",
+                "description": "问题未闭环,仍在处理中"
+              },
+              {
+                "code": "已完成技术归零",
+                "label": "已完成技术归零",
+                "description": "通过技术手段完成归零"
+              },
+              {
+                "code": "已完成管理归零",
+                "label": "已完成管理归零",
+                "description": "通过管理手段完成归零"
+              },
+              {
+                "code": "已完成技术和管理归零",
+                "label": "已完成技术和管理归零",
+                "description": "同时完成技术与管理双归零"
+              }
+            ],
+            "sourceTable": "质量信息汇总表",
+            "note": "数据规范化: '处理中'/'进行中'/'未闭环'等统一归为'未完成归零'"
+          }
+        },
+        "description": "跟进处置表：聚焦未归零问题的归零计划和当前进展，按滞留天数倒序推进闭环。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", subsystem AS \"分系统\", issue_name AS \"问题名称\", dept AS \"责任科室\", issue_category AS \"问题分类\", zero_plan AS \"归零计划\", status AS \"状态\", current_progress AS \"当前进展\", issue_date AS \"问题日期\", pending_days AS \"滞留天数\" FROM biz_dwd_quality_issue_v2 WHERE issue_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND issue_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND COALESCE(is_zero_completed,false) = false [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY pending_days DESC NULLS LAST, issue_date ASC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-title",
+      "type": "title",
+      "name": "质量问题全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-detail-section-desc",
+      "type": "title",
+      "name": "质量问题全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内质量问题的项目、分类、归零状态、当前进展和滞留天数。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-side-section-title",
+      "type": "title",
+      "name": "质量闭环指标摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量闭环指标摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-side-section-desc",
+      "type": "title",
+      "name": "质量闭环指标摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：将质量月度汇总指标转成纵向摘要，快速判断新增、现存、归零和计划提交情况。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-quality-support-section-title",
+      "type": "title",
+      "name": "未归零质量问题跟进表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未归零质量问题跟进表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-quality-support-section-desc",
+      "type": "title",
+      "name": "未归零质量问题跟进表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦未归零问题的归零计划和当前进展，按滞留天数倒序推进闭环。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

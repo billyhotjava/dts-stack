@@ -1,0 +1,53 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/browser-remediation-081bc098a.tar.gz",
+  "sha256": "2d8cd97f6a4c8143597f6206600bde3614b577d4362544d39bfbb1d0c58f535b",
+  "sourceCommit": "081bc098acdbbd909e5631ccd100f38e18e67773",
+  "archiveChecksumsVerified": {
+    "dts-ingestion_s104-081bc098a-20260908-101634.tar": "034a26feaf2bb5f024da7a161ddfee90df5c7bf05b2aad8682f73ca50fac0642",
+    "dts-platform-webapp_s104-081bc098a-20260908-101634.tar": "b484f3a835cb2588751523445ec7bae79d082ba380bed9ea5216ba46a7359e8f",
+    "dts-platform_s104-081bc098a-20260908-101634.tar": "6d9dfe82f4db8bafd340d24623b788afc08660a49da5f53c02b3db7201e967c1"
+  },
+  "images": [
+    {
+      "tag": "dts-ingestion:s104-081bc098a",
+      "localImageId": "sha256:2679445973eb3169eacbae43ca48a13c20ff61926323ee4d43a9f975180080bf",
+      "configImageId": "sha256:2679445973eb3169eacbae43ca48a13c20ff61926323ee4d43a9f975180080bf",
+      "sourceRevision": "081bc098acdbbd909e5631ccd100f38e18e67773"
+    },
+    {
+      "tag": "dts-platform-webapp:s104-081bc098a",
+      "localImageId": "sha256:0717cafdd276aa5ba508a530970ee9accae45e12f676eecebca5ef8978585610",
+      "configImageId": "sha256:0717cafdd276aa5ba508a530970ee9accae45e12f676eecebca5ef8978585610",
+      "sourceRevision": "081bc098acdbbd909e5631ccd100f38e18e67773"
+    },
+    {
+      "tag": "dts-platform:s104-081bc098a",
+      "localImageId": "sha256:d00794ef091880cf048ebdd327c4617dfb73587ba5d67db58d34d09b36326186",
+      "configImageId": "sha256:d00794ef091880cf048ebdd327c4617dfb73587ba5d67db58d34d09b36326186",
+      "sourceRevision": "081bc098acdbbd909e5631ccd100f38e18e67773"
+    }
+  ],
+  "runtime": [
+    {
+      "container": "/deploy-dts-platform-1",
+      "image": "dts-platform:s104-081bc098a",
+      "imageId": "sha256:d00794ef091880cf048ebdd327c4617dfb73587ba5d67db58d34d09b36326186",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "container": "/deploy-dts-ingestion-1",
+      "image": "dts-ingestion:s104-081bc098a",
+      "imageId": "sha256:2679445973eb3169eacbae43ca48a13c20ff61926323ee4d43a9f975180080bf",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "container": "/deploy-dts-platform-webapp-1",
+      "image": "dts-platform-webapp:s104-081bc098a",
+      "imageId": "sha256:0717cafdd276aa5ba508a530970ee9accae45e12f676eecebca5ef8978585610",
+      "status": "running",
+      "health": "not configured"
+    }
+  ]
+}

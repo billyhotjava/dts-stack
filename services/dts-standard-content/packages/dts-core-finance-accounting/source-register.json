@@ -1,0 +1,28 @@
+{
+  "packageCode": "dts-core-finance-accounting",
+  "retrievedAt": "2026-07-29",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "sources": [
+    {
+      "id": "mof-accounting-basic",
+      "organization": "中华人民共和国财政部",
+      "title": "企业会计准则——基本准则及其修改",
+      "url": "https://gs.mof.gov.cn/xxgk/zhengcefagui/201407/t20140730_1119940.htm",
+      "contentUse": "依据公开的会计期间、货币计量、借贷记账法和六类会计要素形成DTS自有字段表达"
+    },
+    {
+      "id": "mof-accounting-it-2024",
+      "organization": "中华人民共和国财政部",
+      "title": "会计信息化工作规范 财会〔2024〕11号",
+      "url": "https://kjs.mof.gov.cn/zhengcejiedu/202408/t20240806_3941155.htm",
+      "contentUse": "依据统一标准体系、会计软件和电子凭证管理要求形成参考字段；不复制附件正文"
+    },
+    {
+      "id": "gbt-12406-2022",
+      "organization": "国家市场监督管理总局 国家标准化管理委员会",
+      "title": "GB/T 12406-2022 表示货币的代码",
+      "url": "https://openstd.samr.gov.cn/bzgk/gb/newGbInfo?hcno=196111BC23AC8BDA0BE2C44F2C32F6CF",
+      "contentUse": "仅保存CNY一个常用事实码值和标准题录；不复制或再分发完整币种代码表"
+    }
+  ]
+}

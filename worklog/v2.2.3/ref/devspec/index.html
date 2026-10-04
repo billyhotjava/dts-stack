@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>DTS 原理与设计方案</title>
+  <style>
+    :root {
+      --navy: #102d43;
+      --ink: #172e43;
+      --muted: #526879;
+      --accent: #087a79;
+      --line: #d8e2e8;
+      --paper: #f3f6f8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    }
+    a { color: inherit; }
+    button { font: inherit; }
+    a:focus, button:focus { outline: 3px solid #e3a535; outline-offset: 3px; }
+    a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
+    .skip-link { position: fixed; top: -80px; left: 20px; z-index: 10; padding: 10px 16px; color: var(--ink); background: white; }
+    .skip-link:focus { top: 12px; }
+    .shell { display: grid; grid-template-columns: 272px minmax(0, 1fr); height: 100vh; }
+    .sidebar {
+      display: flex; flex-direction: column; min-height: 0; padding: 24px 14px 18px;
+      color: #e7f0f6; background: var(--navy); overflow-y: auto;
+    }
+    .sidebar::-webkit-scrollbar { width: 8px; }
+    .sidebar::-webkit-scrollbar-thumb { background: #2f4c60; border-radius: 4px; }
+    .brand { display: flex; align-items: center; gap: 12px; padding: 0 10px 20px; }
+    .brand-mark {
+      display: grid; place-items: center; flex-shrink: 0; width: 44px; height: 44px;
+      border: 1px solid #557283; border-radius: 10px; font-size: 17px; font-weight: 750; letter-spacing: -0.5px;
+    }
+    .brand-name { margin: 0; font-size: 16px; font-weight: 650; }
+    .brand-version { display: block; color: #b5cad8; font-size: 12px; }
+    .group + .group { margin-top: 18px; }
+    .section-label { display: flex; justify-content: space-between; margin: 0 10px 8px; color: #a9c4d3; font-size: 12px; letter-spacing: 1px; }
+    .section-label span:last-child { letter-spacing: 0; color: #7f9cad; }
+    .topics { display: flex; flex-direction: column; gap: 3px; }
+    .topic {
+      display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px;
+      border: 1px solid transparent; border-radius: 8px; text-decoration: none;
+    }
+    .topic:hover { background: #1b3b51; }
+    .topic[aria-current="page"] { border-color: #507685; background: #234959; }
+    .topic-number { padding-top: 1px; color: #a8c4d3; font: 12px/1.9 ui-monospace, Consolas, monospace; }
+    .topic[aria-current="page"] .topic-number { color: #8be4cf; }
+    .topic-title { display: block; font-size: 14px; font-weight: 600; line-height: 1.5; }
+    .topic-note { display: block; margin-top: 1px; color: #b8cbd7; font-size: 12px; line-height: 1.45; }
+    .resources { margin-top: 22px; padding-top: 18px; border-top: 1px solid #345064; }
+    .resource-links { display: grid; gap: 7px; padding: 0 10px; }
+    .resource-links a { width: fit-content; font-size: 13px; text-decoration-color: #668596; text-underline-offset: 4px; }
+    .resource-links a:hover { color: #98e6d5; }
+    .sidebar-footer { margin-top: auto; padding: 22px 10px 0; color: #b8cbd7; font-size: 12px; }
+    .sidebar-footer p { margin: 3px 0; }
+    .sidebar-footer code { color: #e7f0f6; font-size: 12px; }
+    .logout {
+      margin-top: 10px; padding: 5px 12px; border: 1px solid #466577; border-radius: 6px;
+      color: #d9e7ef; background: transparent; font-size: 12px; cursor: pointer;
+    }
+    .logout:hover { background: #1b3b51; }
+    .workspace { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 22px 26px 14px; }
+    .page-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+    .eyebrow { margin: 0; color: var(--muted); font-size: 14px; }
+    .offline-note { margin: 0; color: var(--accent); font-size: 12px; white-space: nowrap; }
+    .offline-note::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: middle; }
+    .reader {
+      display: flex; flex: 1; flex-direction: column; min-height: 0;
+      border: 1px solid var(--line); border-radius: 12px; background: #fff;
+      box-shadow: 0 3px 14px #102d4308; overflow: hidden;
+    }
+    .reader-header { padding: 16px 20px 13px; border-bottom: 1px solid var(--line); }
+    .reader-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .title-group { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .chapter { color: var(--accent); font: 14px/1.5 ui-monospace, Consolas, monospace; white-space: nowrap; }
+    .kind {
+      padding: 1px 8px; border: 1px solid #b9d6d6; border-radius: 999px;
+      color: #1d6665; background: #eef7f7; font-size: 12px; white-space: nowrap;
+    }
+    h1 { margin: 0; font-size: 21px; font-weight: 650; line-height: 1.4; letter-spacing: -0.3px; }
+    .reader-description { margin: 7px 0 0; color: var(--muted); font-size: 14px; }
+    .actions { display: flex; align-items: center; flex-shrink: 0; gap: 8px; }
+    .action {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 34px; padding: 5px 11px; border: 1px solid var(--line); border-radius: 6px;
+      color: var(--ink); background: #fff; font-size: 13px; text-decoration: none; cursor: pointer;
+    }
+    .action:hover { border-color: #95afb9; background: #f0f7f7; }
+    .action-primary { color: #fff; border-color: var(--accent); background: var(--accent); }
+    .action-primary:hover { color: #fff; border-color: #086663; background: #086663; }
+    .diagram-frame { display: block; flex: 1; width: 100%; min-height: 420px; border: 0; background: #fff; }
+    .reader-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 18px; border-top: 1px solid var(--line); }
+    .reader-hint { margin: 0; color: var(--muted); font-size: 12px; }
+    .stepper { display: flex; gap: 8px; flex-shrink: 0; }
+    .stepper button:disabled { color: #7a8995; border-color: #e1e7ec; background: #f6f8fa; cursor: default; }
+    noscript p { margin: 0; padding: 10px 22px; color: #69511c; background: #fff8e7; font-size: 14px; }
+    @media (max-width: 1150px) {
+      .shell { grid-template-columns: 240px minmax(0, 1fr); }
+      .workspace { padding: 18px 16px 12px; }
+      .reader-title-row { align-items: flex-start; flex-wrap: wrap; }
+      h1 { font-size: 19px; }
+    }
+    @media (max-width: 800px) {
+      .shell { display: block; height: auto; }
+      .sidebar { padding: 16px; overflow: visible; }
+      .brand { padding: 0 0 12px; }
+      .topic-note, .sidebar-footer p { display: none; }
+      .topics { flex-direction: row; overflow-x: auto; padding: 2px 2px 8px; }
+      .topic { align-items: center; flex-shrink: 0; padding: 7px 11px; gap: 8px; }
+      .resource-links { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 0; }
+      .workspace { padding: 16px 12px 14px; }
+      .page-heading { margin-bottom: 10px; }
+      .reader-header { padding: 14px 16px; }
+      .diagram-frame { flex: none; height: 75vh; min-height: 560px; }
+      .reader-footer { align-items: flex-start; flex-direction: column; padding: 12px 16px; }
+      .stepper { width: 100%; justify-content: space-between; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#reader">跳转到图示阅读区</a>
+  <div class="shell">
+    <aside class="sidebar" aria-label="资料导航">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">DTS</span>
+        <div><p class="brand-name">原理与设计方案</p><span class="brand-version">v2.2.3 · 模块级 · Archify</span></div>
+      </div>
+
+      <div class="group">
+        <p class="section-label"><span>一 · 模块架构</span><span>服务 → 模块</span></p>
+        <nav class="topics" aria-label="模块架构">
+          <a class="topic" href="10-system-modules.html" target="diagram-frame" data-id="system-modules" data-kind="模块架构" data-title="系统模块全景" data-source="diagrams/10-system-modules.architecture.json" data-doc="10-module-architecture.md" data-description="四个后端服务拆到功能模块，看模块之间如何跨服务调用：语义发布、契约读取、任务代理、血缘回写与调度触发。">
+            <span class="topic-number">01</span><span><span class="topic-title">系统模块全景</span><span class="topic-note">跨服务的模块调用</span></span>
+          </a>
+          <a class="topic" href="11-platform-modules.html" target="diagram-frame" data-id="platform-modules" data-kind="模块架构" data-title="dts-platform 核心业务模块" data-source="diagrams/11-platform-modules.architecture.json" data-doc="10-module-architecture.md#4-dts-platform-核心业务模块图-11" data-description="建模、资产目录、治理质量、查询数据集、构建调度、数据服务与权限安全之间的依赖方向。">
+            <span class="topic-number">02</span><span><span class="topic-title">dts-platform 核心业务</span><span class="topic-note">建模 · 目录 · 治理 · 数据服务</span></span>
+          </a>
+          <a class="topic" href="12-platform-support-modules.html" target="diagram-frame" data-id="platform-support" data-kind="模块架构" data-title="dts-platform 支撑模块" data-source="diagrams/12-platform-support-modules.architecture.json" data-doc="10-module-architecture.md#5-dts-platform-支撑模块图-12" data-description="审计、平台事件、查询网关、数据源连接、元数据同步、回滚失效与报表登记如何支撑核心业务模块。">
+            <span class="topic-number">03</span><span><span class="topic-title">dts-platform 支撑模块</span><span class="topic-note">审计 · 事件 · 数据源 · 回滚</span></span>
+          </a>
+          <a class="topic" href="13-ingestion-modules.html" target="diagram-frame" data-id="ingestion-modules" data-kind="模块架构" data-title="dts-ingestion 模块关系" data-source="diagrams/13-ingestion-modules.architecture.json" data-doc="10-module-architecture.md#6-dts-ingestion图-13" data-description="从任务入口到执行提交、任务编排核心，再到 Addax、DAG、API 连接器与执行同步，以及回调平台的三条出口。">
+            <span class="topic-number">04</span><span><span class="topic-title">dts-ingestion 模块</span><span class="topic-note">任务编排 · 执行层 · 平台回调</span></span>
+          </a>
+          <a class="topic" href="14-admin-modules.html" target="diagram-frame" data-id="admin-modules" data-kind="模块架构" data-title="dts-admin 模块关系" data-source="diagrams/14-admin-modules.architecture.json" data-doc="10-module-architecture.md#7-dts-admin图-14" data-description="管理审批、用户角色、组织与人员主数据、双证书登录和审计如何汇聚到 Keycloak 与变更单。">
+            <span class="topic-number">05</span><span><span class="topic-title">dts-admin 模块</span><span class="topic-note">审批 · 身份 · 组织人员 · 审计</span></span>
+          </a>
+          <a class="topic" href="15-analytics-modules.html" target="diagram-frame" data-id="analytics-modules" data-kind="模块架构" data-title="dts-analytics 模块关系" data-source="diagrams/15-analytics-modules.architecture.json" data-doc="10-module-architecture.md#8-dts-analytics图-15" data-description="卡片、看板、大屏经受治理查询网关读取平台契约并执行 SQL，发布登记与语义发布入站分别连接平台。">
+            <span class="topic-number">06</span><span><span class="topic-title">dts-analytics 模块</span><span class="topic-note">查询网关 · 发布登记 · 语义</span></span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="group">
+        <p class="section-label"><span>二 · 关键链路</span><span>模块间调用时序</span></p>
+        <nav class="topics" aria-label="关键链路">
+          <a class="topic" href="00-t1-overview.html" target="diagram-frame" data-id="t1-overview" data-kind="链路总览" data-title="T1 主链服务总览" data-source="diagrams/00-t1-overview.architecture.json" data-doc="assets/call-graph-and-dispatch.md" data-description="建模、接入、管理审批、分析消费四条主链经过的服务、入口与外部依赖。">
+            <span class="topic-number">07</span><span><span class="topic-title">T1 主链服务总览</span><span class="topic-note">四条主链的服务与依赖</span></span>
+          </a>
+          <a class="topic" href="01-modeling-ports.html" target="diagram-frame" data-id="modeling-ports" data-kind="接口与实现" data-title="建模端口与实现" data-source="diagrams/01-modeling-ports.architecture.json" data-doc="01-modeling-mainline.md" data-description="建模模块对外依赖的端口接口、实现类与注入位置：接口 → 单实现 + 构造注入。">
+            <span class="topic-number">08</span><span><span class="topic-title">建模端口与实现</span><span class="topic-note">接口 → 实现 → 注入点</span></span>
+          </a>
+          <a class="topic" href="01-modeling-publish.html" target="diagram-frame" data-id="modeling-publish" data-kind="调用时序" data-title="建模发布与契约读取" data-source="diagrams/01-modeling-publish.sequence.json" data-doc="01-modeling-mainline.md" data-description="发布提交 → serving 投影 → 定时语义同步 → QueryDataset 发布 → 分析端契约读取。">
+            <span class="topic-number">09</span><span><span class="topic-title">建模发布与契约读取</span><span class="topic-note">modeling → catalog → sql → analytics</span></span>
+          </a>
+          <a class="topic" href="02-ingestion-execution.html" target="diagram-frame" data-id="ingestion-execution" data-kind="调用时序" data-title="接入异步执行与状态回写" data-source="diagrams/02-ingestion-execution.sequence.json" data-doc="02-ingestion-execution.md" data-description="幂等提交 → 两阶段执行 → Addax / 目标表守卫 / DAG → Airflow 触发 → 15s 轮询回写与重试。">
+            <span class="topic-number">10</span><span><span class="topic-title">接入执行与回写</span><span class="topic-note">任务 → Addax / Airflow → 平台</span></span>
+          </a>
+          <a class="topic" href="03-admin-approval.html" target="diagram-frame" data-id="admin-approval" data-kind="调用时序" data-title="管理审批：提交、同意执行与审计" data-source="diagrams/03-admin-approval.sequence.json" data-doc="03-admin-approval.md" data-description="草稿与提交、审批通知、事务内 applyChangeRequest 分派、APPLIED / FAILED 回写与审计 V2。">
+            <span class="topic-number">11</span><span><span class="topic-title">管理审批</span><span class="topic-note">变更单 → 分派执行 → 审计</span></span>
+          </a>
+          <a class="topic" href="04-analytics-consumption.html" target="diagram-frame" data-id="analytics-consumption" data-kind="调用时序" data-title="分析消费：契约缓存与查询执行" data-source="diagrams/04-analytics-consumption.sequence.json" data-doc="04-analytics-consumption.md" data-description="数据集定义缓存 → 引用校验 → 受治理查询执行 → 图表与看板消费。">
+            <span class="topic-number">12</span><span><span class="topic-title">分析消费</span><span class="topic-note">契约 → 查询 → 图表看板</span></span>
+          </a>
+          <a class="topic" href="05-quality-run.html" target="diagram-frame" data-id="quality-run" data-kind="调用时序" data-title="数据质量：触发、执行与状态收敛" data-source="diagrams/05-quality-run.sequence.json" data-doc="05-quality-workflow.md" data-description="规则列表 / 工作流 / 模型门禁三类触发、执行器与 5s 状态收敛、资产回读。">
+            <span class="topic-number">13</span><span><span class="topic-title">数据质量</span><span class="topic-note">触发 → 执行 → 收敛</span></span>
+          </a>
+          <a class="topic" href="06-classification-seal.html" target="diagram-frame" data-id="classification-seal" data-kind="调用时序" data-title="分类分级：封存、兼容投影与传播" data-source="diagrams/06-classification-seal.sequence.json" data-doc="06-classification-tagging.md" data-description="统一密级阶梯、快照与事件、三类兼容投影、传播任务与消费方重算。">
+            <span class="topic-number">14</span><span><span class="topic-title">分类分级</span><span class="topic-note">封存 → 投影 → 传播</span></span>
+          </a>
+          <a class="topic" href="07-bi-publish.html" target="diagram-frame" data-id="bi-publish" data-kind="调用时序" data-title="BI：看板发布与平台登记" data-source="diagrams/07-bi-publish.sequence.json" data-doc="07-bi-orchestration.md" data-description="看板发布版本快照、实体锁、登记 Outbox 与平台内部接口。">
+            <span class="topic-number">15</span><span><span class="topic-title">BI 发布登记</span><span class="topic-note">快照 → Outbox → 平台</span></span>
+          </a>
+          <a class="topic" href="08-data-api-invoke.html" target="diagram-frame" data-id="data-api-invoke" data-kind="调用时序" data-title="数据服务：API 鉴权、限流与查询" data-source="diagrams/08-data-api-invoke.sequence.json" data-doc="08-data-services-push.md" data-description="令牌校验、秒级限流、脱敏查询与调用指标；数据产品、推送与对账见设计文档。">
+            <span class="topic-number">16</span><span><span class="topic-title">数据 API 调用</span><span class="topic-note">令牌 → 限流 → 脱敏查询</span></span>
+          </a>
+          <a class="topic" href="09-pki-login.html" target="diagram-frame" data-id="pki-login" data-kind="调用时序" data-title="PKI：双证书登录与会话建立" data-source="diagrams/09-pki-login.sequence.json" data-doc="09-pki-mdm-integration.md" data-description="挑战签发与一次性消费、PKCS7 验签、签名票据换门户会话；MDM 握手与回调见设计文档。">
+            <span class="topic-number">17</span><span><span class="topic-title">双证书登录</span><span class="topic-note">挑战 → 验签 → 会话</span></span>
+          </a>
+        </nav>
+      </div>
+
+      <div class="resources">
+        <p class="section-label"><span>配套材料</span></p>
+        <div class="resource-links">
+          <a href="doc.html?f=README.md" target="_blank" rel="noopener">阅读说明 ↗</a>
+          <a href="doc.html?f=10-module-architecture.md" target="_blank" rel="noopener">模块划分与调用依据 ↗</a>
+          <a href="doc.html?f=assets/call-graph-and-dispatch.md" target="_blank" rel="noopener">接口实现与分派图谱 ↗</a>
+          <a href="doc.html?f=assets/interface-impl-inventory.md" target="_blank" rel="noopener">接口 / 实现清单 ↗</a>
+          <a href="doc.html?f=assets/rest-inventory-dts-platform.md" target="_blank" rel="noopener">REST 清单 · platform ↗</a>
+          <a href="doc.html?f=assets/rest-inventory-dts-ingestion.md" target="_blank" rel="noopener">REST 清单 · ingestion ↗</a>
+          <a href="doc.html?f=assets/rest-inventory-dts-admin.md" target="_blank" rel="noopener">REST 清单 · admin ↗</a>
+          <a href="doc.html?f=assets/rest-inventory-dts-analytics.md" target="_blank" rel="noopener">REST 清单 · analytics ↗</a>
+          <a href="doc.html?f=assets/error-code-inventory.md" target="_blank" rel="noopener">错误码清单 ↗</a>
+          <a href="../intro/index.html" target="_blank" rel="noopener">服务级总览（ref/intro）↗</a>
+        </div>
+      </div>
+
+      <div class="sidebar-footer">
+        <p>资料日期 · 2026-09-14</p>
+        <p>模块图基线 · <code title="da531fb161413fc07917d8075ed0d767118f1734">da531fb16</code></p>
+        <p>链路图基线 · <code title="915097e220817313ac313091d9c22fb21763796c">915097e22</code></p>
+        <button class="logout" id="logout" type="button">退出登录</button>
+      </div>
+    </aside>
+
+    <main class="workspace" id="reader" tabindex="-1">
+      <div class="page-heading">
+        <p class="eyebrow">DTS 原理与设计方案 / <span id="eyebrow-group">模块架构</span></p>
+        <p class="offline-note">图内可缩放、搜索、切换深浅色与导出</p>
+      </div>
+      <section class="reader" aria-labelledby="diagram-title">
+        <header class="reader-header">
+          <div class="reader-title-row">
+            <div class="title-group" aria-live="polite" aria-atomic="true">
+              <span class="chapter" id="chapter">01 / 17</span>
+              <span class="kind" id="kind">模块架构</span>
+              <h1 id="diagram-title">系统模块全景</h1>
+            </div>
+            <div class="actions">
+              <a class="action" id="doc-link" href="doc.html?f=10-module-architecture.md" target="_blank" rel="noopener">设计文档 ↗</a>
+              <a class="action" id="source-link" href="diagrams/10-system-modules.architecture.json" target="_blank" rel="noopener">图源 JSON ↗</a>
+              <a class="action action-primary" id="open-link" href="10-system-modules.html" target="_blank" rel="noopener">独立打开 ↗</a>
+            </div>
+          </div>
+          <p class="reader-description" id="diagram-description">四个后端服务拆到功能模块，看模块之间如何跨服务调用：语义发布、契约读取、任务代理、血缘回写与调度触发。</p>
+        </header>
+        <noscript><p>当前浏览器未启用 JavaScript。可通过左侧导航在下方切换原图；上方标题与辅助链接保持为第一张图。</p></noscript>
+        <iframe class="diagram-frame" id="diagram-frame" name="diagram-frame" src="10-system-modules.html" title="系统模块全景 · 交互图示" allowfullscreen></iframe>
+        <footer class="reader-footer">
+          <p class="reader-hint">先看模块架构（01—06）建立全局，再按关键链路（07—17）追踪模块间的调用时序。</p>
+          <div class="stepper" aria-label="顺序阅读">
+            <button class="action" id="previous" type="button" disabled>← 上一张</button>
+            <button class="action" id="next" type="button" disabled>下一张 →</button>
+          </div>
+        </footer>
+      </section>
+    </main>
+  </div>
+  <script>
+    (() => {
+      'use strict';
+      const topics = Array.from(document.querySelectorAll('.topic'));
+      const total = String(topics.length).padStart(2, '0');
+      const frame = document.getElementById('diagram-frame');
+      const title = document.getElementById('diagram-title');
+      const kind = document.getElementById('kind');
+      const eyebrowGroup = document.getElementById('eyebrow-group');
+      const description = document.getElementById('diagram-description');
+      const chapter = document.getElementById('chapter');
+      const docLink = document.getElementById('doc-link');
+      const sourceLink = document.getElementById('source-link');
+      const openLink = document.getElementById('open-link');
+      const previous = document.getElementById('previous');
+      const next = document.getElementById('next');
+      let current = -1;
+
+      function docHref(doc) {
+        const [path, hash] = doc.split('#');
+        return 'doc.html?f=' + encodeURIComponent(path) + (hash ? '#' + hash : '');
+      }
+
+      function render(index) {
+        if (index < 0 || index >= topics.length || index === current) return;
+        const topic = topics[index];
+        const path = topic.getAttribute('href');
+        topics.forEach((item, itemIndex) => {
+          if (itemIndex === index) item.setAttribute('aria-current', 'page');
+          else item.removeAttribute('aria-current');
+        });
+        title.textContent = topic.dataset.title;
+        kind.textContent = topic.dataset.kind;
+        eyebrowGroup.textContent = topic.closest('nav').getAttribute('aria-label');
+        description.textContent = topic.dataset.description;
+        chapter.textContent = String(index + 1).padStart(2, '0') + ' / ' + total;
+        docLink.setAttribute('href', docHref(topic.dataset.doc));
+        sourceLink.setAttribute('href', topic.dataset.source);
+        openLink.setAttribute('href', path);
+        frame.setAttribute('title', topic.dataset.title + ' · 交互图示');
+        if (frame.getAttribute('src') !== path) frame.setAttribute('src', path);
+        previous.disabled = index === 0;
+        next.disabled = index === topics.length - 1;
+        document.title = topic.dataset.title + ' · DTS 原理与设计方案';
+        if (window.matchMedia('(min-width: 801px)').matches) topic.scrollIntoView({ block: 'nearest' });
+        current = index;
+      }
+
+      function navigate(index) {
+        if (index < 0 || index >= topics.length) return;
+        window.location.hash = topics[index].dataset.id;
+        render(index);
+      }
+
+      function readHash() {
+        const id = window.location.hash.slice(1);
+        // 仅允许导航中列出的主题，URL 片段不会成为文件路径。
+        const index = topics.findIndex(topic => topic.dataset.id === id);
+        if (id === 'reader' && current >= 0) return;
+        render(index < 0 ? 0 : index);
+      }
+
+      topics.forEach((topic, index) => {
+        topic.addEventListener('click', event => {
+          if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          navigate(index);
+        });
+      });
+      previous.addEventListener('click', () => navigate(current - 1));
+      next.addEventListener('click', () => navigate(current + 1));
+      document.getElementById('logout').addEventListener('click', () => window.location.replace('api/logout'));
+      window.addEventListener('hashchange', readHash);
+      readHash();
+    })();
+  </script>
+  <script src="assets/session-watch.js"></script>
+</body>
+</html>

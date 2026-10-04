@@ -1,0 +1,129 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: dts-ingestion
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://dts-pg:5432/dts_platform}
+    username: ${SPRING_DATASOURCE_USERNAME:dts}
+    password: ${SPRING_DATASOURCE_PASSWORD:dts}
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 60MB
+      # Sprint-37 H1: 消除上传明文落宿主机磁盘层。threshold ≥ max-file-size 使被允许的上传
+      # 全部留内存、根本不写磁盘。超阈值与 POI 解析的临时文件依赖容器内
+      # JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/apptmp(tmpfs) 重定向，不落宿主机 overlay2 diff 层。
+      file-size-threshold: 50MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        format_sql: false
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
+
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - health
+          - info
+
+# This release has one deployment-wide audit owner. The durable outbox keeps
+# tenant_id for ownership and replay isolation, but it is not externally selectable.
+auditing:
+  tenant-id: default
+
+dts:
+  ingestion:
+    enabled: true
+    # Pairwise credentials are necessary but not sufficient: code-owned service/method/path policy also applies.
+    trusted-service-tokens:
+      dts-platform: ${DTS_INGESTION_FROM_PLATFORM_TOKEN:${DTS_PLATFORM_TO_INGESTION_TOKEN:}}
+      dts-airflow: ${DTS_AIRFLOW_TO_INGESTION_TOKEN:}
+    api:
+      max-pages: ${DTS_INGESTION_API_MAX_PAGES:1000}
+      connect-timeout: ${DTS_INGESTION_API_CONNECT_TIMEOUT:10s}
+      read-timeout: ${DTS_INGESTION_API_READ_TIMEOUT:60s}
+      execution-timeout: ${DTS_INGESTION_API_EXECUTION_TIMEOUT:30m}
+      max-response-bytes: ${DTS_INGESTION_API_MAX_RESPONSE_BYTES:32MB}
+      table-prefix: ${DTS_INGESTION_API_TABLE_PREFIX:ods_api_}
+      allow-http: ${DTS_INGESTION_API_ALLOW_HTTP:false}
+      allowed-hosts: ${DTS_INGESTION_API_ALLOWED_HOSTS:}
+      retry:
+        max-retries: ${DTS_INGESTION_API_RETRY_MAX_RETRIES:3}
+        base-backoff: ${DTS_INGESTION_API_RETRY_BASE_BACKOFF:200ms}
+        backoff-cap: ${DTS_INGESTION_API_RETRY_BACKOFF_CAP:30s}
+      rate-limit:
+        default-rps: ${DTS_INGESTION_API_RATE_LIMIT_DEFAULT_RPS:0}
+        burst-multiplier: ${DTS_INGESTION_API_RATE_LIMIT_BURST_MULTIPLIER:2}
+        max-concurrency: ${DTS_INGESTION_API_RATE_LIMIT_MAX_CONCURRENCY:1}
+      landing:
+        batch-size: ${DTS_INGESTION_API_LANDING_BATCH_SIZE:500}
+      executor:
+        pool-size: ${DTS_INGESTION_API_EXECUTOR_POOL_SIZE:4}
+        per-task-concurrency: ${DTS_INGESTION_API_EXECUTOR_PER_TASK_CONCURRENCY:1}
+    # Sprint-28 F4 新增:出站客户端配置(ingestion 调 platform)
+    outbound:
+      platform:
+        enabled: ${DTS_INGESTION_OUTBOUND_PLATFORM_ENABLED:true}
+        base-url: ${DTS_INGESTION_OUTBOUND_PLATFORM_BASE_URL:${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}}
+        api-path: ${DTS_INGESTION_OUTBOUND_PLATFORM_API_PATH:${DTS_PLATFORM_API_PATH:/api}}
+        # 三级 fallback: 新独立 env -> 旧 platform 专用 env -> 通用 admin token
+        service-token: ${DTS_INGESTION_TO_PLATFORM:${DTS_PLATFORM_SERVICE_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}}
+        # ingestion 自报身份,默认 dts-ingestion(对应 platform 入站 trustedServices.dts-ingestion)
+        service-name: ${DTS_INGESTION_OUTBOUND_SERVICE_NAME:dts-ingestion}
+  addax:
+    enabled: ${DTS_ADDAX_ENABLED:true}
+    job-dir: ${DTS_ADDAX_JOB_DIR:/opt/airflow/dags}
+    image: ${IMAGE_ADDAX:dts-addax:6.0.8}
+  airflow:
+    enabled: ${DTS_AIRFLOW_ENABLED:true}
+    base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
+    api-path: ${DTS_AIRFLOW_API_PATH:/api/v1}
+    username: ${DTS_AIRFLOW_USERNAME:}
+    password: ${DTS_AIRFLOW_PASSWORD:}
+    dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
+    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
+    dag-ready-wait-seconds: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:60}
+    dag-ready-poll-seconds: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:3}
+    dag-trigger-retry-seconds: ${DTS_AIRFLOW_DAG_TRIGGER_RETRY_SECONDS:15}
+    dag-not-found-retry-wait-seconds: ${DTS_AIRFLOW_DAG_NOT_FOUND_RETRY_WAIT_SECONDS:60}
+    execution-poll-enabled: ${DTS_AIRFLOW_EXECUTION_POLL_ENABLED:true}
+    execution-poll-interval-ms: ${DTS_AIRFLOW_EXECUTION_POLL_INTERVAL_MS:15000}
+    execution-poll-batch-size: ${DTS_AIRFLOW_EXECUTION_POLL_BATCH_SIZE:50}
+  openmetadata:
+    enabled: ${DTS_OPENMETADATA_ENABLED:${DTS_PLATFORM_OPENMETADATA_ENABLED:true}}
+    base-url: ${DTS_OPENMETADATA_BASE_URL:${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}}
+    api-path: ${DTS_OPENMETADATA_API_PATH:/api/v1}
+    auth-token: ${DTS_OPENMETADATA_AUTH_TOKEN:${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:}}
+    table-fields: ${DTS_OPENMETADATA_TABLE_FIELDS:${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain}}
+    source-service-name: ${DTS_OPENMETADATA_SOURCE_SERVICE_NAME:}
+    source-service-type: ${DTS_OPENMETADATA_SOURCE_SERVICE_TYPE:}
+    destination-service-name: ${DTS_OPENMETADATA_DESTINATION_SERVICE_NAME:${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:}}
+    destination-service-type: ${DTS_OPENMETADATA_DESTINATION_SERVICE_TYPE:Postgres}
+    destination-database: ${DTS_OPENMETADATA_DESTINATION_DATABASE:${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:}}
+    destination-schema: ${DTS_OPENMETADATA_DESTINATION_SCHEMA:${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:}}
+    source-database: ${DTS_OPENMETADATA_SOURCE_DATABASE:}
+    source-schema: ${DTS_OPENMETADATA_SOURCE_SCHEMA:}
+    ingestion-enabled: ${DTS_OPENMETADATA_INGESTION_ENABLED:true}
+    ingestion-pipeline-prefix: ${DTS_OPENMETADATA_INGESTION_PREFIX:dts_ingest}
+    ingestion-default-schedule: ${DTS_OPENMETADATA_INGESTION_SCHEDULE:0 * * * *}
+  # @deprecated Sprint-28 起 dts.platform.service-token 仍作为旧 env 兼容入口,
+  # 新代码应使用 dts.ingestion.outbound.platform.service-token(见上方 dts.ingestion.outbound),Sprint-29 移除此段。
+  platform:
+    service-token: ${DTS_PLATFORM_SERVICE_TOKEN:${DTS_ADMIN_SERVICE_TOKEN:}}
+    infra:
+      encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:}
+      key-version: ${DTS_INFRA_KEY_VERSION:v1}

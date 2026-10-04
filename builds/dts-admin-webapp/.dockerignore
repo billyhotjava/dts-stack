@@ -1,0 +1,21 @@
+# Common ignores for Docker build context (Web app)
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+*.log
+
+# Package managers / caches
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Local env/config
+.env
+.env.*
+vercel.json

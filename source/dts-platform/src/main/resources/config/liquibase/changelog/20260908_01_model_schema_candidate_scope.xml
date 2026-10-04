@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+ <changeSet id="20260908-01-model-schema-candidate-scope" author="codex" dbms="postgresql">
+  <preConditions onFail="HALT" onError="HALT">
+   <indexExists indexName="uk_model_release_candidate_active_plan"/>
+   <indexExists indexName="uk_model_release_candidate_entry_active_claim"/>
+  </preConditions>
+  <comment>Separate schema-only single-model admission from ordinary plan publication; retain model claims and history.</comment>
+  <sql splitStatements="false"><![CDATA[
+   ALTER TABLE modeling_model_release_candidate DROP CONSTRAINT ck_model_release_candidate_materialization_context;
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_materialization_context
+                CHECK (
+                    origin IN ('SINGLE_MODEL_INTENT', 'BATCH_WORKBENCH', 'SCHEMA_ONLY_INTENT')
+                    AND (
+                        (
+                            execution_target_key IS NULL
+                            AND adapter IS NULL
+                            AND profile_key IS NULL
+                            AND target_name IS NULL
+                        )
+                        OR (
+                            btrim(execution_target_key) <> ''
+                            AND execution_target_key = btrim(execution_target_key)
+                            AND btrim(adapter) <> ''
+                            AND adapter = btrim(adapter)
+                            AND btrim(profile_key) <> ''
+                            AND profile_key = btrim(profile_key)
+                            AND btrim(target_name) <> ''
+                            AND target_name = btrim(target_name)
+                        )
+                    )
+                );
+   DROP INDEX uk_model_release_candidate_active_plan;
+   CREATE UNIQUE INDEX uk_model_release_candidate_active_plan
+    ON modeling_model_release_candidate (tenant_id, plan_id)
+    WHERE origin <> 'SCHEMA_ONLY_INTENT'
+      AND status NOT IN ('REJECTED','ROLLED_BACK','STALE','CANCELLED','PUBLISHED');
+  ]]></sql>
+  <rollback>
+   <sql splitStatements="false"><![CDATA[
+    DO $$ BEGIN
+     IF EXISTS (SELECT 1 FROM modeling_model_release_candidate WHERE origin = 'SCHEMA_ONLY_INTENT') THEN
+      RAISE EXCEPTION 'ROLLBACK_BLOCKED_SCHEMA_CANDIDATE_HISTORY_EXISTS';
+     END IF;
+    END $$;
+    ALTER TABLE modeling_model_release_candidate DROP CONSTRAINT ck_model_release_candidate_materialization_context;
+            ALTER TABLE modeling_model_release_candidate
+                ADD CONSTRAINT ck_model_release_candidate_materialization_context
+                CHECK (
+                    origin IN ('SINGLE_MODEL_INTENT', 'BATCH_WORKBENCH')
+                    AND (
+                        (
+                            execution_target_key IS NULL
+                            AND adapter IS NULL
+                            AND profile_key IS NULL
+                            AND target_name IS NULL
+                        )
+                        OR (
+                            btrim(execution_target_key) <> ''
+                            AND execution_target_key = btrim(execution_target_key)
+                            AND btrim(adapter) <> ''
+                            AND adapter = btrim(adapter)
+                            AND btrim(profile_key) <> ''
+                            AND profile_key = btrim(profile_key)
+                            AND btrim(target_name) <> ''
+                            AND target_name = btrim(target_name)
+                        )
+                    )
+                );
+    DROP INDEX uk_model_release_candidate_active_plan;
+    CREATE UNIQUE INDEX uk_model_release_candidate_active_plan
+     ON modeling_model_release_candidate (tenant_id, plan_id)
+     WHERE status NOT IN ('REJECTED','ROLLED_BACK','STALE','CANCELLED','PUBLISHED');
+   ]]></sql>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

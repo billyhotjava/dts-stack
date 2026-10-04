@@ -1,0 +1,13 @@
+log:
+  level: INFO
+  filePath: "/logs/traefik/traefik.log"
+
+accessLog:
+  filePath: "/logs/traefik/access.log"
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: dts-core
+  file:
+    filename: "/etc/traefik/dynamic/traefik-dynamic.yml"

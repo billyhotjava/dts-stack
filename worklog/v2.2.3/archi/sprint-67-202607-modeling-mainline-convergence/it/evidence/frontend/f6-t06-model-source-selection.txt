@@ -1,0 +1,133 @@
+Sprint-67 F6-T06 — model source selection, generated system codes and submit-time revalidation
+Date: 2026-07-22
+
+Scope
+- Query only the selected WarehousePlan's confirmed, current and available source inventory.
+- Select a source by business-readable label; derive bindingId/ref/kind/resolvedVersion from the choice.
+- Preserve user-owned layer/role/alias/join semantics while replacing server-owned source identity.
+- Generate dimension and hierarchy system codes and render them read-only.
+- Keep stale saved sources visible as disabled diagnostics with a canonical repair route.
+- Revalidate all submitted source identity against current backend truth; never trust hidden client fields.
+- Let a user register a concrete catalog table from an ACTIVE, successfully verified JDBC connection without leaving the current plan.
+- Keep source registration inside the active model create/edit form and reload that form's source choices after a successful save.
+- Load the authoritative plan lifecycle and policy before enabling embedded source maintenance; unknown state is read-only.
+- Invalidate the verification timestamp when connection configuration changes; require a fresh successful test before registration.
+- Enforce plan-object authorization, authoritative department scope and exact department matching on the complete candidate/catalog chain.
+
+TDD RED
+Command:
+  cd source/dts-platform-webapp
+  node --test \
+    src/pages/modeling/modelSpecSourceSelection.test.ts \
+    src/pages/modeling/modelSpecSystemCode.test.ts \
+    src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts
+Result:
+  EXPECTED RED; tests=11, pass=0, fail=11. The failures exposed the missing source selector, automatic association, plan-switch clearing, stale-source diagnostics and generated-code contract.
+
+Inline model-form repair RED / GREEN
+Command:
+  cd source/dts-platform-webapp
+  node --test src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts
+Results:
+  EXPECTED RED before implementation; tests=13, pass=10, fail=3. Missing contracts were the embedded manager, persistent management entry and authoritative lifecycle/policy gate.
+  PASS after implementation; tests=13, pass=13, fail=0.
+
+Save lifecycle review RED / GREEN
+Commands:
+  cd source/dts-platform-webapp
+  node --test src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts
+  node --test src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts src/pages/modeling/warehousePlanSourceRegistration.test.ts
+Results:
+  EXPECTED RED after review; tests=15, pass=13, fail=2. A catalog CANDIDATE could close the embedded manager too early, and the Modal could be dismissed during a source mutation.
+  PASS after implementation; targeted contracts and behavior tests=22, pass=22, fail=0. Candidate decisions keep the manager open; X, mask and Escape are disabled while saving.
+
+Authoritative parent-refresh handoff RED / GREEN
+Command:
+  cd source/dts-platform-webapp
+  node --test src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts
+Results:
+  EXPECTED RED after final review; tests=16, pass=14, fail=2. Parent callbacks did not return their refreshed inventory, and manual refresh retries had no latest-request guard.
+  PASS after implementation; tests=16, pass=16, fail=0. The manager closes only after a successful latest authoritative refresh with no remaining CANDIDATE; failures remain visible with a guarded retry.
+
+Focused frontend GREEN
+Command:
+  cd source/dts-platform-webapp
+  node --test \
+    src/pages/modeling/modelSpecSourceSelection.test.ts \
+    src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts \
+    src/pages/modeling/modelSpecSystemCode.test.ts \
+    src/pages/modeling/modelSpecWorkbench.test.ts \
+    src/pages/modeling/modelSpecV2Contract.test.ts \
+    src/pages/modeling/WarehousePlanSourcesTab.source-contract.test.ts \
+    src/pages/modeling/warehousePlanSourceRegistration.test.ts
+Result:
+  PASS; tests=80, pass=80, fail=0.
+
+Backend submit-time resolver regression
+Command:
+  cd source/dts-platform
+  ./mvnw -Dtest=ModelSpecApplicationServiceTest,ModelSpecSourceValidationAdapterTest,ModelSpecSourceBindingLockIT test
+Result:
+  PASS; tests=31, failures=0, errors=0, skipped=0; BUILD SUCCESS.
+  The PostgreSQL IT observed the concurrent writer waiting on a real Lock until the FOR SHARE validation transaction released it.
+
+Backend source-registration and authorization closure
+Commands:
+  cd source/dts-platform
+  ./mvnw -Dtest=WarehousePlanSourceInventoryApplicationServiceIT test
+  ./mvnw -Dtest=CatalogMetadataServiceDepartmentScopeTest,CatalogDatasetMetadataDepartmentScopeTest,InfraManagementServiceTest,WarehousePlanAuthorizationGuardTest,WarehousePlanResourceTest,WarehousePlanModelCandidateResourceTest test
+  ./mvnw -Dtest=InfraManagementServiceTest,SourceReferenceResolverAdapterTest,WarehousePlanModelCandidateResourceTest test
+Results:
+  PASS; source registration fail-closed gate=4/4.
+  PASS; plan-object, catalog and authoritative-department chain=44/44.
+  PASS; final config-invalidation, resolver and candidate-maintenance regression=23/23; BUILD SUCCESS.
+
+Core lint
+Command:
+  cd source/dts-platform-webapp
+  pnpm exec biome check --formatter-enabled=false --assist-enabled=false \
+    src/api/platformApi.ts \
+    src/pages/modeling/ModelSpecDetailPage.tsx \
+    src/pages/modeling/WarehousePlanSourcesTab.tsx \
+    src/pages/modeling/WarehousePlanSourcesTab.source-contract.test.ts \
+    src/pages/modeling/warehousePlanSourceRegistration.ts \
+    src/pages/modeling/warehousePlanSourceRegistration.test.ts \
+    src/pages/modeling/components/ModelSpecCreateDrawer.tsx \
+    src/pages/modeling/components/ModelSpecSourceInventoryModal.tsx \
+    src/pages/modeling/modelSpecSourceSelection.ts \
+    src/pages/modeling/modelSpecSourceSelection.test.ts \
+    src/pages/modeling/modelSpecSourceSelection.source-contract.test.ts \
+    src/pages/modeling/modelSpecSystemCode.ts \
+    src/pages/modeling/modelSpecSystemCode.test.ts \
+    src/pages/modeling/modelSpecWorkbench.ts
+Result:
+  PASS; 14 files checked, no diagnostics.
+
+TypeScript / production build
+Commands:
+  cd source/dts-platform-webapp
+  pnpm exec tsc --noEmit --pretty false
+  pnpm build
+Result:
+  PASS; typecheck exit=0; production build exit=0; Vite transformed 10594 modules and built in 1m59s.
+  Non-blocking existing warnings: caniuse-lite age and large chunk advisory.
+
+GitNexus changed-scope audit
+Status:
+  PASS. mcp__gitnexus__detect_changes(repo="s10-stack", scope="all") reported
+  risk_level=low and affected_processes=[]. The shared dirty worktree contained
+  61 indexed changed files / 388 changed symbols, including unrelated pre-existing
+  and parallel changes, so these totals are not claimed as F6-T06-only ownership.
+
+Real Chrome 95 / API / PostgreSQL
+Status:
+  PENDING. Validate real-login create/edit, plan switching, empty/error repair, stale/version-drift rejection, forged identity rejection and 390px layout. Mock API evidence must not be used as a substitute.
+
+Current boundary
+- A connection alone is not a selectable model source. The concrete table/node must be metadata-synced, resolvable and confirmed in the current plan.
+- An empty plan source inventory is repaired from the current model form. A completed confirmation reloads the current plan's selectable sources and then closes the embedded manager.
+- Catalog assets remain in the embedded manager while still CANDIDATE; the user must confirm or exclude them. A source mutation cannot be interrupted by closing or destroying the Modal.
+- Parent source refresh returns authoritative inventory or null. Refresh failure and stale retry responses cannot close or overwrite a newer manager session.
+- ETL/ELT execution is not a prerequisite for model design. Implementation, quality and publication evidence remain later independent gates.
+- A confirmed source version is never silently upgraded. The user must explicitly adopt the current version before a new ModelSpec revision can be saved.
+- T06 remains IN_PROGRESS until real deployed Chrome 95/API/PostgreSQL evidence is attached.

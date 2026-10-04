@@ -1,0 +1,26 @@
+{
+  "cookies": [],
+  "origins": [
+    {
+      "origin": "http://127.0.0.1:19349",
+      "localStorage": [
+        {
+          "name": "platformUserStore",
+          "value": "{\"state\":{\"userInfo\":{\"username\":\"platform-token-user\",\"fullName\":\"业务运维管理员\",\"roles\":[\"ROLE_OP_ADMIN\"],\"permissions\":[],\"enabled\":true},\"userToken\":{\"accessToken\":\"platform-playwright-token\",\"refreshToken\":\"\"}},\"version\":0}"
+        },
+        {
+          "name": "userStore",
+          "value": "{\"state\":{\"userInfo\":{\"username\":\"platform-token-user\",\"fullName\":\"业务运维管理员\",\"roles\":[\"ROLE_OP_ADMIN\"],\"permissions\":[],\"enabled\":true},\"userToken\":{\"accessToken\":\"platform-playwright-token\",\"refreshToken\":\"\"}},\"version\":0}"
+        },
+        {
+          "name": "dts.platform.session.loginTs",
+          "value": "1774249965516"
+        },
+        {
+          "name": "dts.platform.session.lastActivity",
+          "value": "1774249965516"
+        }
+      ]
+    }
+  ]
+}

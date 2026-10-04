@@ -1,0 +1,15 @@
+Sprint-67 F3-T04 SUMMARY/APPLICATION 表单证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+- SUMMARY 默认 DWS，APPLICATION 默认 ADS；
+- 两类表单都把所选上游投影为 modelSpecId + 当前 revision；
+- SUMMARY 保留聚合输出粒度，APPLICATION 另要求消费场景和输出字段；
+- 两类表单均不出现 objectId/processId；
+- modelSpecWorkbench 测试覆盖两类命令投影，本批 TypeScript 聚焦测试 33/33 PASS；
+- Chrome95 legacy production build PASS。
+
+2026-07-20 复核补证：
+- SUMMARY/APPLICATION 详情在原模型设计页展示 revision-pinned 上游图，不增加第二关系编辑入口；
+- CURRENT、STALE、UNKNOWN 分别显示“当前版本”“版本漂移”“引用不可用”，受限节点不透出正文；
+- TypeScript ModelSpec 契约与页面 source-contract 43/43 PASS；legacy production build PASS（10,586 modules transformed）。

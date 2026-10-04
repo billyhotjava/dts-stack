@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+ <changeSet id="20260910-01-indicator-analysis-audit-catalog" author="codex">
+  <sql><![CDATA[
+   INSERT INTO audit_module_catalog(source_system,module_key,module_name,parent_module_key,owner,enabled,order_value,version,updated_at)
+   VALUES ('platform','governance.indicator','数据指标','governance','platform',true,5000,'indicator-analysis-v1',now())
+   ON CONFLICT(source_system,module_key) DO NOTHING;
+   INSERT INTO audit_action_catalog(source_system,action_code,module_key,module_name,operation_code,operation_name,operation_kind,resource_type,allow_empty_targets,enabled,version,updated_at)
+   SELECT 'platform',action,'governance.indicator','数据指标',action,label,kind,'governance.indicator',false,true,'indicator-analysis-v1',now()
+   FROM (VALUES ('GOV_INDICATOR_REGISTER','注册指标分析版本','UPDATE'),('GOV_INDICATOR_CALCULATE','计算指标','QUERY'),('GOV_INDICATOR_PUBLISH','发布指标版本','UPDATE')) AS actions(action,label,kind)
+   ON CONFLICT(source_system,action_code) DO UPDATE SET module_key=EXCLUDED.module_key,module_name=EXCLUDED.module_name,operation_name=EXCLUDED.operation_name,version=EXCLUDED.version,updated_at=EXCLUDED.updated_at;
+  ]]></sql>
+  <rollback><sql>SELECT 1;</sql></rollback>
+ </changeSet>
+</databaseChangeLog>

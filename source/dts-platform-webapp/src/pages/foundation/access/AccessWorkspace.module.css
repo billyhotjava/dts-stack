@@ -1,0 +1,79 @@
+.workspace {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+.tableShell {
+	min-width: 0;
+	padding: 16px;
+	border: 0;
+	border-radius: 16px;
+	background: var(--color-bg-container, #fff);
+	box-shadow:
+		0 0 0 1px rgba(15, 23, 42, 0.04),
+		0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.toolbar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 14px;
+}
+
+.search {
+	width: min(340px, 100%);
+}
+
+.select {
+	min-width: 150px;
+}
+
+.toolbarSpacer {
+	flex: 1;
+}
+
+.nameButton {
+	height: auto;
+	padding: 0;
+	font-weight: 600;
+	text-align: left;
+}
+
+.kindMark {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-weight: 500;
+}
+
+.kindDot {
+	width: 7px;
+	height: 7px;
+	border-radius: 2px;
+	background: currentColor;
+}
+
+.database {
+	color: #1677ff;
+}
+
+.api {
+	color: #08979c;
+}
+
+.file {
+	color: #d46b08;
+}
+
+@media (max-width: 900px) {
+	.intro {
+		flex-direction: column;
+	}
+
+	.toolbarSpacer {
+		display: none;
+	}
+}

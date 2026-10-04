@@ -1,0 +1,33 @@
+{
+  "url": "http://127.0.0.1:4173/#/studio/sql-modeling",
+  "generatedAt": "2026-06-18T17:26:00.156Z",
+  "results": [
+    {
+      "viewport": {
+        "name": "desktop",
+        "width": 1366,
+        "height": 768
+      },
+      "hasWorkbench": 1,
+      "hasStandard": 1,
+      "hasBinding": 1,
+      "errors": [],
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/sql-modeling-mocked-desktop-1366x768.png",
+      "sampleText": "BI数智平台\n机密 (CONFIDENTIAL)\n收起\n数据平台\n工作台\n搜索模块与页面\nCtrl K\nCommand Palette\n\nSearch for a command to run...\n\n逻辑建模\ndbt 已连接\n模 型\n批量删除\n保 存\n断链诊断\n插 入\n编 译\n测 试\n构 建\n上 线\n更 多\n设 置\n同步状态:\nmanifest\n已同步\nrun_results\n已同步\n最近构建\nSUCCESS\n| 模型 +0/~1, 字段 3, 血缘 +0/-0\n上次同步: -\n项目目录\n已选 0 项\n树 0 / 治理 0 / 列表 0\n全选当前结果\n删除所选\n订单主题域\nDWD_层 (1)\ndwd_order_detail\ndwd_order_detail\nDWD\nmodels/dwd/dwd_order_detail.sql\n诊 断\n刷 新\n流水线\n编译\n测试\n提交变更\n发布上线\n草稿\n1\nselect order_id, order_status, customer_id from {{ \nref('stg_order') }}\n模型\n项目\n模型诊断\n打开\n查看 ODS → DWD → DWS 断链提示、上游行数和推荐排查 SQL。\n数据源\nPlatform PostgreSQL\n来源系统\nplatform\n物化方式\ntable\nSchema\ndwd\n标签\n订单,标准映射\n契约版本\n-\n语义发布\n发布到 Analytics\n指标/维度\n1 / 2\n影响报表\n0\n影响字段\n3\n字段标准绑定\n待映射\n当前模型已识别 3 个字段，已绑定 2 个，待映射 1 个。 公共码表 seed 和字段标准会写入 dbt schema.yml，并进入标准门禁。\n自动匹配数据元\n标准门禁\n生成 schema.yml\n字段列表\n字段\n\t数据元标准\n \n\t\n \n\n\norder_id\nvarchar(64)\n\t\nSTD_ORDER_ID\n已绑定\n\n\norder_status\nvarchar(32)\n\t\nSTD_ORDER_STATUS\nORDER_STATUS\n已绑定\n\n\ncustomer_id\nvarchar(64)\n\t\n待映射\n数据预览\n操作记录\n操作说明\n加载预览\n100 行\n暂无数据\n点击「加载预览」查询模型输出数据"
+    },
+    {
+      "viewport": {
+        "name": "mobile",
+        "width": 390,
+        "height": 844,
+        "isMobile": true
+      },
+      "hasWorkbench": 1,
+      "hasStandard": 1,
+      "hasBinding": 1,
+      "errors": [],
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-50-202606/it/screenshots/sql-modeling-mocked-mobile-390x844.png",
+      "sampleText": "菜单\nCtrl K\nCommand Palette\n\nSearch for a command to run...\n\n逻辑建模\ndbt 已连接\n模 型\n批量删除\n保 存\n断链诊断\n插 入\n编 译\n测 试\n构 建\n上 线\n更 多\n设 置\n同步状态:\nmanifest\n已同步\nrun_results\n已同步\n最近构建\nSUCCESS\n| 模型 +0/~1, 字段 3, 血缘 +0/-0\n上次同步: -\n项目目录\n已选 0 项\n树 0 / 治理 0 / 列表 0\n全选当前结果\n删除所选\n订单主题域\nDWD_层 (1)\ndwd_order_detail\ndwd_order_detail\nDWD\nmodels/dwd/dwd_order_detail.sql\n诊 断\n刷 新\n流水线\n编译\n测试\n提交变更\n发布上线\n草稿\n1\nselect order_id, order_status, \ncustomer_id from {{ ref\n('stg_order') }}\n模型\n项目\n模型诊断\n打开\n查看 ODS → DWD → DWS 断链提示、上游行数和推荐排查 SQL。\n数据源\nPlatform PostgreSQL\n来源系统\nplatform\n物化方式\ntable\nSchema\ndwd\n标签\n订单,标准映射\n契约版本\n-\n语义发布\n发布到 Analytics\n指标/维度\n1 / 2\n影响报表\n0\n影响字段\n3\n字段标准绑定\n待映射\n当前模型已识别 3 个字段，已绑定 2 个，待映射 1 个。 公共码表 seed 和字段标准会写入 dbt schema.yml，并进入标准门禁。\n自动匹配数据元\n标准门禁\n生成 schema.yml\n字段列表\n字段\n\t数据元标准\n \n\t\n \n\n\norder_id\nvarchar(64)\n\t\nSTD_ORDER_ID\n已绑定\n\n\norder_status\nvarchar(32)\n\t\nSTD_ORDER_STATUS\nORDER_STATUS\n已绑定\n\n\ncustomer_id\nvarchar(64)\n\t\n待映射\n数据预览\n操作记录\n操作说明\n加载预览\n100 行\n暂无数据\n点击「加载预览」查询模型输出数据"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/benchmark:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/stages:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/alerts/trend:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/skills:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/runs?limit=20:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/batches:0
+[ 4140366ms] [ERROR] Failed to load resource: net::ERR_CONNECTION_REFUSED @ http://127.0.0.1:50080/api/batches/metrics-trend:0

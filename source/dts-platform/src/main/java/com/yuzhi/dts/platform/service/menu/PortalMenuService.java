@@ -1,0 +1,460 @@
+package com.yuzhi.dts.platform.service.menu;
+
+import com.yuzhi.dts.platform.service.menu.PortalMenuClient.RemoteMenuNode;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+
+@Service
+public class PortalMenuService {
+
+    private static final Logger log = LoggerFactory.getLogger(PortalMenuService.class);
+
+    private final PortalMenuClient client;
+
+    public PortalMenuService(PortalMenuClient client) {
+        this.client = client;
+    }
+
+    public List<PortalMenuTreeItem> getMenuTree() {
+        // Forward the current user's roles (sanitized) so dts-admin can filter precisely.
+        List<String> roles = sanitizeAudienceRoles(currentAuthorities());
+        // When user has no roles, return empty menu tree — no menus should be visible.
+        // Previously this fell back to fetchMenuTree() (no audience filter) which could
+        // leak menus to unauthenticated or role-less users.
+        if (roles == null || roles.isEmpty()) {
+            return List.of();
+        }
+        List<RemoteMenuNode> remote = client.fetchMenuTreeForAudience(roles, List.of());
+        java.util.Set<String> activeIds = flattenIds(remote);
+        java.util.Set<String> visited = new java.util.LinkedHashSet<>();
+        List<PortalMenuTreeItem> mapped = remote
+            .stream()
+            .map(node -> mapTree(node, null, null, activeIds, visited))
+            .filter(Objects::nonNull)
+            .collect(Collectors.toCollection(ArrayList::new));
+        return mapped;
+    }
+
+    public List<PortalMenuFlatItem> getFlatMenuList() {
+        List<PortalMenuTreeItem> tree = getMenuTree();
+        if (tree != null) {
+            tree = tree.stream().filter(node -> node != null && !node.deleted()).collect(Collectors.toCollection(ArrayList::new));
+        }
+        List<PortalMenuFlatItem> flat = new ArrayList<>();
+        for (PortalMenuTreeItem root : tree) {
+            flatten(root, "", flat);
+        }
+        return flat;
+    }
+
+    private List<String> currentAuthorities() {
+        try {
+            org.springframework.security.core.Authentication auth = org.springframework.security.core.context.SecurityContextHolder
+                .getContext()
+                .getAuthentication();
+            if (auth == null || auth.getAuthorities() == null) return List.of();
+            return auth
+                .getAuthorities()
+                .stream()
+                .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        } catch (Exception ex) {
+            log.debug("No authorities found in SecurityContext: {}", ex.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Sanitize audience roles before forwarding to dts-admin:
+     * - Normalize to upper-case with ROLE_ prefix
+     * - If user has any specific roles in addition to ROLE_USER, drop ROLE_USER to avoid broad default menus
+     */
+    private List<String> sanitizeAudienceRoles(List<String> authorities) {
+        if (authorities == null || authorities.isEmpty()) return List.of();
+        List<String> normalized = authorities
+            .stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .map(s -> s.toUpperCase(java.util.Locale.ROOT))
+            .map(s -> s.startsWith("ROLE_") ? s : "ROLE_" + s)
+            .distinct()
+            .collect(Collectors.toCollection(ArrayList::new));
+        boolean hasSpecific = normalized.stream().anyMatch(r -> !"ROLE_USER".equals(r));
+        if (hasSpecific) {
+            normalized.remove("ROLE_USER");
+        }
+        return normalized;
+    }
+
+    public List<PortalMenuTreeNode> getMenuTreeView() {
+        return getMenuTree().stream().map(item -> toTreeNode(item, null)).collect(Collectors.toCollection(ArrayList::new));
+    }
+
+    public Map<String, Object> createMenu(Map<String, Object> payload) {
+        return client.createPortalMenu(payload);
+    }
+
+    public Map<String, Object> updateMenu(Long id, Map<String, Object> payload) {
+        return client.updatePortalMenu(id, payload);
+    }
+
+    public Map<String, Object> deleteMenu(Long id) {
+        return client.deletePortalMenu(id);
+    }
+
+    private void flatten(PortalMenuTreeItem node, String parentId, List<PortalMenuFlatItem> out) {
+        if (node.deleted()) {
+            return;
+        }
+        String id = node.id() != null ? String.valueOf(node.id()) : node.generatedId();
+        String fullPath = node.fullPath();
+        out.add(
+            new PortalMenuFlatItem(
+                id,
+                parentId != null ? parentId : "",
+                node.name(),
+                node.code(),
+                node.sortOrder(),
+                node.type(),
+                fullPath != null ? fullPath : "",
+                node.component(),
+                node.icon(),
+                node.metadata(),
+                node.deleted()
+            )
+        );
+
+        for (PortalMenuTreeItem child : node.children()) {
+            flatten(child, id, out);
+        }
+    }
+
+    private PortalMenuTreeItem mapTree(
+        RemoteMenuNode node,
+        PortalMenuTreeItem parent,
+        String inheritedPath,
+        java.util.Set<String> activeIds,
+        java.util.Set<String> visited
+    ) {
+        if (Boolean.TRUE.equals(node.getDeleted())) {
+            return null;
+        }
+        // Platform-side hard removal for legacy portal menus:
+        // - security.threeAdmins: 三员管理与职责分离已在 dts-admin 管理端实现
+        if (isDisabledForPlatform(node)) {
+            return null;
+        }
+        Long id = parseLong(node.getId());
+        if (activeIds != null && id != null && !activeIds.isEmpty()) {
+            if (!activeIds.contains(String.valueOf(id))) {
+                return null;
+            }
+        }
+        Long parentId = parseLong(node.getParentId());
+        String pathSegment = normalizePathSegment(node.getPath());
+        String fullPath = buildFullPath(inheritedPath, pathSegment);
+        String dedupeKey = dedupeKey(id, fullPath);
+        if (visited != null && dedupeKey != null) {
+            if (visited.contains(dedupeKey)) {
+                return null;
+            }
+            visited.add(dedupeKey);
+        }
+        List<PortalMenuTreeItem> children = new ArrayList<>();
+        PortalMenuTreeItem current = new PortalMenuTreeItem(
+            id,
+            parent != null ? parent.id() : parentId,
+            node.getName(),
+            node.getCode(),
+            node.getOrder(),
+            deriveType(node, children),
+            pathSegment,
+            fullPath,
+            node.getComponent(),
+            node.getIcon(),
+            node.getMetadata(),
+            Boolean.TRUE.equals(node.getDeleted()),
+            children,
+            generateFallbackId(node, parent)
+        );
+
+        if (node.getChildren() != null && !node.getChildren().isEmpty()) {
+            List<RemoteMenuNode> sortedChildren = node
+                .getChildren()
+                .stream()
+                .filter(Objects::nonNull)
+                .sorted(this::compareNodes)
+                .collect(Collectors.toList());
+            for (RemoteMenuNode child : sortedChildren) {
+                PortalMenuTreeItem mappedChild = mapTree(child, current, fullPath, activeIds, visited);
+                if (mappedChild != null) {
+                    children.add(mappedChild);
+                }
+            }
+        }
+
+        return current;
+    }
+
+    private boolean isDisabledForPlatform(RemoteMenuNode node) {
+        if (node == null) return true;
+        String metadata = node.getMetadata();
+        String name = node.getName();
+        String path = node.getPath();
+        String component = node.getComponent();
+        String metaLower = metadata == null ? "" : metadata.toLowerCase(java.util.Locale.ROOT);
+        String nameLower = name == null ? "" : name.toLowerCase(java.util.Locale.ROOT);
+        String pathLower = path == null ? "" : path.toLowerCase(java.util.Locale.ROOT);
+        String componentLower = component == null ? "" : component.toLowerCase(java.util.Locale.ROOT);
+
+        // Preferred: sectionKey / entryKey in metadata (seeded menus always include these).
+        if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"threeadmins\"")) {
+            return true;
+        }
+        if (metaLower.contains("\"sectionkey\":\"security\"") && metaLower.contains("\"entrykey\":\"three_admins\"")) {
+            return true;
+        }
+        // Hide duplicated "主题域" menu under 数据资产(catalog); keep the one under 模型与标准(modeling).
+        // Different deployments use different keys (domains/subjectDomains/catalogDomains) and translations, so match by
+        // sectionKey + entryKey/path/component instead of Chinese literals.
+        if (metaLower.contains("\"sectionkey\":\"catalog\"")) {
+            // Common portal-menu entry keys for "主题域管理"
+            if (metaLower.contains("\"entrykey\":\"domains\"") || metaLower.contains("\"entrykey\":\"subjectdomains\"")) {
+                return true;
+            }
+            // Common title keys (older seeds)
+            if (metaLower.contains("catalogdomains") || nameLower.contains("catalogdomains")) {
+                return true;
+            }
+            // Some menus may not carry metadata keys; match by route segment/component.
+            if ("domains".equals(pathLower) || "subject-domains".equals(pathLower)) {
+                return true;
+            }
+            if (componentLower.contains("domainslistpage") || componentLower.contains("datadomainmanagementpage")) {
+                return true;
+            }
+        }
+
+        // Fallback: name tokens (for old rows with missing metadata)
+        if (nameLower.contains("threeadmins") || nameLower.contains("three_admins") || nameLower.contains("three-admins")) {
+            return true;
+        }
+        return false;
+    }
+
+    private PortalMenuTreeNode toTreeNode(PortalMenuTreeItem item, String parentId) {
+        String nodeId = item.id() != null ? String.valueOf(item.id()) : item.generatedId();
+        String currentParentId = parentId != null ? parentId : (item.parentId() != null ? String.valueOf(item.parentId()) : "");
+        List<PortalMenuTreeNode> children = item
+            .children()
+            .stream()
+            .map(child -> toTreeNode(child, nodeId))
+            .collect(Collectors.toCollection(ArrayList::new));
+        return new PortalMenuTreeNode(
+            nodeId,
+            currentParentId,
+            item.name(),
+            item.code(),
+            item.sortOrder(),
+            item.type(),
+            item.fullPath(),
+            item.component(),
+            item.icon(),
+            item.metadata(),
+            item.deleted(),
+            children
+        );
+    }
+
+    private Integer deriveType(RemoteMenuNode node, List<PortalMenuTreeItem> children) {
+        if (node.getType() != null) {
+            return node.getType();
+        }
+        return (node.getChildren() != null && !node.getChildren().isEmpty()) ? 1 : 2;
+    }
+
+    private String normalizePathSegment(String segment) {
+        if (!StringUtils.hasText(segment)) {
+            return "";
+        }
+        String trimmed = segment.trim();
+        if (trimmed.startsWith("/")) {
+            trimmed = trimmed.substring(1);
+        }
+        if (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        return trimmed;
+    }
+
+    private String buildFullPath(String parentPath, String segment) {
+        if (!StringUtils.hasText(segment)) {
+            return parentPath == null ? "" : parentPath;
+        }
+        // Segment starting with "/" is already absolute — return as-is.
+        if (segment.startsWith("/")) {
+            return segment;
+        }
+        if (!StringUtils.hasText(parentPath)) {
+            return "/" + segment;
+        }
+        String normalizedParent = parentPath.endsWith("/") ? parentPath.substring(0, parentPath.length() - 1) : parentPath;
+        if (segment.isEmpty()) {
+            return normalizedParent;
+        }
+        // DB stores full paths (e.g., "bi/home" for a child of "bi").
+        // If segment already starts with the parent's basename, it's a full path — just prepend "/".
+        String parentBasename = normalizedParent.contains("/")
+            ? normalizedParent.substring(normalizedParent.lastIndexOf('/') + 1)
+            : normalizedParent.replace("/", "");
+        if (StringUtils.hasText(parentBasename) && segment.startsWith(parentBasename + "/")) {
+            return "/" + segment;
+        }
+        return normalizedParent + "/" + segment;
+    }
+
+    private Long parseLong(String value) {
+        try {
+            if (!StringUtils.hasText(value)) {
+                return null;
+            }
+            return Long.parseLong(value);
+        } catch (NumberFormatException ex) {
+            log.debug("Unable to parse portal menu id '{}'", value, ex);
+            return null;
+        }
+    }
+
+    private String generateFallbackId(RemoteMenuNode node, PortalMenuTreeItem parent) {
+        String base = Optional.ofNullable(parent).map(PortalMenuTreeItem::fullPath).orElse("");
+        String segment = normalizePathSegment(node.getPath());
+        String candidate = (StringUtils.hasText(base) ? base + "/" : "") + (StringUtils.hasText(segment) ? segment : slug(node.getName()));
+        return candidate.replaceAll("[^a-zA-Z0-9:/_-]", "-");
+    }
+
+    private String dedupeKey(Long id, String fullPath) {
+        if (id != null) {
+            return "id:" + id;
+        }
+        if (StringUtils.hasText(fullPath)) {
+            return "path:" + fullPath;
+        }
+        return null;
+    }
+
+    private int compareNodes(RemoteMenuNode left, RemoteMenuNode right) {
+        int orderLeft = left.getOrder() != null ? left.getOrder() : Integer.MAX_VALUE;
+        int orderRight = right.getOrder() != null ? right.getOrder() : Integer.MAX_VALUE;
+        int cmp = Integer.compare(orderLeft, orderRight);
+        if (cmp != 0) {
+            return cmp;
+        }
+        String nameLeft = left.getName() != null ? left.getName() : "";
+        String nameRight = right.getName() != null ? right.getName() : "";
+        cmp = nameLeft.compareToIgnoreCase(nameRight);
+        if (cmp != 0) {
+            return cmp;
+        }
+        String idLeft = left.getId() != null ? left.getId() : "";
+        String idRight = right.getId() != null ? right.getId() : "";
+        return idLeft.compareTo(idRight);
+    }
+
+    private String slug(String input) {
+        if (!StringUtils.hasText(input)) {
+            return "menu";
+        }
+        return input
+            .trim()
+            .toLowerCase()
+            .replaceAll("[^a-z0-9]+", "-")
+            .replaceAll("(^-|-$)", "");
+    }
+
+    public record PortalMenuTreeItem(
+        Long id,
+        Long parentId,
+        String name,
+        String code,
+        Integer sortOrder,
+        Integer type,
+        String pathSegment,
+        String fullPath,
+        String component,
+        String icon,
+        String metadata,
+        boolean deleted,
+        List<PortalMenuTreeItem> children,
+        String generatedId
+    ) {
+        public List<PortalMenuTreeItem> children() {
+            return children != null ? children : List.of();
+        }
+    }
+
+    public record PortalMenuFlatItem(
+        String id,
+        String parentId,
+        String name,
+        String code,
+        Integer order,
+        Integer type,
+        String path,
+        String component,
+        String icon,
+        String metadata,
+        boolean deleted
+    ) {}
+
+    public record PortalMenuTreeNode(
+        String id,
+        String parentId,
+        String name,
+        String code,
+        Integer order,
+        Integer type,
+        String path,
+        String component,
+        String icon,
+        String metadata,
+        boolean deleted,
+        List<PortalMenuTreeNode> children
+    ) {}
+
+    private java.util.Set<String> flattenIds(List<RemoteMenuNode> nodes) {
+        java.util.Set<String> ids = new java.util.LinkedHashSet<>();
+        if (nodes == null || nodes.isEmpty()) {
+            return ids;
+        }
+        java.util.ArrayDeque<RemoteMenuNode> stack = new java.util.ArrayDeque<>(nodes);
+        while (!stack.isEmpty()) {
+            RemoteMenuNode current = stack.pop();
+            if (current == null) {
+                continue;
+            }
+            if (StringUtils.hasText(current.getId())) {
+                ids.add(current.getId());
+            }
+            if (current.getChildren() != null) {
+                for (RemoteMenuNode child : current.getChildren()) {
+                    if (child != null) {
+                        stack.push(child);
+                    }
+                }
+            }
+        }
+        return ids;
+    }
+}

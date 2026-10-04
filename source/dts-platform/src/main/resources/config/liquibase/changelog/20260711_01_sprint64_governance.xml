@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260711_01_sprint64_governance" author="codex">
+        <createTable tableName="sprint64_business_process">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="domain_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="process_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(1024)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="sprint64_business_process" columnNames="domain_id, process_id" constraintName="uk_sprint64_process_domain_key"/>
+        <createIndex tableName="sprint64_business_process" indexName="idx_sprint64_process_domain">
+            <column name="domain_id"/>
+        </createIndex>
+
+        <createTable tableName="sprint64_bus_matrix">
+            <column name="domain_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="process_id" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dimension_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addPrimaryKey tableName="sprint64_bus_matrix" columnNames="domain_id, process_id, dimension_id" constraintName="pk_sprint64_bus_matrix"/>
+        <createIndex tableName="sprint64_bus_matrix" indexName="idx_sprint64_bus_matrix_domain">
+            <column name="domain_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

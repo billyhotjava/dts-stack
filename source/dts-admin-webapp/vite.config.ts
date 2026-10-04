@@ -1,0 +1,236 @@
+import tailwindcss from "@tailwindcss/vite";
+import { vanillaExtractPlugin } from "@vanilla-extract/vite-plugin";
+import react from "@vitejs/plugin-react";
+import { visualizer } from "rollup-plugin-visualizer";
+import { defineConfig, loadEnv } from "vite";
+import tsconfigPaths from "vite-tsconfig-paths";
+import { fileURLToPath } from "node:url";
+import { resolve as resolvePath } from "node:path";
+import legacy from "@vitejs/plugin-legacy";
+import { unwrapCssLayers } from "./tools/postcss/unwrap-css-layers";
+import { legacyCssFallbacks } from "./tools/postcss/legacy-css-fallbacks";
+
+const rootDir = fileURLToPath(new URL(".", import.meta.url));
+const legacySupportedBrowsers = ["chrome >= 95", "edge >= 95", "firefox >= 102", "safari >= 15.4", "ios >= 15.5", "android >= 95"];
+const modernSupportedBrowsers = ["chrome >= 109", "edge >= 109", "firefox >= 115", "safari >= 16.4", "ios >= 16.4", "android >= 109"];
+
+export default defineConfig(({ mode }) => {
+	const rawEnv = loadEnv(mode, process.cwd(), "");
+	const env = { ...process.env, ...rawEnv };
+	const base = env.VITE_APP_PUBLIC_PATH || env.VITE_PUBLIC_PATH || "/";
+	const isProduction = mode === "production";
+	const analyzeFlag = String(env.ANALYZE ?? "").trim().toLowerCase();
+	const analyzeEnabled = isProduction && analyzeFlag !== "" && analyzeFlag !== "0" && analyzeFlag !== "false";
+	const legacyFlagRaw =
+		env.LEGACY_BROWSER_BUILD ??
+		rawEnv.LEGACY_BROWSER_BUILD ??
+		env.VITE_LEGACY_BUILD ??
+		rawEnv.VITE_LEGACY_BUILD ??
+		(isProduction ? "1" : "0");
+	const normalizedLegacyFlag = String(legacyFlagRaw).trim().toLowerCase();
+	const legacyEnabled = normalizedLegacyFlag !== "0" && normalizedLegacyFlag !== "false";
+	const browserTargets = legacyEnabled ? legacySupportedBrowsers : modernSupportedBrowsers;
+	const buildTarget = legacyEnabled ? "chrome95" : "chrome109";
+	// Default to host-mapped admin backend port when running on host
+	const apiProxyTarget = env.VITE_API_PROXY_TARGET || "http://localhost:18081";
+	const autoPrefix = (() => {
+		if (env.VITE_API_PROXY_PREFIX) return "";
+		try {
+			const u = new URL(apiProxyTarget);
+			if (u.protocol === "https:") return "/admin";
+		} catch {}
+		return "";
+	})();
+	const apiProxyPrefix = env.VITE_API_PROXY_PREFIX || autoPrefix || "";
+	const pollingEnabled = String(env.CHOKIDAR_USEPOLLING || "").trim().toLowerCase() === "true";
+	const pollingInterval = Number(env.CHOKIDAR_INTERVAL || 1000) || 1000;
+
+    // Dev-only helper: serve /runtime-config.js so the app can read
+    // runtime toggles (same shape as the Nginx entrypoint emits in prod).
+    const runtimeConfigPlugin = (() => {
+        const koalCsv = (env as any).KOAL_PKI_ENDPOINTS || (env as any).VITE_KOAL_PKI_ENDPOINTS || "";
+        const koalList = String(koalCsv)
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean);
+        const enableRaw = (env as any).WEBAPP_PASSWORD_LOGIN_ENABLED ?? "";
+        const hideRaw = (env as any).VITE_HIDE_PASSWORD_LOGIN ?? "";
+        const classifiedBadgeRaw = (env as any).WEBAPP_SHOW_CLASSIFIED_LOGIN_BADGE ?? "";
+        const vendorBase = (env as any).KOAL_VENDOR_BASE || (env as any).VITE_KOAL_VENDOR_BASE || "";
+        const enable = String(enableRaw).trim().toLowerCase();
+        const hide = String(hideRaw).trim().toLowerCase();
+        const classifiedBadge = String(classifiedBadgeRaw).trim().toLowerCase();
+        return {
+            name: "dev-runtime-config",
+            apply: "serve",
+            configureServer(server: any) {
+                server.middlewares.use((req: any, res: any, next: any) => {
+                    if (req.url === "/runtime-config.js") {
+                        let js = "(function(w){w.__RUNTIME_CONFIG__=w.__RUNTIME_CONFIG__||{};";
+                        if (koalList.length > 0) {
+                            js += `w.__RUNTIME_CONFIG__.koalPkiEndpoints=${JSON.stringify(koalList)};`;
+                        }
+                        if (enable) {
+                            js += `w.__RUNTIME_CONFIG__.enablePasswordLogin=${JSON.stringify(enable)};`;
+                        }
+                        if (hide) {
+                            js += `w.__RUNTIME_CONFIG__.hidePasswordLogin=${JSON.stringify(hide)};`;
+                        }
+                        if (classifiedBadge) {
+                            js += `w.__RUNTIME_CONFIG__.showClassifiedLoginBadge=${JSON.stringify(classifiedBadge)};`;
+                        }
+                        if (String(vendorBase).trim()) {
+                            js += `w.__RUNTIME_CONFIG__.koalVendorBase=${JSON.stringify(String(vendorBase).trim())};`;
+                        }
+                        js += "})(window);\n";
+                        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+                        res.end(js);
+                        return;
+                    }
+                    next();
+                });
+            },
+        };
+    })();
+
+    return {
+        base,
+        envPrefix: ["VITE_", "WEBAPP_"],
+        plugins: [
+            // Redirect `import "sonner"` → dedup wrapper everywhere except
+            // dedup-toast.ts itself (which needs the real sonner package).
+            {
+                name: "sonner-dedup",
+                enforce: "pre",
+                resolveId(source: string, importer: string | undefined) {
+                    if (source === "sonner" && importer && !importer.includes("dedup-toast")) {
+                        return resolvePath(rootDir, "src/utils/dedup-toast.ts");
+                    }
+                },
+            },
+            react(),
+            vanillaExtractPlugin({
+                identifiers: ({ debugId }) => `${debugId}`,
+            }),
+            tailwindcss(),
+            legacy({
+                targets: browserTargets,
+                modernPolyfills: true,
+                renderLegacyChunks: false,
+            }),
+            tsconfigPaths(),
+            runtimeConfigPlugin,
+
+            // Opt-in only (`pnpm build:analyze`). gzipSize + brotliSize compress every
+            // chunk twice on top of the real build, which is pure overhead for the
+            // image build that never reads the report.
+            analyzeEnabled &&
+                visualizer({
+                    // Avoid auto-opening in CI/Docker to prevent PowerShell/xdg-open errors
+                    open: env.VITE_VISUALIZER_OPEN === "true" && !process.env.CI,
+					gzipSize: true,
+					brotliSize: true,
+					template: "treemap",
+				}),
+		].filter(Boolean),
+
+		resolve: {
+			alias: {
+				"@": resolvePath(rootDir, "src"),
+				"#": resolvePath(rootDir, "src/types"),
+			},
+		},
+
+		server: {
+			open: true,
+			host: true,
+			port: 3001,
+			// Accept requests from reverse proxy with custom Host header (e.g. https://biadmin.<base-domain>)
+			allowedHosts: true,
+			// Decouple from other workspaces; do not traverse outside project root
+			fs: { strict: true, allow: [rootDir] },
+			// Ignore any sibling mounts like /workspace/dts-platform-webapp/**
+			watch: {
+				ignored: [
+					"**/dts-platform-webapp/**",
+					"**/.pnpm-store/**",
+					"**/.pnpm/**",
+					"**/pnpm-store/**",
+					"**/.vite-cache/**",
+				],
+				usePolling: pollingEnabled,
+				interval: pollingEnabled ? pollingInterval : undefined,
+			},
+            proxy: {
+                // Serve Koal SDK assets in dev by proxying to the platform dev server,
+                // which ships the vendor bundle under /vendor/koal in its public directory.
+                // Both dev servers are attached to the same docker network in compose.dev.
+                "/vendor/koal": {
+                    target: (env as any).KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
+                    changeOrigin: true,
+                    secure: false,
+                    xfwd: true,
+                },
+                // Also support '/koal/*' for clients that try this base first;
+                // rewrite to '/vendor/koal/*' on the target platform dev server.
+                "/koal": {
+                    target: (env as any).KOAL_VENDOR_PROXY_TARGET || "http://dts-platform-webapp:3001",
+                    changeOrigin: true,
+                    secure: false,
+                    xfwd: true,
+                    rewrite: (p: string) => p.replace(/^\/koal/, "/vendor/koal"),
+                },
+                "/api": {
+                    target: apiProxyTarget,
+                    changeOrigin: true,
+                    // If targeting Traefik via HTTPS, auto prefix '/admin'
+                    rewrite: apiProxyPrefix ? (p) => p.replace(/^\/api/, `${apiProxyPrefix}/api`) : undefined,
+					secure: false,
+					xfwd: true,
+				},
+			},
+		},
+
+		build: {
+			target: buildTarget,
+			minify: "esbuild",
+			sourcemap: !isProduction,
+			cssCodeSplit: true,
+			chunkSizeWarningLimit: 1500,
+			rollupOptions: {
+				output: {
+					manualChunks: {
+						"vendor-core": ["react", "react-dom", "react-router"],
+						"vendor-ui": ["antd", "@ant-design/cssinjs", "styled-components"],
+						"vendor-utils": ["axios", "dayjs", "i18next", "zustand", "@iconify/react"],
+						"vendor-charts": ["apexcharts", "react-apexcharts"],
+					},
+				},
+			},
+		},
+
+		optimizeDeps: {
+			include: ["react", "react-dom", "react-router", "antd", "axios", "dayjs"],
+			exclude: ["@iconify/react", "@vanilla-extract/css"],
+		},
+
+		esbuild: {
+			drop: isProduction ? ["console", "debugger"] : [],
+			legalComments: "none",
+			target: buildTarget,
+		},
+		// Prevent Vite CSS analyzer from touching absolute container paths
+		// that don't belong to this project (e.g., /workspace/dts-platform-webapp/...)
+		css: {
+			url: {
+				filter: (url) => {
+					if (url.startsWith("/workspace/")) return false;
+					return true;
+				},
+			},
+			postcss: {
+				plugins: legacyEnabled ? [unwrapCssLayers(), legacyCssFallbacks()] : [],
+			},
+		},
+	};
+});

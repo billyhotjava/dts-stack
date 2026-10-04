@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-06-ingestion-rollback-truncate-guards" author="codex" dbms="postgresql">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="INGESTION_ROLLBACK_TRUNCATE_GUARD_CONFLICT"
+            onErrorMessage="INGESTION_ROLLBACK_TRUNCATE_GUARD_UNEXPECTED">
+            <and>
+                <tableExists tableName="rollback_audit_log"/>
+                <tableExists tableName="ingestion_rollback_affected_object"/>
+                <sqlCheck expectedResult="1"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_proc function_definition
+                      JOIN pg_namespace function_schema
+                        ON function_schema.oid = function_definition.pronamespace
+                     WHERE function_schema.nspname = current_schema()
+                       AND function_definition.proname = 'dts_reject_rollback_evidence_mutation'
+                ]]></sqlCheck>
+                <sqlCheck expectedResult="0"><![CDATA[
+                    SELECT count(*)
+                      FROM pg_trigger trigger_definition
+                      JOIN pg_class trigger_table
+                        ON trigger_table.oid = trigger_definition.tgrelid
+                      JOIN pg_namespace table_schema
+                        ON table_schema.oid = trigger_table.relnamespace
+                      JOIN pg_proc trigger_function
+                        ON trigger_function.oid = trigger_definition.tgfoid
+                      JOIN pg_namespace function_schema
+                        ON function_schema.oid = trigger_function.pronamespace
+                     WHERE trigger_definition.tgname IN (
+                         'trg_rollback_audit_no_truncate',
+                         'trg_ingestion_rollback_evidence_no_truncate'
+                     )
+                       AND NOT trigger_definition.tgisinternal
+                       AND (
+                           table_schema.nspname <> current_schema()
+                           OR function_schema.nspname <> current_schema()
+                           OR trigger_function.proname <> 'dts_reject_rollback_evidence_mutation'
+                           OR trigger_definition.tgtype <> 34
+                           OR trigger_definition.tgenabled NOT IN ('O', 'A')
+                           OR NOT (
+                               (
+                                   trigger_definition.tgname = 'trg_rollback_audit_no_truncate'
+                                   AND trigger_table.relname = 'rollback_audit_log'
+                               )
+                               OR (
+                                   trigger_definition.tgname = 'trg_ingestion_rollback_evidence_no_truncate'
+                                   AND trigger_table.relname = 'ingestion_rollback_affected_object'
+                               )
+                           )
+                       )
+                ]]></sqlCheck>
+            </and>
+        </preConditions>
+
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                      FROM pg_trigger
+                     WHERE tgname = 'trg_rollback_audit_no_truncate'
+                       AND tgrelid = 'rollback_audit_log'::regclass
+                       AND NOT tgisinternal
+                ) THEN
+                    CREATE TRIGGER trg_rollback_audit_no_truncate
+                    BEFORE TRUNCATE ON rollback_audit_log
+                    FOR EACH STATEMENT EXECUTE FUNCTION dts_reject_rollback_evidence_mutation();
+                END IF;
+
+                IF NOT EXISTS (
+                    SELECT 1
+                      FROM pg_trigger
+                     WHERE tgname = 'trg_ingestion_rollback_evidence_no_truncate'
+                       AND tgrelid = 'ingestion_rollback_affected_object'::regclass
+                       AND NOT tgisinternal
+                ) THEN
+                    CREATE TRIGGER trg_ingestion_rollback_evidence_no_truncate
+                    BEFORE TRUNCATE ON ingestion_rollback_affected_object
+                    FOR EACH STATEMENT EXECUTE FUNCTION dts_reject_rollback_evidence_mutation();
+                END IF;
+            END;
+            $$;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_INGESTION_ROLLBACK_TRUNCATE_GUARDS_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,1239 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-execution-v4",
+  "name": "执行层-项目执行详情",
+  "description": "项目执行监控钻取页面，分区展示超期未完成节点、科室完成/未完成情况、正常完成节点及近期计划节点。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-exec-header-bar",
+      "type": "shape",
+      "name": "drill-exec-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-exec-title",
+      "type": "title",
+      "name": "执行层-项目执行详情",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-项目执行详情",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(88, 180, 255, 0.20)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-exec-back-shape",
+      "type": "shape",
+      "name": "返回执行监控",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.20)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-exec-back-label",
+      "type": "title",
+      "name": "返回执行监控",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回执行监控",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-exec-kpi-1",
+      "type": "number-card",
+      "name": "整体完成率",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "节点完成百分比",
+        "value": "72.4",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_completion_rate",
+          "displayName": "节点完成百分比",
+          "domain": "进度",
+          "category": "完成率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "周期内已到时间的节点中,已完成节点的占比(含周期外完成)",
+          "formula": "(按时完成节点数 + 超期完成节点数 + 周期外完成节点数) ÷ (已到时间节点数 + 周期外完成节点数) × 100%",
+          "scope": "已到时间节点 = 周期内总节点 - 正常待完成节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 85,
+            "critical": 75,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #9 节点完成百分比"
+        },
+        "metricCode": "pjm_prog_completion_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-2",
+      "type": "number-card",
+      "name": "里程碑达成率",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "里程碑节点完成总百分比",
+        "value": "68",
+        "unit": "%",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_milestone_completion_rate",
+          "displayName": "里程碑节点完成总百分比",
+          "domain": "进度",
+          "category": "里程碑",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "里程碑节点中已完成的占比(含按时和超期完成)",
+          "formula": "(里程碑按时完成数 + 里程碑超期完成数) ÷ (未完成里程碑数 + 里程碑按时完成数 + 里程碑超期完成数) × 100%",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 90,
+            "critical": 80,
+            "rule": "<"
+          },
+          "excelRef": "原始指标 #26 里程碑节点完成总百分比"
+        },
+        "metricCode": "pjm_prog_milestone_completion_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_due THEN 1 ELSE 0 END) AS due_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time THEN 1 ELSE 0 END) AS on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_overdue_completed THEN 1 ELSE 0 END) AS overdue_completed_cnt, SUM(CASE WHEN d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_completed AND (d.plan_year != d.actual_year OR d.plan_month != d.actual_month) THEN 1 ELSE 0 END) AS outside_completed_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete AND d.is_milestone_node THEN 1 ELSE 0 END) AS incomplete_milestone_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_on_time THEN 1 ELSE 0 END) AS milestone_on_time_cnt, SUM(CASE WHEN d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_milestone_node AND d.is_overdue_completed THEN 1 ELSE 0 END) AS milestone_overdue_completed_cnt FROM biz_dwd_project_node_v2 d WHERE ((d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')) OR (d.actual_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.actual_month <= to_char({{dateTo}}::date, 'YYYY-MM'))) [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]]) SELECT CASE WHEN (agg.due_cnt+agg.outside_completed_cnt)=0 THEN 0 ELSE ROUND((agg.on_time_cnt+agg.overdue_completed_cnt+agg.outside_completed_cnt)::numeric/(agg.due_cnt+agg.outside_completed_cnt)::numeric*100,2) END AS \"完成率\", CASE WHEN (agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)=0 THEN 0 ELSE ROUND((agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric/(agg.incomplete_milestone_cnt+agg.milestone_on_time_cnt+agg.milestone_overdue_completed_cnt)::numeric*100,2) END AS \"里程碑完成率\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-3",
+      "type": "number-card",
+      "name": "异常率",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "节点不正常率",
+        "value": "4.6",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_prog_abnormal_rate",
+          "displayName": "节点不正常率",
+          "domain": "进度",
+          "category": "异常",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "已到时间节点中,处于危险状态但尚未走变更流程的节点占比",
+          "formula": "(不正常待变更 + 超期未完成未变更) ÷ 已到时间节点数 × 100%",
+          "scope": "不含一般节点",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 20,
+            "critical": 30,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #3 pjm_prog_abnormal_rate"
+        },
+        "metricCode": "pjm_prog_abnormal_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND((SUM(CASE WHEN d.is_abnormal_pending AND NOT d.is_general_node THEN 1 ELSE 0 END)+SUM(CASE WHEN d.is_overdue_unchanged AND NOT d.is_general_node THEN 1 ELSE 0 END))::numeric/SUM(CASE WHEN d.is_due THEN 1 ELSE 0 END)::numeric*100,2) END AS \"异常率\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-kpi-4",
+      "type": "number-card",
+      "name": "风险预警指数",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目风险预警指数",
+        "value": "37",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_warning_index",
+          "displayName": "项目风险预警指数",
+          "domain": "综合",
+          "category": "预警",
+          "unit": "点",
+          "direction": "DOWN",
+          "definition": "加权风险暴露指数,值越低风险越小",
+          "formula": "未完成里程碑数 × 3 + 高风险未完成节点数 × 2 + 超期未完成节点数 × 1",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "进度信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 10,
+            "critical": 20,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #18 pjm_risk_warning_index"
+        },
+        "metricCode": "pjm_risk_warning_index"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)=0 THEN 0 ELSE ROUND(SUM(CASE WHEN d.is_incomplete AND d.is_high_risk THEN 1 ELSE 0 END)::numeric/SUM(CASE WHEN d.is_incomplete THEN 1 ELSE 0 END)::numeric*100,2) END AS \"风险预警指数\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-detail-table",
+      "type": "table",
+      "name": "超期未完成节点列表",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "超期未完成节点列表",
+        "header": [
+          "项目编号",
+          "分系统",
+          "节点任务",
+          "节点类型",
+          "负责人",
+          "责任科室",
+          "完成情况",
+          "风险等级",
+          "计划时间",
+          "超期天数",
+          "未完成原因"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "延期天数": {
+            "code": "pjm_prog_delay_days",
+            "displayName": "延期天数",
+            "domain": "进度",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "节点实际完成时间相对计划完成时间的延后天数(正数=延后,负数=提前)",
+            "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
+            "scope": "针对单个节点",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(派生)delay_days"
+          },
+          "节点类型": {
+            "kind": "field",
+            "displayName": "节点类型",
+            "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
+            "enumValues": [
+              {
+                "code": "里程碑节点",
+                "label": "里程碑节点",
+                "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
+              },
+              {
+                "code": "重大节点",
+                "label": "重大节点",
+                "description": "影响项目交付的关键节点"
+              },
+              {
+                "code": "重要节点",
+                "label": "重要节点",
+                "description": "重要技术或管理节点"
+              },
+              {
+                "code": "一般节点",
+                "label": "一般节点",
+                "description": "常规工作节点,通常不参与超期/不正常率统计"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
+          },
+          "完成情况": {
+            "kind": "field",
+            "displayName": "完成情况",
+            "definition": "节点在统计时点的完成状态。'已变更'表示已走过变更流程并获批。",
+            "enumValues": [
+              {
+                "code": "正常待完成",
+                "label": "正常待完成",
+                "description": "节点未到计划时间,状态正常,还能正常完成"
+              },
+              {
+                "code": "按时完成",
+                "label": "按时完成",
+                "description": "节点已在计划时间内完成"
+              },
+              {
+                "code": "超期已完成已变更",
+                "label": "超期已完成已变更",
+                "description": "超过计划时间但已完成,且已走过变更流程"
+              },
+              {
+                "code": "超期已完成未变更",
+                "label": "超期已完成未变更",
+                "description": "超过计划时间但已完成,未走变更流程"
+              },
+              {
+                "code": "不正常待变更",
+                "label": "不正常待变更",
+                "description": "已到计划时间但未完成,需走变更流程(异常状态)"
+              },
+              {
+                "code": "超期未完成未变更",
+                "label": "超期未完成未变更",
+                "description": "已超过计划时间且未完成,未走变更流程(严重异常)"
+              },
+              {
+                "code": "超期未完成已变更",
+                "label": "超期未完成已变更",
+                "description": "已超过计划时间且未完成,已走过变更流程"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          }
+        },
+        "description": "事实明细表：展示统计周期内已超期且仍未完成的非一般节点，按超期天数倒序定位优先处置对象。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统\", COALESCE(d.node_task,'') AS \"节点任务\", d.node_type AS \"节点类型\", d.owner AS \"负责人\", d.dept AS \"责任科室\", d.completion_status AS \"完成情况\", d.risk_level AS \"风险等级\", d.plan_date AS \"计划时间\", COALESCE(d.delay_days,0) AS \"超期天数\", d.incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_incomplete = true AND (d.is_overdue_unchanged OR d.is_overdue_changed) AND NOT d.is_general_node [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY COALESCE(d.delay_days,0) DESC, d.plan_date ASC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-side-panel",
+      "type": "table",
+      "name": "科室完成与未完成情况",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "科室完成与未完成情况",
+        "header": [
+          "责任科室",
+          "节点总数",
+          "正常完成",
+          "超期完成",
+          "正常待完成",
+          "超期未完成"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "节点总数": {
+            "code": "pjm_prog_total_nodes",
+            "displayName": "项目本周期节点总数",
+            "domain": "进度",
+            "category": "基础",
+            "unit": "个",
+            "direction": "NEUTRAL",
+            "definition": "统计周期内计划完成的节点总数",
+            "formula": "节点计划时间在[开始日期,结束日期]内的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #1"
+          },
+          "已完成": {
+            "code": "pjm_prog_on_time_cnt",
+            "displayName": "按时完成节点数",
+            "domain": "进度",
+            "category": "完成状态",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "周期内在计划时间内完成的节点数",
+            "formula": "完成情况='按时完成' 的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #6"
+          },
+          "未完成": {
+            "code": "pjm_prog_incomplete_cnt",
+            "displayName": "项目本周期节点未完成总数",
+            "domain": "进度",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内处于未完成状态的节点总数",
+            "formula": "状态为'不正常待变更'+'超期未完成未变更'+'超期未完成已变更'的节点计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #5"
+          }
+        },
+        "description": "汇总分析表：按责任科室汇总正常完成、超期完成、正常待完成和超期未完成节点。",
+        "tableRole": "汇总分析表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 112,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.dept,'未分配') AS \"责任科室\", COUNT(*) AS \"节点总数\", SUM(CASE WHEN d.is_on_time THEN 1 ELSE 0 END) AS \"正常完成\", SUM(CASE WHEN d.is_overdue_completed THEN 1 ELSE 0 END) AS \"超期完成\", SUM(CASE WHEN d.is_pending_normal THEN 1 ELSE 0 END) AS \"正常待完成\", SUM(CASE WHEN (d.is_overdue_unchanged OR d.is_overdue_changed) AND NOT d.is_general_node THEN 1 ELSE 0 END) AS \"超期未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] GROUP BY COALESCE(d.dept,'未分配') ORDER BY \"超期未完成\" DESC, \"正常待完成\" DESC, \"节点总数\" DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-support-table",
+      "type": "table",
+      "name": "正常完成节点列表",
+      "x": 38,
+      "y": 704,
+      "width": 884,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "正常完成节点列表",
+        "header": [
+          "项目编号",
+          "分系统",
+          "节点任务",
+          "节点类型",
+          "负责人",
+          "责任科室",
+          "计划时间",
+          "完成时间",
+          "完成情况"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 7,
+        "freezeHeader": true,
+        "columnNotes": {
+          "延期天数": {
+            "code": "pjm_prog_delay_days",
+            "displayName": "延期天数",
+            "domain": "进度",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "节点实际完成时间相对计划完成时间的延后天数(正数=延后,负数=提前)",
+            "formula": "实际完成时间 − 计划完成时间(单位:天);未完成节点取 (统计结束时间 − 计划完成时间)",
+            "scope": "针对单个节点",
+            "sourceTable": "进度信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(派生)delay_days"
+          },
+          "节点类型": {
+            "kind": "field",
+            "displayName": "节点类型",
+            "definition": "节点在项目中的重要等级,影响考核权重与异常判定。",
+            "enumValues": [
+              {
+                "code": "里程碑节点",
+                "label": "里程碑节点",
+                "description": "项目对外承诺的关键交付点,权重最高,单独考核完成率"
+              },
+              {
+                "code": "重大节点",
+                "label": "重大节点",
+                "description": "影响项目交付的关键节点"
+              },
+              {
+                "code": "重要节点",
+                "label": "重要节点",
+                "description": "重要技术或管理节点"
+              },
+              {
+                "code": "一般节点",
+                "label": "一般节点",
+                "description": "常规工作节点,通常不参与超期/不正常率统计"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "重要程度: 里程碑 > 重大 > 重要 > 一般"
+          },
+          "完成情况": {
+            "kind": "field",
+            "displayName": "完成情况",
+            "definition": "节点在统计时点的完成状态。'已变更'表示已走过变更流程并获批。",
+            "enumValues": [
+              {
+                "code": "正常待完成",
+                "label": "正常待完成",
+                "description": "节点未到计划时间,状态正常,还能正常完成"
+              },
+              {
+                "code": "按时完成",
+                "label": "按时完成",
+                "description": "节点已在计划时间内完成"
+              },
+              {
+                "code": "超期已完成已变更",
+                "label": "超期已完成已变更",
+                "description": "超过计划时间但已完成,且已走过变更流程"
+              },
+              {
+                "code": "超期已完成未变更",
+                "label": "超期已完成未变更",
+                "description": "超过计划时间但已完成,未走变更流程"
+              },
+              {
+                "code": "不正常待变更",
+                "label": "不正常待变更",
+                "description": "已到计划时间但未完成,需走变更流程(异常状态)"
+              },
+              {
+                "code": "超期未完成未变更",
+                "label": "超期未完成未变更",
+                "description": "已超过计划时间且未完成,未走变更流程(严重异常)"
+              },
+              {
+                "code": "超期未完成已变更",
+                "label": "超期未完成已变更",
+                "description": "已超过计划时间且未完成,已走过变更流程"
+              }
+            ],
+            "sourceTable": "进度信息汇总表",
+            "note": "排序权重: 正常待完成=1 < 按时完成=2 < 超期完成=3-4 < 不正常/超期未完成=5-7"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          }
+        },
+        "description": "事实明细表：展示统计周期内按计划完成的节点，用于核对正常闭环样本和责任人。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 118,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统\", COALESCE(d.node_task,'') AS \"节点任务\", d.node_type AS \"节点类型\", d.owner AS \"负责人\", d.dept AS \"责任科室\", d.plan_date AS \"计划时间\", d.actual_date AS \"完成时间\", d.completion_status AS \"完成情况\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND d.is_on_time = true [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.actual_date DESC NULLS LAST, d.plan_date DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-exec-detail-section-bg",
+      "type": "shape",
+      "name": "超期主表区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-exec-detail-section-title",
+      "type": "title",
+      "name": "超期未完成节点列表",
+      "x": 38,
+      "y": 190,
+      "width": 560,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "超期未完成节点列表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-detail-section-desc",
+      "type": "title",
+      "name": "超期未完成节点列表说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内已超期且仍未完成的非一般节点，按超期天数倒序定位优先处置对象。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-side-section-bg",
+      "type": "shape",
+      "name": "科室汇总区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-exec-side-section-title",
+      "type": "title",
+      "name": "科室完成与未完成情况",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室完成与未完成情况",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-side-section-desc",
+      "type": "title",
+      "name": "科室完成与未完成情况说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "汇总分析表：按责任科室汇总正常完成、超期完成、正常待完成和超期未完成节点。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-support-section-bg",
+      "type": "shape",
+      "name": "正常完成区",
+      "x": 20,
+      "y": 632,
+      "width": 920,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-exec-support-section-title",
+      "type": "title",
+      "name": "正常完成节点列表",
+      "x": 38,
+      "y": 646,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "正常完成节点列表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-support-section-desc",
+      "type": "title",
+      "name": "正常完成节点列表说明",
+      "x": 38,
+      "y": 674,
+      "width": 864,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内按计划完成的节点，用于核对正常闭环样本和责任人。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-plan-section-bg",
+      "type": "shape",
+      "name": "近期计划区",
+      "x": 980,
+      "y": 632,
+      "width": 920,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-exec-plan-section-title",
+      "type": "title",
+      "name": "近期计划节点列表",
+      "x": 998,
+      "y": 646,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "近期计划节点列表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-plan-section-desc",
+      "type": "title",
+      "name": "近期计划节点列表说明",
+      "x": 998,
+      "y": 674,
+      "width": 864,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "计划跟踪表：展示统计结束日起30天内计划完成且尚未完成的节点，用于提前准备后续节奏。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-exec-plan-table",
+      "type": "table",
+      "name": "近期计划节点列表",
+      "x": 998,
+      "y": 704,
+      "width": 884,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "近期计划节点列表",
+        "description": "计划跟踪表：展示统计结束日起30天内计划完成且尚未完成的节点，用于提前准备后续节奏。",
+        "tableRole": "计划跟踪表",
+        "header": [
+          "项目编号",
+          "分系统",
+          "节点任务",
+          "节点类型",
+          "负责人",
+          "责任科室",
+          "风险等级",
+          "计划时间",
+          "完成情况",
+          "未完成原因"
+        ],
+        "fontSize": 14,
+        "headerFontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "autoPageSize": true,
+        "pageSize": 7,
+        "minColumnWidth": 118,
+        "freezeHeader": true,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT d.project_no AS \"项目编号\", COALESCE(d.subsystem,'') AS \"分系统\", COALESCE(d.node_task,'') AS \"节点任务\", d.node_type AS \"节点类型\", d.owner AS \"负责人\", d.dept AS \"责任科室\", d.risk_level AS \"风险等级\", d.plan_date AS \"计划时间\", d.completion_status AS \"完成情况\", d.incomplete_reason AS \"未完成原因\" FROM biz_dwd_project_node_v2 d WHERE d.plan_date > {{dateTo}}::date AND d.plan_date <= {{dateTo}}::date + interval '30 days' AND d.is_completed = false [[AND d.dept = {{deptId}}]] [[AND d.project_no = {{projectNo}}]] [[AND d.risk_level = {{riskLevel}}]] ORDER BY d.plan_date ASC, d.project_no",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

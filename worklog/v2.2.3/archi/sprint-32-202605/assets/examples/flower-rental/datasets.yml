@@ -1,0 +1,14 @@
+datasets:
+  - dataset_code: flower_rental_overview_dataset
+    dataset_name: 花卉租赁经营总览数据集
+    source_model: ads_flower_rental_overview
+    default_time_dimension: stat_month
+    dimensions:
+      - stat_month
+      - dept_id
+    metrics:
+      - contract_cnt
+      - contract_amount
+      - collection_rate
+      - high_risk_project_cnt
+    permission_asset_type: DATASET

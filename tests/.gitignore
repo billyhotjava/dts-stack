@@ -1,0 +1,10 @@
+reports/*.json
+reports/*.md
+reports/*.xml
+reports/*.log
+!reports/.gitkeep
+!reports/README.md
+.locks/
+__pycache__/
+**/__pycache__/
+*.pyc

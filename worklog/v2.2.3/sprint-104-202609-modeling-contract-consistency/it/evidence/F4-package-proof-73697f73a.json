@@ -1,0 +1,62 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/f4-performance-73697f73a.tar.gz",
+  "sha256": "e3904213165096c03031631a53471211ac358cf05e24d4e4bb755b8c3025b288",
+  "images": [
+    {
+      "archive": "images/dts-platform-webapp_1.0.0-20260908-183021.tar",
+      "revision": "73697f73a605399c793f691e8d76a48a2a499715",
+      "rootfsLayers": 11,
+      "repoTags": [
+        "dts-platform-webapp:1.0.0"
+      ]
+    },
+    {
+      "archive": "images/dts-platform_1.0.0-20260908-183021.tar",
+      "revision": "73697f73a605399c793f691e8d76a48a2a499715",
+      "rootfsLayers": 7,
+      "repoTags": [
+        "dts-platform:1.0.0"
+      ]
+    }
+  ],
+  "manifest": {
+    "formatVersion": 1,
+    "version": "73697f73a605",
+    "sourceCommit": "73697f73a605399c793f691e8d76a48a2a499715",
+    "generatedAt": "2026-09-08T10:36:18.670218+00:00",
+    "images": [
+      {
+        "archive": "dts-platform-webapp_1.0.0-20260908-183021.tar",
+        "sha256": "a8847cb4d8346c4ad4a252bfaf399fd368522826138b379ab9714a3112465bc4",
+        "images": [
+          {
+            "imageId": "sha256:0b4c2572ce6edfa088ac9ebb20689844695946e96d367063926405946be919f0",
+            "tags": [
+              "dts-platform-webapp:1.0.0"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "73697f73a605399c793f691e8d76a48a2a499715"
+          }
+        ]
+      },
+      {
+        "archive": "dts-platform_1.0.0-20260908-183021.tar",
+        "sha256": "1d59256c4fb7f80c104422de6eabb438192cbdce39120ba18e86f3b0e60bd17f",
+        "images": [
+          {
+            "imageId": "sha256:750a6ba63b8bff5ce362210a2f9658065acdab0e909e651cf6ccb93d1faf95d8",
+            "tags": [
+              "dts-platform:1.0.0"
+            ],
+            "architecture": "amd64",
+            "os": "linux",
+            "sourceRevision": "73697f73a605399c793f691e8d76a48a2a499715"
+          }
+        ]
+      }
+    ],
+    "imagesIncluded": true,
+    "runtimeFilesRequired": true
+  }
+}

@@ -1,0 +1,32 @@
+server:
+  port: ${OPMANAGER_SERVER_PORT:18095}
+  shutdown: graceful
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: dts-opmanager
+  main:
+    banner-mode: console
+  servlet:
+    multipart:
+      max-file-size: ${OPMANAGER_UPLOAD_MAX_FILE_SIZE:20GB}
+      max-request-size: ${OPMANAGER_UPLOAD_MAX_REQUEST_SIZE:20GB}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+opmanager:
+  data-dir: ${OPMANAGER_DATA_DIR:${OPMANAGER_HOME:/opt/dts-opmanager}/data}
+  package-roots: ${OPMANAGER_PACKAGE_ROOTS:${OPMANAGER_HOME:/opt/dts-opmanager}/packages}
+  target-stack-dir: ${OPMANAGER_TARGET_STACK_DIR:/opt/dts-stack}
+  docker-enabled: ${OPMANAGER_DOCKER_ENABLED:true}
+  portainer-url: ${OPMANAGER_PORTAINER_URL:}

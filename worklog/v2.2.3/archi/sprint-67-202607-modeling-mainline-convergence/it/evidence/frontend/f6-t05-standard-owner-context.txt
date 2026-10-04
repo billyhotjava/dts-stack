@@ -1,0 +1,69 @@
+Sprint-67 F6-T05 — global standard owner and canonical plan context
+Date: 2026-07-21
+
+Scope
+- Data elements and business categories remain globally browsable/maintainable.
+- WarehousePlan baseline owns selected categories, readiness and layer policy.
+- ModelSpec fields own stable standard ID/version bindings.
+- Elements/SubjectAreas no longer produce or consume browser-only WarehousePlan truth.
+- Model/plan returnTo is restricted to matching local canonical routes.
+
+TDD RED
+Command:
+  node --test src/pages/governance/standardOwnerNavigation.test.ts src/pages/governance/ElementsPage.source-contract.test.ts src/pages/foundation/StandardPackageImport.source-contract.test.ts src/pages/governance/SubjectAreasPage.source-contract.test.ts src/pages/modeling/warehousePlanJourneyConvergence.source-contract.test.ts src/pages/modeling/dataDevelopmentWorkbench.source-contract.test.ts
+Result:
+  44 tests; 30 passed; 14 expected failures against the legacy session-plan/page-wide-draft behavior.
+
+Focused GREEN
+Same command after implementation.
+Result:
+  tests=44, pass=44, fail=0, duration=280.49ms.
+
+Review RED and final GREEN
+- Review regression tests first reproduced error/empty-state overlap, false import success, untrusted plan context and path-segment traversal.
+- The focused review batch failed before fixes, then the final expanded command passed:
+  tests=60, pass=60, fail=0, duration=284.97ms.
+- Security coverage includes malformed/duplicate/mismatched plan context and an encoded `../../ops/instances?ignored=` path segment.
+
+Production build
+Command:
+  cd source/dts-platform-webapp && pnpm build
+Result:
+  PASS; tsc passed; Vite transformed 10,590 modules; Chrome 95 legacy bundle built in 1m57s.
+Warnings:
+  browserslist data age and existing large chunk advisory only; no compile/build error.
+
+Post-review verification
+Commands:
+  pnpm exec biome check --formatter-enabled=false --assist-enabled=false <9 F6-T05 core files>
+  pnpm exec tsc --noEmit --pretty false
+Result:
+  PASS / PASS. These checks covered the small review-driven changes before the later container image rebuild.
+
+Container image rebuild and service replacement
+Date:
+  2026-07-21
+Commands:
+  docker tag sha256:95a7aa36aa33d1cdf45ec1928940a00cf4f48f180f86c23c125f139eac000ecc dts-platform-webapp:rollback-sprint67-f6t05-20260721
+  docker build --progress=plain -t dts-platform-webapp:1.0.0 -f builds/dts-platform-webapp/Dockerfile .
+  docker compose -f docker-compose-app.yml up -d --no-deps --force-recreate dts-platform-webapp
+Result:
+  PASS; new image sha256:8d613c2b89799601005e2062fff3933b66616065fac27233561cdddc25fc7f03.
+  Container v223-dts-platform-webapp-1 is running with restart_count=0; old image retained under the rollback tag.
+  Container Nginx config passed; container root, Traefik HTTPS root, /governance/elements and ElementsPage-CJGwkHI_.js returned HTTP 200.
+  Deployed bundle contains the F6-T05 data-element global-owner copy.
+
+GitNexus changed-scope audit
+Command/tool:
+  detect_changes(repo=s10-stack, scope=unstaged)
+Result:
+  LOW; affected execution processes=0. The report covers the whole existing dirty worktree (45 files), not only F6-T05, so it is not used to claim unrelated changes were reviewed.
+
+Formatting boundary
+- A full formatter/import-sort check still finds existing style debt in previously edited files; no bulk reformat was applied because it would enlarge and mix the dirty-worktree diff.
+- F6-T05 core linter rules are green; TypeScript correctness is covered by the successful production build plus final no-emit typecheck.
+
+Remaining before DONE
+- Run real-login/API Chrome 95 desktop and 390px Journey D.
+- Record modelSpecId/revision/planId, API responses and screenshots.
+- Execute incremental Go/No-Go together with the still-open F2-T05 evidence.

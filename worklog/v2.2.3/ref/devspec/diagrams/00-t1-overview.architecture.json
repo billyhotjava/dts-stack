@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DTS T1 主链接口总览",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [
+      1120,
+      640
+    ]
+  },
+  "components": [
+    {
+      "id": "idp",
+      "type": "security",
+      "label": "身份与三员",
+      "sublabel": "Keycloak",
+      "pos": [
+        40,
+        60
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "admin",
+      "type": "backend",
+      "label": "管理审批",
+      "sublabel": "dts-admin AdminApiResource",
+      "pos": [
+        300,
+        60
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "kafka",
+      "type": "messagebus",
+      "label": "平台事件",
+      "sublabel": "Kafka · 开关控制",
+      "pos": [
+        860,
+        60
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "entry",
+      "type": "frontend",
+      "label": "浏览器入口",
+      "sublabel": "Traefik + 平台/管理前端",
+      "pos": [
+        40,
+        300
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "platform",
+      "type": "backend",
+      "label": "建模与治理",
+      "sublabel": "dts-platform modeling/serving",
+      "pos": [
+        300,
+        300
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "analytics",
+      "type": "backend",
+      "label": "分析消费",
+      "sublabel": "dts-analytics AnalysisQueryGateway",
+      "pos": [
+        600,
+        300
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "execution",
+      "type": "backend",
+      "label": "构建与调度",
+      "sublabel": "Airflow / dbt / Addax",
+      "pos": [
+        860,
+        300
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "ingestion",
+      "type": "backend",
+      "label": "接入执行",
+      "sublabel": "dts-ingestion IngestionTaskService",
+      "pos": [
+        300,
+        500
+      ],
+      "size": [
+        200,
+        64
+      ]
+    },
+    {
+      "id": "metadata",
+      "type": "external",
+      "label": "元数据目录",
+      "sublabel": "OpenMetadata",
+      "pos": [
+        600,
+        500
+      ],
+      "size": [
+        200,
+        64
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "admin-idp",
+      "from": "admin",
+      "to": "idp",
+      "label": "三员角色集合",
+      "variant": "security"
+    },
+    {
+      "id": "entry-admin",
+      "from": "entry",
+      "to": "admin",
+      "label": "管理 API"
+    },
+    {
+      "id": "entry-platform",
+      "from": "entry",
+      "to": "platform",
+      "label": "业务 API",
+      "variant": "emphasis",
+      "labelAt": [
+        250,
+        352
+      ]
+    },
+    {
+      "id": "platform-ingestion",
+      "from": "platform",
+      "to": "ingestion",
+      "label": "接入任务调用",
+      "labelAt": [
+        440,
+        420
+      ]
+    },
+    {
+      "id": "platform-analytics",
+      "from": "platform",
+      "to": "analytics",
+      "label": "语义发布 HTTP",
+      "fromSide": "top",
+      "toSide": "top"
+    },
+    {
+      "id": "analytics-platform",
+      "from": "analytics",
+      "to": "platform",
+      "label": "契约读取 GET",
+      "fromSide": "left",
+      "toSide": "right",
+      "labelAt": [
+        550,
+        308
+      ]
+    },
+    {
+      "id": "ingestion-execution",
+      "from": "ingestion",
+      "to": "execution",
+      "label": "Addax / DAG 触发",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "platform-execution",
+      "from": "platform",
+      "to": "execution",
+      "label": "DbtExecutionGateway",
+      "variant": "emphasis",
+      "fromSide": "top",
+      "toSide": "top"
+    },
+    {
+      "id": "ingestion-metadata",
+      "from": "ingestion",
+      "to": "metadata",
+      "label": "目录/血缘（平台回写）",
+      "labelAt": [
+        550,
+        574
+      ]
+    },
+    {
+      "id": "platform-kafka",
+      "from": "platform",
+      "to": "kafka",
+      "label": "投影事件",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "left",
+      "labelAt": [
+        700,
+        150
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "四条 T1 主链",
+      "items": [
+        "建模主链：规划→模型→加工配置→构建→发布→数据集",
+        "接入执行：任务→Addax/Airflow→目标表→目录",
+        "管理审批：变更单→同意→分派执行→审计",
+        "分析消费：契约缓存→查询执行→公共分享"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "只画主关系，接口与行号见各链文档",
+        "OpenMetadata 注册分支当前不可达，血缘走平台回写",
+        "服务声明不等于运行与验收"
+      ]
+    }
+  ]
+}

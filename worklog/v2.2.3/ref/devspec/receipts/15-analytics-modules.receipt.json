@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/15-analytics-modules.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/15-analytics-modules.html",
+  "specification": {
+    "sha256": "ef2e789aef3c455adad30e6a800c471307dc1aab34190548bde36429828e8757",
+    "bytes": 5721
+  },
+  "artifact": {
+    "sha256": "56f259fd1c1e9c4563a7c26a5ba2a77d02b7bfa78396a4a479462170f51041ee",
+    "bytes": 718674
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0051-01-governed-analysis-card-expand" author="codex">
+        <addColumn tableName="analytics_card">
+            <column name="query_dataset_id" type="uuid"/>
+            <column name="query_dataset_version" type="int"/>
+            <column name="semantic_contract_version" type="varchar(64)"/>
+            <column name="lifecycle_status" type="varchar(32)" defaultValue="DRAFT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_revision_id" type="bigint"/>
+            <column name="version_no" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="varchar(128)"/>
+        </addColumn>
+        <sql>
+            UPDATE analytics_card
+               SET lifecycle_status = CASE WHEN archived THEN 'ARCHIVED' ELSE 'DRAFT' END
+             WHERE lifecycle_status IS NULL OR lifecycle_status = 'DRAFT';
+            ALTER TABLE analytics_card
+                ADD CONSTRAINT ck_analytics_card_lifecycle_status
+                CHECK (lifecycle_status IN ('DRAFT', 'PUBLISHED', 'ARCHIVED'));
+        </sql>
+        <createIndex tableName="analytics_card" indexName="idx_card_analysis_dataset">
+            <column name="card_type"/>
+            <column name="query_dataset_id"/>
+            <column name="query_dataset_version"/>
+            <column name="lifecycle_status"/>
+        </createIndex>
+        <addUniqueConstraint
+            tableName="analytics_card"
+            columnNames="creator_id,idempotency_key"
+            constraintName="uk_card_creator_idempotency_key"/>
+        <rollback>
+            <dropUniqueConstraint tableName="analytics_card" constraintName="uk_card_creator_idempotency_key"/>
+            <dropIndex tableName="analytics_card" indexName="idx_card_analysis_dataset"/>
+            <sql>ALTER TABLE analytics_card DROP CONSTRAINT IF EXISTS ck_analytics_card_lifecycle_status;</sql>
+            <dropColumn tableName="analytics_card" columnName="idempotency_key"/>
+            <dropColumn tableName="analytics_card" columnName="version_no"/>
+            <dropColumn tableName="analytics_card" columnName="published_revision_id"/>
+            <dropColumn tableName="analytics_card" columnName="lifecycle_status"/>
+            <dropColumn tableName="analytics_card" columnName="semantic_contract_version"/>
+            <dropColumn tableName="analytics_card" columnName="query_dataset_version"/>
+            <dropColumn tableName="analytics_card" columnName="query_dataset_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

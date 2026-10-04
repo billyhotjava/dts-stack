@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Security Compliance"
+  short_description: "Guide secure DTS auth and audit work"
+  default_prompt: "Use $dts-security-compliance to review this DTS security-sensitive change."

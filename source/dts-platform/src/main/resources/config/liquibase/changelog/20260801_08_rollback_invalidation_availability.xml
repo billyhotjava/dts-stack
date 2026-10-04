@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801_08_rollback_invalidation_availability" author="platform">
+        <createSequence sequenceName="integration_rollback_invalidation_source_seq" startValue="1" incrementBy="1"/>
+
+        <createTable tableName="integration_rollback_invalidation_receipt">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="state" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="rollback_level" type="int"><constraints nullable="false"/></column>
+            <column name="rollback_scope" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="task_id" type="bigint"/>
+            <column name="source_data_source_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="actor" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="completion_event_id" type="varchar(128)"/>
+            <column name="completion_payload_hash" type="varchar(64)"/>
+            <column name="completion_source_sequence" type="bigint"/>
+            <column name="downstream_summary_json" type="text"/>
+            <column name="prepared_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="applied_at" type="timestamp"/>
+            <column name="aborted_at" type="timestamp"/>
+            <column name="restored_at" type="timestamp"/>
+            <column name="reconciliation_at" type="timestamp"/>
+            <column name="created_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="integration_rollback_invalidation_receipt"
+            columnNames="idempotency_key"
+            constraintName="uk_rollback_invalidation_receipt_idempotency"/>
+        <createIndex tableName="integration_rollback_invalidation_receipt" indexName="idx_rollback_invalidation_source_state">
+            <column name="source_data_source_id"/>
+            <column name="state"/>
+            <column name="source_sequence"/>
+        </createIndex>
+
+        <createTable tableName="integration_rollback_dispatch_outbox">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="receipt_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="command_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="command_json" type="text"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="dispatch_attempts" type="int" defaultValueNumeric="0"><constraints nullable="false"/></column>
+            <column name="claimed_at" type="timestamp"/>
+            <column name="next_attempt_at" type="timestamp"/>
+            <column name="sent_at" type="timestamp"/>
+            <column name="completed_at" type="timestamp"/>
+            <column name="last_error" type="varchar(512)"/>
+            <column name="created_at" type="timestamp"><constraints nullable="false"/></column>
+            <column name="updated_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="integration_rollback_dispatch_outbox"
+            baseColumnNames="receipt_id"
+            referencedTableName="integration_rollback_invalidation_receipt"
+            referencedColumnNames="id"
+            constraintName="fk_rollback_dispatch_receipt"/>
+        <addUniqueConstraint
+            tableName="integration_rollback_dispatch_outbox"
+            columnNames="receipt_id"
+            constraintName="uk_rollback_dispatch_receipt"/>
+        <createIndex tableName="integration_rollback_dispatch_outbox" indexName="idx_rollback_dispatch_claim">
+            <column name="status"/>
+            <column name="next_attempt_at"/>
+            <column name="created_at"/>
+        </createIndex>
+        <createIndex tableName="integration_rollback_dispatch_outbox" indexName="idx_rollback_dispatch_stale_claim">
+            <column name="status"/>
+            <column name="claimed_at"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_availability">
+            <column name="asset_type" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="availability_epoch" type="bigint"><constraints nullable="false"/></column>
+            <column name="source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="fence_id" type="uuid"/>
+            <column name="event_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="reason" type="varchar(512)"/>
+            <column name="updated_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_asset_availability"
+            columnNames="asset_type, asset_key"
+            constraintName="pk_catalog_asset_availability"/>
+        <createIndex tableName="catalog_asset_availability" indexName="idx_catalog_asset_availability_status">
+            <column name="status"/>
+            <column name="updated_at"/>
+        </createIndex>
+
+        <createTable tableName="integration_rollback_invalidation_target">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="receipt_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="asset_type" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="ods_mapping_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="previous_mapping_enabled" type="boolean"><constraints nullable="false"/></column>
+            <column name="previous_availability_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="previous_availability_epoch" type="bigint"><constraints nullable="false"/></column>
+            <column name="previous_availability_event_id" type="varchar(128)"/>
+            <column name="previous_availability_payload_hash" type="varchar(64)"/>
+            <column name="previous_availability_reason" type="varchar(512)"/>
+            <column name="previous_availability_source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="applied_at" type="timestamp"/>
+            <column name="created_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="integration_rollback_invalidation_target"
+            baseColumnNames="receipt_id"
+            referencedTableName="integration_rollback_invalidation_receipt"
+            referencedColumnNames="id"
+            constraintName="fk_rollback_invalidation_target_receipt"
+            onDelete="CASCADE"/>
+        <addUniqueConstraint
+            tableName="integration_rollback_invalidation_target"
+            columnNames="receipt_id, ods_mapping_id"
+            constraintName="uk_rollback_invalidation_target_mapping"/>
+        <createIndex tableName="integration_rollback_invalidation_target" indexName="idx_rollback_invalidation_target_asset">
+            <column name="asset_type"/>
+            <column name="asset_key"/>
+        </createIndex>
+
+        <createTable tableName="integration_rollback_invalidation_completion_event">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="receipt_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="event_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="outcome" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="resulting_state" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="reason" type="varchar(512)"/>
+            <column name="zero_side_effects_confirmed" type="boolean"><constraints nullable="false"/></column>
+            <column name="downstream_reference" type="text"/>
+            <column name="completed_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="integration_rollback_invalidation_completion_event"
+            baseColumnNames="receipt_id"
+            referencedTableName="integration_rollback_invalidation_receipt"
+            referencedColumnNames="id"
+            constraintName="fk_rollback_invalidation_completion_receipt"/>
+        <addUniqueConstraint
+            tableName="integration_rollback_invalidation_completion_event"
+            columnNames="receipt_id, event_id"
+            constraintName="uk_rollback_invalidation_completion_identity"/>
+        <createIndex
+            tableName="integration_rollback_invalidation_completion_event"
+            indexName="idx_rollback_invalidation_completion_sequence">
+            <column name="receipt_id"/>
+            <column name="source_sequence"/>
+        </createIndex>
+
+        <createTable tableName="catalog_asset_availability_event">
+            <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="event_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="payload_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="receipt_id" type="uuid"/>
+            <column name="asset_type" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="asset_key" type="varchar(512)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="availability_epoch" type="bigint"><constraints nullable="false"/></column>
+            <column name="source_sequence" type="bigint"><constraints nullable="false"/></column>
+            <column name="reason" type="varchar(512)"/>
+            <column name="occurred_at" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_availability_event"
+            baseColumnNames="receipt_id"
+            referencedTableName="integration_rollback_invalidation_receipt"
+            referencedColumnNames="id"
+            constraintName="fk_catalog_availability_event_receipt"/>
+        <createIndex tableName="catalog_asset_availability_event" indexName="idx_catalog_availability_event_receipt">
+            <column name="receipt_id"/>
+        </createIndex>
+        <addUniqueConstraint
+            tableName="catalog_asset_availability_event"
+            columnNames="event_id, asset_type, asset_key"
+            constraintName="uk_catalog_availability_event_identity"/>
+        <createIndex tableName="catalog_asset_availability_event" indexName="idx_catalog_availability_event_asset_time">
+            <column name="asset_type"/>
+            <column name="asset_key"/>
+            <column name="occurred_at"/>
+        </createIndex>
+
+        <addColumn tableName="infra_ods_table_mapping">
+            <column name="availability_fence_id" type="uuid"/>
+            <column name="availability_event_id" type="varchar(128)"/>
+            <column name="availability_source_sequence" type="bigint" defaultValueNumeric="0"><constraints nullable="false"/></column>
+        </addColumn>
+        <createIndex tableName="infra_ods_table_mapping" indexName="idx_infra_ods_mapping_availability_fence">
+            <column name="availability_fence_id"/>
+            <column name="availability_source_sequence"/>
+        </createIndex>
+
+        <addColumn tableName="platform_event_outbox">
+            <column name="payload_hash" type="varchar(64)"/>
+        </addColumn>
+        <createIndex tableName="platform_event_outbox" indexName="idx_platform_event_payload_hash">
+            <column name="payload_hash"/>
+        </createIndex>
+
+        <sql>
+            alter table integration_rollback_invalidation_receipt
+                add constraint chk_rollback_invalidation_state
+                check (
+                    state in ('PREPARED', 'RECONCILIATION_REQUIRED', 'APPLIED', 'ABORTED', 'RESTORED')
+                    and rollback_level in (1, 2, 3)
+                    and source_sequence > 0
+                    and source_sequence &lt; 9223372036854775807
+                    and char_length(payload_hash) = 64
+                    and (
+                        (
+                            state in ('PREPARED', 'RECONCILIATION_REQUIRED')
+                            and completion_event_id is null
+                            and completion_payload_hash is null
+                            and completion_source_sequence is null
+                        )
+                        or (
+                            state in ('APPLIED', 'ABORTED', 'RESTORED')
+                            and completion_event_id is not null
+                            and completion_payload_hash is not null
+                            and completion_source_sequence is not null
+                            and char_length(completion_payload_hash) = 64
+                            and completion_source_sequence > source_sequence
+                            and completion_source_sequence &lt; 9223372036854775807
+                        )
+                    )
+                );
+            alter table integration_rollback_invalidation_target
+                add constraint chk_rollback_invalidation_target_sequence
+                check (
+                    previous_availability_epoch >= 0
+                    and previous_availability_source_sequence >= 0
+                    and previous_availability_source_sequence &lt; 9223372036854775807
+                );
+            alter table integration_rollback_dispatch_outbox
+                add constraint chk_rollback_dispatch_state
+                check (
+                    status in ('PENDING', 'CLAIMED', 'RETRY', 'SENT', 'COMPLETED', 'DEAD')
+                    and dispatch_attempts >= 0
+                    and char_length(command_hash) = 64
+                    and char_length(command_json) between 2 and 262144
+                    and (
+                        (status in ('PENDING', 'RETRY') and claimed_at is null and next_attempt_at is not null)
+                        or (
+                            status = 'SENT'
+                            and claimed_at is null
+                            and next_attempt_at is not null
+                            and sent_at is not null
+                        )
+                        or (status = 'CLAIMED' and claimed_at is not null)
+                        or (
+                            status in ('COMPLETED', 'DEAD')
+                            and claimed_at is null
+                            and next_attempt_at is null
+                        )
+                    )
+                );
+            alter table catalog_asset_availability
+                add constraint chk_catalog_asset_availability_status
+                check (
+                    status in ('AVAILABLE', 'FENCED', 'UNAVAILABLE')
+                    and availability_epoch >= 0
+                    and source_sequence > 0
+                    and source_sequence &lt; 9223372036854775807
+                    and char_length(payload_hash) = 64
+                );
+            alter table catalog_asset_availability_event
+                add constraint chk_catalog_asset_availability_event_status
+                check (
+                    status in ('AVAILABLE', 'FENCED', 'UNAVAILABLE')
+                    and availability_epoch >= 0
+                    and source_sequence > 0
+                    and source_sequence &lt; 9223372036854775807
+                    and char_length(payload_hash) = 64
+                );
+            alter table integration_rollback_invalidation_completion_event
+                add constraint chk_rollback_invalidation_completion_event
+                check (
+                    outcome in ('APPLY', 'ABORT_NO_SIDE_EFFECT', 'RESTORE')
+                    and resulting_state in ('APPLIED', 'ABORTED', 'RESTORED')
+                    and source_sequence > 0
+                    and source_sequence &lt; 9223372036854775807
+                    and char_length(payload_hash) = 64
+                    and (
+                        (outcome = 'APPLY' and resulting_state = 'APPLIED' and not zero_side_effects_confirmed)
+                        or (
+                            outcome = 'ABORT_NO_SIDE_EFFECT'
+                            and resulting_state = 'ABORTED'
+                            and zero_side_effects_confirmed
+                        )
+                        or (outcome = 'RESTORE' and resulting_state = 'RESTORED' and not zero_side_effects_confirmed)
+                    )
+                );
+            alter table infra_ods_table_mapping
+                add constraint chk_infra_ods_mapping_availability_sequence
+                check (
+                    availability_source_sequence >= 0
+                    and availability_source_sequence &lt; 9223372036854775807
+                );
+        </sql>
+
+        <sql dbms="postgresql" splitStatements="false">
+            create or replace function reject_rollback_invalidation_evidence_mutation()
+            returns trigger as $$
+            begin
+                raise exception 'ROLLBACK_INVALIDATION_EVIDENCE_APPEND_ONLY'
+                    using errcode = '55000';
+            end;
+            $$ language plpgsql;
+
+            create trigger trg_catalog_availability_event_append_only
+                before update or delete on catalog_asset_availability_event
+                for each row execute function reject_rollback_invalidation_evidence_mutation();
+
+            create trigger trg_catalog_availability_event_no_truncate
+                before truncate on catalog_asset_availability_event
+                for each statement execute function reject_rollback_invalidation_evidence_mutation();
+
+            create trigger trg_rollback_completion_event_append_only
+                before update or delete on integration_rollback_invalidation_completion_event
+                for each row execute function reject_rollback_invalidation_evidence_mutation();
+
+            create trigger trg_rollback_completion_event_no_truncate
+                before truncate on integration_rollback_invalidation_completion_event
+                for each statement execute function reject_rollback_invalidation_evidence_mutation();
+
+            create or replace function protect_rollback_invalidation_target_evidence()
+            returns trigger as $$
+            begin
+                if TG_OP = 'DELETE' then
+                    raise exception 'ROLLBACK_INVALIDATION_TARGET_EVIDENCE_IMMUTABLE'
+                        using errcode = '55000';
+                end if;
+                if (to_jsonb(NEW) - 'applied_at') is distinct from (to_jsonb(OLD) - 'applied_at')
+                   or (
+                       OLD.applied_at is not null
+                       and NEW.applied_at is distinct from OLD.applied_at
+                   ) then
+                    raise exception 'ROLLBACK_INVALIDATION_TARGET_EVIDENCE_IMMUTABLE'
+                        using errcode = '55000';
+                end if;
+                return NEW;
+            end;
+            $$ language plpgsql;
+
+            create trigger trg_rollback_invalidation_target_immutable
+                before update or delete on integration_rollback_invalidation_target
+                for each row execute function protect_rollback_invalidation_target_evidence();
+
+            create trigger trg_rollback_invalidation_target_no_truncate
+                before truncate on integration_rollback_invalidation_target
+                for each statement execute function reject_rollback_invalidation_evidence_mutation();
+
+            create trigger trg_rollback_dispatch_identity_immutable
+                before update of receipt_id, command_hash, command_json or delete
+                on integration_rollback_dispatch_outbox
+                for each row execute function reject_rollback_invalidation_evidence_mutation();
+
+            create trigger trg_rollback_dispatch_no_truncate
+                before truncate on integration_rollback_dispatch_outbox
+                for each statement execute function reject_rollback_invalidation_evidence_mutation();
+        </sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE integration_rollback_invalidation_receipt,
+                               integration_rollback_dispatch_outbox,
+                               integration_rollback_invalidation_target,
+                               integration_rollback_invalidation_completion_event,
+                               catalog_asset_availability,
+                               catalog_asset_availability_event,
+                               infra_ods_table_mapping,
+                               platform_event_outbox
+                        IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM integration_rollback_invalidation_receipt)
+                       OR EXISTS (SELECT 1 FROM integration_rollback_dispatch_outbox)
+                       OR EXISTS (SELECT 1 FROM integration_rollback_invalidation_target)
+                       OR EXISTS (SELECT 1 FROM integration_rollback_invalidation_completion_event)
+                       OR EXISTS (SELECT 1 FROM catalog_asset_availability)
+                       OR EXISTS (SELECT 1 FROM catalog_asset_availability_event)
+                       OR EXISTS (
+                           SELECT 1
+                             FROM infra_ods_table_mapping
+                            WHERE availability_fence_id IS NOT NULL
+                               OR availability_event_id IS NOT NULL
+                               OR availability_source_sequence <> 0
+                       )
+                       OR EXISTS (SELECT 1 FROM platform_event_outbox WHERE payload_hash IS NOT NULL) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_ROLLBACK_INVALIDATION_EVIDENCE_EXISTS'
+                            USING ERRCODE = '55000';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_dispatch_no_truncate
+                    on integration_rollback_dispatch_outbox
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_dispatch_identity_immutable
+                    on integration_rollback_dispatch_outbox
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_invalidation_target_no_truncate
+                    on integration_rollback_invalidation_target
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_invalidation_target_immutable
+                    on integration_rollback_invalidation_target
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_completion_event_no_truncate
+                    on integration_rollback_invalidation_completion_event
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_rollback_completion_event_append_only
+                    on integration_rollback_invalidation_completion_event
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_catalog_availability_event_no_truncate
+                    on catalog_asset_availability_event
+            </sql>
+            <sql dbms="postgresql">
+                drop trigger if exists trg_catalog_availability_event_append_only
+                    on catalog_asset_availability_event
+            </sql>
+            <dropIndex tableName="platform_event_outbox" indexName="idx_platform_event_payload_hash"/>
+            <dropColumn tableName="platform_event_outbox" columnName="payload_hash"/>
+            <dropIndex tableName="infra_ods_table_mapping" indexName="idx_infra_ods_mapping_availability_fence"/>
+            <dropColumn tableName="infra_ods_table_mapping" columnName="availability_source_sequence"/>
+            <dropColumn tableName="infra_ods_table_mapping" columnName="availability_event_id"/>
+            <dropColumn tableName="infra_ods_table_mapping" columnName="availability_fence_id"/>
+            <dropTable tableName="catalog_asset_availability_event"/>
+            <dropTable tableName="integration_rollback_invalidation_completion_event"/>
+            <dropTable tableName="integration_rollback_dispatch_outbox"/>
+            <dropTable tableName="integration_rollback_invalidation_target"/>
+            <dropTable tableName="catalog_asset_availability"/>
+            <dropTable tableName="integration_rollback_invalidation_receipt"/>
+            <dropSequence sequenceName="integration_rollback_invalidation_source_seq"/>
+            <sql dbms="postgresql">
+                drop function if exists protect_rollback_invalidation_target_evidence()
+            </sql>
+            <sql dbms="postgresql">
+                drop function if exists reject_rollback_invalidation_evidence_mutation()
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

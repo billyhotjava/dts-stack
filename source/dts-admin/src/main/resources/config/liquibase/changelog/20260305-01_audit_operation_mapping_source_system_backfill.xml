@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260305-01-audit-operation-mapping-source-system-backfill" author="codex">
+        <comment>Backfill source_system for legacy audit operation mappings</comment>
+
+        <update tableName="audit_operation_mapping">
+            <column name="source_system" value="admin"/>
+            <where>
+                source_system IS NULL
+                AND module_name IN ('审批管理','未知模块','部门管理','菜单管理','角色管理','审计日志','用户管理','基础设施')
+            </where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="source_system" value="platform"/>
+            <where>
+                source_system IS NULL
+                AND module_name IN ('数据标准','数据开发','数据目录','数据质量','数据治理','数据探索')
+            </where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20260305-02-audit-operation-mapping-user-request-labels" author="codex">
+        <comment>Adjust user-related audit labels to reflect approval submissions</comment>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户新增审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users' AND http_method = 'POST'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户信息更新审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}' AND http_method = 'PUT'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户角色分配审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/roles' AND http_method = 'POST'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户角色回收审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/roles' AND http_method = 'DELETE'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户密级调整审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/person-level' AND http_method = 'PUT'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户启停审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/enabled' AND http_method = 'PUT'</where>
+        </update>
+
+        <update tableName="audit_operation_mapping">
+            <column name="description_template" value="提交用户密码重置审批"/>
+            <column name="operation_type" value="REQUEST"/>
+            <where>url_pattern = '/api/keycloak/users/{id}/reset-password' AND http_method = 'POST'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

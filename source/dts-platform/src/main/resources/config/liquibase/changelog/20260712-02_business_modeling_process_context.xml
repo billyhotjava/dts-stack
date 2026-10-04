@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260712-02-semantic-business-object-process" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <and>
+                <tableExists tableName="semantic_business_object"/>
+                <not><columnExists tableName="semantic_business_object" columnName="process_id"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="semantic_business_object">
+            <column name="process_id" type="varchar(128)"/>
+        </addColumn>
+        <createIndex tableName="semantic_business_object" indexName="idx_semantic_object_process">
+            <column name="process_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260712-02-semantic-model-process" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <and>
+                <tableExists tableName="semantic_model"/>
+                <not><columnExists tableName="semantic_model" columnName="process_id"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="semantic_model">
+            <column name="process_id" type="varchar(128)"/>
+        </addColumn>
+        <createIndex tableName="semantic_model" indexName="idx_semantic_model_process">
+            <column name="process_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

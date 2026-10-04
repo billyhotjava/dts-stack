@@ -1,0 +1,4 @@
+Sprint-26 metrics module ownership smoke passed
+static=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/routes/sections/dashboard/static-routes.tsx
+dynamic=/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/routes/sections/dashboard/dynamic-resolver.tsx
+evidence=worklog/v2.2.3/sprint-26-202605/it/evidence/20260502-local/metrics-module

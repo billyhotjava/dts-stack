@@ -1,0 +1,22 @@
+{
+  "httpStatus": "200",
+  "status": 200,
+  "message": "OK",
+  "runId": "3063edf3-5010-4da5-83c7-d2a91112686b",
+  "blocking": true,
+  "totalErrors": 1,
+  "elementReport": {
+    "file": "02-data-elements.csv",
+    "present": true,
+    "total": 1,
+    "toCreate": 0,
+    "toUpdate": 0,
+    "errorCount": 1,
+    "errors": [
+      {
+        "row": 2,
+        "message": "s57_20260704151638_status_code_bad 的 code_set 无法解析：MISSING_S57_s57_20260704151638_STATUS"
+      }
+    ]
+  }
+}

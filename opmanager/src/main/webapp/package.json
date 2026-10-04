@@ -1,0 +1,42 @@
+{
+  "name": "dts-opmanager-webapp",
+  "private": true,
+  "version": "2.2.3",
+  "type": "module",
+  "scripts": {
+    "dev": "VITE_CACHE_DIR=.vite-cache vite",
+    "build": "LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache tsc -p tsconfig.json && LEGACY_BROWSER_BUILD=1 VITE_CACHE_DIR=.vite-cache vite build",
+    "preview": "vite preview",
+    "test:diff": "node --test test/diff.test.mjs"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.79",
+    "@types/react-dom": "^18.2.25",
+    "@vitejs/plugin-legacy": "^6.1.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "terser": "^5.16.0",
+    "typescript": "^5.6.3",
+    "vite": "^6.2.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "browserslist": {
+    "production": [
+      "Chrome >= 95",
+      "Edge >= 95",
+      "Firefox >= 60",
+      "Safari >= 15.4",
+      "iOS >= 15.5",
+      "Android >= 95"
+    ],
+    "development": [
+      "last 1 Chrome version"
+    ]
+  }
+}

@@ -1,0 +1,115 @@
+{
+  "evidenceType": "sprint-104-model-materialization-read-only",
+  "capturedAt": "2026-09-06T17:09:00+08:00",
+  "modelSpecId": "e71715b7-ad1d-49b5-86e2-a91fa91e1b07",
+  "modelName": "S104 无时间明细复测",
+  "candidate": {
+    "id": "393ab1c2-42b4-4d4d-ade9-bee8c48cfde3",
+    "version": 4,
+    "status": "QUALITY_RUNNING",
+    "environment": "test",
+    "lastModifiedAt": "2026-09-06T17:08:04.431174+08:00"
+  },
+  "releaseBuild": {
+    "attempt": 1,
+    "pipelineRunId": "f7f7ff67-6bc6-31f3-ba6d-9b1aea29794e",
+    "status": "BUILT",
+    "airflowDagId": "dts_release_build_postgres_primary",
+    "airflowRunId": "dts_rc_393ab1c242b44d4dade9bee8c48cfde3_v2_a1",
+    "dbtInvocationId": "abcec93d-3b61-4457-b5d3-79290ad28c4a",
+    "selector": "model_e71715b7_ad1d_49b5_86e2_a91fa91e1b07",
+    "target": "dwd_s104_detail_retry",
+    "startedAt": "2026-09-06T17:07:22.425710+08:00",
+    "finishedAt": "2026-09-06T17:07:36.611664+08:00",
+    "message": "dbt build and physical relation verification succeeded",
+    "airflowTasks": {
+      "prepare_runtime": "success",
+      "dbt_build": "success",
+      "sync_manifest_and_probe": "success",
+      "finalize_run": "success"
+    }
+  },
+  "physicalRelation": {
+    "database": "biadmin",
+    "schema": "public",
+    "identifier": "dwd_s104_detail_retry",
+    "actualType": "TABLE",
+    "exists": true,
+    "verified": true,
+    "columnCount": 2,
+    "columns": [
+      {"name": "project_id", "dataType": "text", "nullable": true, "ordinalPosition": 1},
+      {"name": "remark", "dataType": "text", "nullable": true, "ordinalPosition": 2}
+    ],
+    "rowCount": 3,
+    "redactedRows": [
+      {"project_id_md5": "33efbb16ece8550ff8eff9fd435442fc", "remark_md5": "8b04d5e3775d298e78455efc5ca404d5", "project_id_null": false, "remark_null": false},
+      {"project_id_md5": "33efbb16ece8550ff8eff9fd435442fc", "remark_md5": "a9f0e61a137d86aa9db53465e0801612", "project_id_null": false, "remark_null": false},
+      {"project_id_md5": "8208a34c870ec1cddb1b092f464b3392", "remark_md5": "dd5c8bf51558ffcbe5007071908e9524", "project_id_null": false, "remark_null": false}
+    ],
+    "redaction": "Values are replaced by MD5 fingerprints; hashes support equality/non-null verification only."
+  },
+  "qualityStart": {
+    "uiErrorCode": "MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED",
+    "candidateStatusAfterFailure": "QUALITY_RUNNING",
+    "runtimeEvidence": {
+      "governanceEvidenceViolationAtStart": "ASSET_MISMATCH",
+      "governanceEvidenceViolationAfterRefresh": "MISSING",
+      "ruleId": null,
+      "ruleVersionId": null,
+      "bindingId": null,
+      "qualityRunId": null
+    },
+    "sourceDerivedCause": {
+      "code": "MODEL_SPEC_GOVERNANCE_QUALITY_BINDING_REQUIRED",
+      "explanation": "The start response had ASSET_MISMATCH and the refreshed evidence is MISSING. Neither has a rule, rule version or binding, so neither is rerunnable; the rerun service rejects an empty eligible scope. The REST resource wraps that exception as MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED after the status transition.",
+      "isRuntimeStackTrace": false
+    },
+    "conclusion": "The dbt/Airflow build and physical relation verification succeeded. Quality workflow was not started because no rerunnable, bound governance rule matched the physical asset; this is not an Airflow/dbt execution failure."
+  },
+  "secondMaterialization": {
+    "attempted": false,
+    "reason": "The UI materialization action was disabled while the candidate remained QUALITY_RUNNING; no second RELEASE_BUILD run exists. This does not cover the later, separate MANUAL operational-run request."
+  },
+  "postPublicationReadOnlyDiagnostic": {
+    "quality": {
+      "publishedRuleId": "d9abfde2-7576-4a32-b01f-2bebc41550ce",
+      "qualityRunId": "72d7bc72-259e-4ff5-8c33-cf0856cb7997",
+      "result": "3/3 passed",
+      "candidateStatus": "PUBLISHED"
+    },
+    "catalogSemanticSync": {
+      "projectionStatus": "SYNC_FAILED",
+      "attempts": 1,
+      "errorCode": "ANALYTICS_SEMANTIC_PUBLISH_HTTP_400",
+      "runtimeObservation": "dts-analytics received POST /api/semantic/publish for public.dwd_s104_detail_retry with dataSourceName=null and returned HTTP 400.",
+      "rootCause": "The analytics database registry contains zero rows. The semantic publish endpoint cannot resolve a database with dataSourceName absent, therefore returns its datasource-not-found HTTP 400 response.",
+      "isRuntimeVerified": true
+    },
+    "manualOperationalRun": {
+      "pipelineRunId": "5850295c-7516-3899-bd2c-aea5726f3e2f",
+      "secondRunGenerated": true,
+      "purpose": "OPERATIONAL_RUN",
+      "status": "QUEUED",
+      "attempt": 1,
+      "airflowDagId": "dts_release_build_postgres_primary",
+      "airflowRunId": "dts_plan_69949db3d42d3870ba0e39e6e238e184_ffa2720aaa5b520b3f87",
+      "airflowDagRunExists": false,
+      "executionBinding": {
+        "id": "69949db3-d42d-3870-ba0e-39e6e238e184",
+        "status": "ACTIVE",
+        "scheduleMode": "MANUAL_ONLY",
+        "airflowPaused": false
+      },
+      "dispatch": {
+        "status": "UNKNOWN",
+        "dispatchAttempts": 2,
+        "lastErrorCode": "MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED",
+        "nextAttemptAt": "2026-09-06T17:17:51.159962+08:00"
+      },
+      "rootCause": "The platform swallowed the underlying runtime exception after two recovery attempts, so its persisted code is only MODEL_OPERATIONAL_DISPATCH_RECOVERY_FAILED. The absent deterministic Airflow DagRun proves no task started. Source flow shows the nested terminal path is Airflow submission outcome unknown when trigger/get cannot establish the DagRun; the exact upstream HTTP/transport exception was not persisted or logged by the platform.",
+      "isUnderlyingExceptionRuntimeVerified": false
+    }
+  },
+  "readOnlyScope": "No retry, candidate status update, database write, or service restart was performed."
+}

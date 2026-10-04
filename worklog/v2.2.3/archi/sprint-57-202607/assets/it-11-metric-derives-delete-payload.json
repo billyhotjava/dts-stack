@@ -1,0 +1,20 @@
+{
+  "scenario": "metric-to-metric derivation edge deleted from MetricWorkbench mock data",
+  "method": "PUT",
+  "url": "http://localhost:3001/api/semantic/metrics/metric-avg",
+  "id": "metric-avg",
+  "body": {
+    "objectId": "object-order",
+    "code": "avg_order_amount",
+    "name": "客单价",
+    "formulaType": "aggregation/avg",
+    "formulaJson": "{\"field\":\"amount\"}",
+    "status": "ACTIVE"
+  },
+  "assertions": {
+    "relationType": "METRIC_DERIVES",
+    "sourceMetricId": "metric-amount",
+    "targetMetricId": "metric-avg",
+    "dependsOnMetricIdsRemoved": true
+  }
+}

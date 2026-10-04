@@ -1,0 +1,506 @@
+# ===================================================================
+# Spring Boot configuration.
+#
+# This configuration will be overridden by the Spring profile you use,
+# for example application-dev.yml if you use the "dev" profile.
+#
+# More information on profiles: https://www.jhipster.tech/profiles/
+# More information on configuration properties: https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+# ===================================================================
+# Standard Spring Boot properties.
+# Full reference is available at:
+# http://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
+# ===================================================================
+
+---
+# Conditionally disable springdoc on missing api-docs profile
+spring:
+  config:
+    activate:
+      on-profile: '!api-docs'
+springdoc:
+  api-docs:
+    enabled: false
+---
+eureka:
+  client:
+    enabled: true
+    healthcheck:
+      enabled: true
+    fetch-registry: true
+    register-with-eureka: true
+    instance-info-replication-interval-seconds: 10
+    registry-fetch-interval-seconds: 10
+  instance:
+    appname: dtsplatform
+    instanceId: dtsplatform:${spring.application.instance-id:${random.value}}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
+    status-page-url-path: ${management.endpoints.web.base-path}/info
+    health-check-url-path: ${management.endpoints.web.base-path}/health
+    metadata-map:
+      zone: primary # This is needed for the load balancer
+      profile: ${spring.profiles.active}
+      version: '@project.version@'
+      git-version: ${git.commit.id.describe:}
+      git-commit: ${git.commit.id.abbrev:}
+      git-branch: ${git.branch:}
+      context-path: ${server.servlet.context-path:}
+feign:
+  circuitbreaker:
+    enabled: true
+  # client:
+  #   config:
+  #     default:
+  #       connectTimeout: 5000
+  #       readTimeout: 5000
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - configprops
+          - env
+          - health
+          - info
+          - jhimetrics
+          - jhiopenapigroups
+          - logfile
+          - loggers
+          - prometheus
+          - threaddump
+          - caches
+          - liquibase
+  endpoint:
+    health:
+      show-details: when_authorized
+      roles: 'ROLE_ADMIN'
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+    jhimetrics:
+      enabled: true
+  info:
+    git:
+      mode: full
+    env:
+      enabled: true
+  health:
+    mail:
+      enabled: false # When using the MailService, configure an SMTP server and set this to true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+        step: 60
+  observations:
+    key-values:
+      application: ${spring.application.name}
+  metrics:
+    enable:
+      http: true
+      jvm: true
+      logback: true
+      process: true
+      system: true
+    distribution:
+      percentiles-histogram:
+        all: true
+      percentiles:
+        all: 0, 0.5, 0.75, 0.95, 0.99, 1.0
+    data:
+      repository:
+        autotime:
+          enabled: true
+    tags:
+      application: ${spring.application.name}
+
+spring:
+  application:
+    name: dtsPlatform
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start-only
+      file: src/main/docker/postgresql.yml
+  profiles:
+    # The commented value for `active` can be replaced with valid Spring profiles to load.
+    # Otherwise, it will be filled in by maven when building the JAR file
+    # Either way, it can be overridden by `--spring.profiles.active` value passed in the commandline or `-Dspring.profiles.active` set in `JAVA_OPTS`
+    active: '@spring.profiles.active@'
+    group:
+      dev:
+        - dev
+        - api-docs
+        # Uncomment to activate TLS for the dev profile
+        #- tls
+  jmx:
+    enabled: false
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.timezone.default_storage: NORMALIZE
+      # Leave Instant mapping to Hibernate defaults to avoid incubating setting warnings
+      hibernate.id.new_generator_mappings: true
+      hibernate.connection.provider_disables_autocommit: true
+      hibernate.cache.use_second_level_cache: true
+      hibernate.cache.use_query_cache: false
+      hibernate.generate_statistics: false
+      # modify batch size as necessary
+      hibernate.jdbc.batch_size: 25
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      hibernate.query.fail_on_pagination_over_collection_fetch: true
+      hibernate.query.in_clause_parameter_padding: true
+      hibernate.cache.region.factory_class: com.hazelcast.hibernate.HazelcastCacheRegionFactory
+      hibernate.cache.use_minimal_puts: true
+      hibernate.cache.hazelcast.instance_name: dtsPlatform
+      hibernate.cache.hazelcast.use_lite_member: true
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  messages:
+    basename: i18n/messages
+  main:
+    allow-bean-definition-overriding: true
+  mvc:
+    problemdetails:
+      enabled: true
+  servlet:
+    multipart:
+      max-file-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+      max-request-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+      # Sprint-37 H1: dts-platform 是入湖上传第一跳代理(IngestionTaskProxyResource /files/upload*)，
+      # 上传明文先经此容器的 multipart 处理。200MB 上限纯内存会 OOM，故 threshold 适中(小文件
+      # 留内存)；超阈值与 POI 临时文件落容器内 JAVA_TOOL_OPTIONS=-Djava.io.tmpdir=/apptmp(tmpfs)，
+      # 而非宿主机 overlay2 diff 层。
+      file-size-threshold: ${DTS_MULTIPART_THRESHOLD:8MB}
+  security:
+    oauth2:
+      client:
+        provider:
+          oidc:
+            issuer-uri: http://dts-keycloak:8080/realms/S10
+        registration:
+          oidc:
+            client-id: ${OAUTH2_PLATFORM_CLIENT_ID:internal}
+            client-secret: ${OAUTH2_PLATFORM_CLIENT_SECRET:internal}
+            scope: openid, profile, email, offline_access # last one for refresh tokens
+  kafka:
+    bootstrap-servers: ${DTS_KAFKA_BOOTSTRAP_SERVERS:dts-kafka:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+  task:
+    execution:
+      thread-name-prefix: dts-platform-task-
+      pool:
+        core-size: 2
+        max-size: 50
+        queue-capacity: 10000
+    scheduling:
+      thread-name-prefix: dts-platform-scheduling-
+      pool:
+        size: 2
+logging:
+  level:
+    com.yuzhi.dts.platform.service.security.AccessChecker: DEBUG
+  thymeleaf:
+    mode: HTML
+  output:
+    ansi:
+      console-available: true
+
+server:
+  forward-headers-strategy: framework
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: x-forwarded-host
+      internal-proxies: ${DTS_TRUSTED_PROXY_REGEX:.*}
+  undertow:
+    max-http-post-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+  servlet:
+    session:
+      cookie:
+        http-only: true
+
+springdoc:
+  show-actuator: true
+
+# Properties to be exposed on the /info management endpoint
+info:
+  # Comma separated list of profiles that will trigger the ribbon to show
+  display-ribbon-on-profiles: 'dev'
+
+dts:
+  modeling:
+    # Operational write freeze; canonical ModelSpec v2 remains the only readable contract.
+    canonical-write-enabled: ${DTS_MODELING_CANONICAL_WRITE_ENABLED:true}
+    catalog:
+      semantic-sync-enabled: ${DTS_MODELING_CATALOG_SEMANTIC_SYNC_ENABLED:true}
+      semantic-sync-delay-ms: ${DTS_MODELING_CATALOG_SEMANTIC_SYNC_DELAY_MS:30000}
+    runtime:
+      # Keep first deployment safe; enable after Addax and Airflow endpoints are reachable.
+      enabled: ${DTS_MODELING_RUNTIME_ENABLED:false}
+    materialization:
+      enabled: ${DTS_MODEL_MATERIALIZATION_ENABLED:true}
+      execution-target-key: ${DTS_MODEL_EXECUTION_TARGET_KEY:postgres-primary}
+      adapter: ${DTS_MODEL_EXECUTION_ADAPTER:postgres}
+      profile-key: ${DTS_MODEL_EXECUTION_PROFILE_KEY:dts}
+      target-name: ${DTS_MODEL_EXECUTION_TARGET_NAME:dev}
+      release-build-dag-id: ${DTS_MODEL_RELEASE_BUILD_DAG_ID:dts_release_build_postgres_primary}
+      runtime-profile-root: ${DTS_DBT_RUNTIME_PROFILE_ROOT:/run/dts-dbt-runtime}
+      runtime-profile-require-tmpfs: ${DTS_DBT_RUNTIME_PROFILE_REQUIRE_TMPFS:true}
+      runtime-profile-expected-uid: ${DTS_DBT_RUNTIME_PROFILE_EXPECTED_UID:0}
+      runtime-profile-lease-ttl: ${DTS_DBT_RUNTIME_PROFILE_LEASE_TTL:10m}
+      runtime-spec-signing-key: ${DTS_MODEL_RUNTIME_SPEC_SIGNING_KEY:}
+      runtime-spec-token-ttl: ${DTS_MODEL_RUNTIME_SPEC_TOKEN_TTL:15m}
+      dbt-runtime-certification:
+        status: ${DTS_DBT_RUNTIME_CERTIFICATION_STATUS:NOT_CERTIFIED}
+        profile-id: ${DTS_DBT_RUNTIME_CERTIFICATION_PROFILE_ID:}
+        candidate-profile-id: ${DTS_DBT_RUNTIME_CERTIFICATION_CANDIDATE_PROFILE_ID:}
+        platform: ${DTS_DBT_RUNTIME_CERTIFICATION_PLATFORM:}
+        dbt-core-version: ${DTS_DBT_RUNTIME_CERTIFICATION_CORE_VERSION:}
+        dbt-postgres-version: ${DTS_DBT_RUNTIME_CERTIFICATION_POSTGRES_VERSION:}
+        adapter: ${DTS_DBT_RUNTIME_CERTIFICATION_ADAPTER:}
+        database-type: ${DTS_DBT_RUNTIME_CERTIFICATION_DATABASE_TYPE:}
+        requirements-lock-sha256: ${DTS_DBT_RUNTIME_CERTIFICATION_LOCK_SHA256:}
+        candidate-image-digest: ${DTS_DBT_RUNTIME_CERTIFICATION_CANDIDATE_IMAGE_DIGEST:}
+        image-ref: ${DTS_DBT_RUNTIME_CERTIFICATION_IMAGE_REF:}
+        evidence-manifest-sha256: ${DTS_DBT_RUNTIME_CERTIFICATION_EVIDENCE_SHA256:}
+  dbt:
+    enabled: ${DTS_DBT_ENABLED:true}
+    config-path: ${DTS_DBT_CONFIG_PATH:/opt/dts/upload/dbt-config.json}
+    project-dir: ${DTS_DBT_PROJECT_DIR:/opt/dts/dbt}
+    profiles-dir: ${DTS_DBT_PROFILES_DIR:/opt/dts/dbt-profiles}
+    release-gate:
+      require-git-metadata: ${DTS_DBT_RELEASE_GATE_REQUIRE_GIT_METADATA:false}
+  airflow:
+    enabled: ${DTS_AIRFLOW_ENABLED:true}
+    base-url: ${DTS_AIRFLOW_BASE_URL:http://dts-airflow-webserver:8080}
+    username: ${DTS_AIRFLOW_USERNAME:airflow}
+    password: ${DTS_AIRFLOW_PASSWORD:airflow}
+    dag-id: ${DTS_AIRFLOW_DAG_ID:dbt_load}
+    dags-dir: ${DTS_AIRFLOW_DAGS_DIR:/opt/airflow/dags}
+    dag-ready-wait-seconds: ${DTS_AIRFLOW_DAG_READY_WAIT_SECONDS:15}
+    dag-ready-poll-seconds: ${DTS_AIRFLOW_DAG_READY_POLL_SECONDS:2}
+  ingestion:
+    enabled: ${DTS_INGESTION_ENABLED:true}
+    base-url: ${DTS_INGESTION_BASE_URL:http://dts-ingestion:8083}
+    service-name: ${DTS_INGESTION_SERVICE_NAME:dts-platform}
+    service-token: ${DTS_PLATFORM_TO_INGESTION_TOKEN:}
+    retry:
+      max-attempts: ${DTS_INGESTION_RETRY_MAX_ATTEMPTS:3}
+      wait-duration-ms: ${DTS_INGESTION_RETRY_WAIT_MS:1000}
+      multiplier: ${DTS_INGESTION_RETRY_MULTIPLIER:2.0}
+    circuit-breaker:
+      failure-rate-threshold: ${DTS_INGESTION_CB_FAILURE_RATE:50}
+      sliding-window-size: ${DTS_INGESTION_CB_WINDOW_SIZE:10}
+      wait-duration-in-open-state-seconds: ${DTS_INGESTION_CB_OPEN_WAIT:30}
+      permitted-calls-in-half-open-state: ${DTS_INGESTION_CB_HALF_OPEN_CALLS:3}
+  sql-ide:
+    v2:
+      enabled: ${DTS_SQL_IDE_V2_ENABLED:false}
+  platform:
+    # Sprint-28 新增:出站客户端配置(platform 调 dts-admin)
+    outbound:
+      admin:
+        enabled: ${DTS_PLATFORM_OUTBOUND_ADMIN_ENABLED:true}
+        base-url: ${DTS_PLATFORM_OUTBOUND_ADMIN_BASE_URL:http://dts-admin:8081}
+        api-path: ${DTS_PLATFORM_OUTBOUND_ADMIN_API_PATH:/api}
+        admin-api-path: ${DTS_PLATFORM_OUTBOUND_ADMIN_ADMIN_API_PATH:/api/admin}
+        service-token: ${DTS_PLATFORM_TO_ADMIN_TOKEN:}
+        # platform 出站时通过 X-DTS-Service header 自报的服务名,默认 dts-platform。
+        # 注:Sprint-27 之前误用入站白名单字符串(dts-admin,dts-ingestion,...) 作为出站身份,Sprint-28 拆分时修复。
+        service-name: ${DTS_PLATFORM_OUTBOUND_SERVICE_NAME:dts-platform}
+    # Sprint-28 新增:入站服务鉴权配置(谁能调 platform)
+    inbound:
+      service-auth:
+        enabled: ${DTS_PLATFORM_INBOUND_AUTH_ENABLED:true}
+        # 每对独立 secret；空配置不会授予服务身份，重复或弱凭据会阻止启动。
+        trusted-services:
+          dts-ingestion: ${DTS_INBOUND_FROM_INGESTION:}
+          dts-airflow:   ${DTS_INBOUND_FROM_AIRFLOW:}
+          dts-analytics: ${DTS_INBOUND_FROM_ANALYTICS:}
+          dts-metrics:   ${DTS_INBOUND_FROM_METRICS:}
+          dts-admin:     ${DTS_INBOUND_FROM_ADMIN:}
+    events:
+      kafka:
+        enabled: ${DTS_PLATFORM_EVENTS_KAFKA_ENABLED:false}
+        topic: ${DTS_PLATFORM_EVENTS_KAFKA_TOPIC:dts.platform.events}
+        batch-size: ${DTS_PLATFORM_EVENTS_KAFKA_BATCH_SIZE:50}
+        dispatch-interval-ms: ${DTS_PLATFORM_EVENTS_KAFKA_DISPATCH_INTERVAL_MS:10000}
+    features:
+      # Serve Keycloak localization resources from platform to avoid browser TLS trust issues to admin domain in dev
+      kc-localization: ${DTS_FEATURE_PLATFORM_KC_LOCALIZATION:true}
+    openmetadata:
+      enabled: ${DTS_PLATFORM_OPENMETADATA_ENABLED:true}
+      base-url: ${DTS_PLATFORM_OPENMETADATA_BASE_URL:http://dts-openmetadata:8585}
+      api-path: ${DTS_PLATFORM_OPENMETADATA_API_PATH:/api/v1}
+      ui-base-url: ${DTS_PLATFORM_OPENMETADATA_UI_BASE_URL:}
+      auth-token: ${DTS_PLATFORM_OPENMETADATA_AUTH_TOKEN:}
+      service-name: ${DTS_PLATFORM_OPENMETADATA_SERVICE_NAME:hive}
+      default-database: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_DATABASE:}
+      default-schema: ${DTS_PLATFORM_OPENMETADATA_DEFAULT_SCHEMA:}
+      table-fqn-pattern: ${DTS_PLATFORM_OPENMETADATA_TABLE_FQN_PATTERN:{service}.{database}.{table}}
+      table-fields: ${DTS_PLATFORM_OPENMETADATA_TABLE_FIELDS:columns,owner,tags,domain,usageSummary,profile}
+    session:
+      timeout-minutes: ${DTS_PLATFORM_SESSION_TIMEOUT_MINUTES:30}
+    hive:
+      enabled: false
+      jdbc-url: jdbc:hive2://dts-hive:10000/default
+      username: ""
+      password: ""
+      tolerant: true
+    catalog:
+      # Enable Hive(Inceptor) metadata sync by default so datasets appear once a data source is published.
+      inceptor-sync-enabled: ${DTS_PLATFORM_CATALOG_INCEPTOR_SYNC_ENABLED:true}
+      asset-status-view-enabled: ${DTS_PLATFORM_CATALOG_ASSET_STATUS_VIEW_ENABLED:true}
+      postgres-schema: OLAP
+      properties: {}
+  jdbc:
+    # Directory to search for external JDBC drivers (jar files) at runtime.
+    # Place vendor-provided drivers here (e.g., TDS/Inceptor client jars).
+    drivers-dir: /opt/dts/drivers
+    # Whether to enable loading JDBC drivers from the external directory above.
+    # Enabled by default now to use vendor driver and avoid Hadoop conflicts.
+    load-external-drivers: true
+    # Optional: specify a concrete driver class to load/register (e.g., org.apache.hive.jdbc.HiveDriver).
+    # If unset, the loader will try ServiceLoader and known fallback classes.
+    driver-class: 
+    # Optional: specify a particular jar file name or absolute path to load, instead of scanning the directory.
+    # Example: inceptor-driver-8.37.3.jar or /opt/dts/drivers/inceptor-driver-8.37.3.jar
+    driver-jar: 
+
+# ===================================================================
+# JHipster specific properties
+#
+# Full reference is available at: https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+jhipster:
+  clientApp:
+    name: 'dtsPlatformApp'
+  # By default CORS is disabled. Uncomment to enable.
+  # cors:
+  #   allowed-origins: "http://localhost:8100,http://localhost:9000"
+  #   allowed-methods: "*"
+  #   allowed-headers: "*"
+  #   exposed-headers: "Authorization,Link,X-Total-Count,X-${jhipster.clientApp.name}-alert,X-${jhipster.clientApp.name}-error,X-${jhipster.clientApp.name}-params"
+  #   allow-credentials: true
+  #   max-age: 1800
+  mail:
+    from: dtsPlatform@localhost
+  api-docs:
+    default-include-pattern: /api/**
+    management-include-pattern: /management/**
+    title: Dts Platform API
+    description: Dts Platform API documentation
+    version: 0.0.1
+    terms-of-service-url:
+    contact-name:
+    contact-url:
+    contact-email:
+    license: unlicensed
+    license-url:
+  security:
+    oauth2:
+      audience:
+        - account
+        - api://default
+
+# jhipster-needle-add-application-yaml-document
+---
+# ===================================================================
+# Application specific properties
+# Add your own application properties here, see the ApplicationProperties class
+# to have type-safe configuration, like in the JHipsterProperties above
+#
+# More documentation is available at:
+# https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+# application:
+
+auditing:
+  enabled: true
+  # This release is single-tenant. Keep one internal audit owner while retaining
+  # tenant_id in the durable ledger for ownership and replay isolation.
+  tenancy-mode: SINGLE_TENANT
+  tenant-id: default
+  outbox:
+    dispatch-delay-ms: ${AUDIT_OUTBOX_DISPATCH_DELAY_MS:2000}
+    batch-size: ${AUDIT_OUTBOX_BATCH_SIZE:100}
+    max-dispatch-cycle-seconds: ${AUDIT_OUTBOX_MAX_DISPATCH_CYCLE_SECONDS:30}
+    stale-claim-seconds: ${AUDIT_OUTBOX_STALE_CLAIM_SECONDS:120}
+    initial-retry-seconds: ${AUDIT_OUTBOX_INITIAL_RETRY_SECONDS:5}
+    max-retry-seconds: ${AUDIT_OUTBOX_MAX_RETRY_SECONDS:300}
+    max-attempts: ${AUDIT_OUTBOX_MAX_ATTEMPTS:20}
+    retention-days: ${AUDIT_OUTBOX_RETENTION_DAYS:180}
+    retention-batch-size: ${AUDIT_OUTBOX_RETENTION_BATCH_SIZE:5000}
+    retention-cron: ${AUDIT_OUTBOX_RETENTION_CRON:0 20 2 * * *}
+  dictionary:
+    # HMAC verification of legacy-action-mappings.json. When verify-signatures=true and hmac-key
+    # is empty, audit dictionary loading fails closed — intentional fail-secure behaviour.
+    # The HMAC key MUST be held by the authorization administrator (authadmin), not the platform
+    # system administrator. See dts-admin/.../AuditDictionaryProperties for parallel admin-side config.
+    verify-signatures: ${AUDIT_DICT_VERIFY_SIG:false}
+    hmac-key: ${AUDIT_DICT_HMAC_KEY:}
+    legacy-keys: ${AUDIT_DICT_HMAC_LEGACY_KEYS:}
+    signature-suffix: ${AUDIT_DICT_SIG_SUFFIX:.sig}
+
+dts:
+  platform:
+    modeling:
+      default-tenant-id: ${DTS_PLATFORM_MODELING_DEFAULT_TENANT_ID:default}
+    infra:
+      multi-source-enabled: ${DTS_PLATFORM_INFRA_MULTI_SOURCE_ENABLED:false}
+      encryption-key: ${DTS_INFRA_ENCRYPTION_KEY:${DATA_STANDARD_ENCRYPTION_KEY:}}
+      key-version: ${DTS_INFRA_KEY_VERSION:${DATA_STANDARD_KEY_VERSION:v1}}
+    data-standard:
+      encryption-key: ${DATA_STANDARD_ENCRYPTION_KEY:}
+      key-version: ${DATA_STANDARD_KEY_VERSION:v1}
+      attachment:
+        max-file-size: ${DATA_STANDARD_MAX_FILE_SIZE:209715200}
+        allowed-extensions: docx,wps,pdf,xlsx,xls,md,txt
+        storage-strategy: ${DATA_STANDARD_ATTACHMENT_STORAGE_STRATEGY:filesystem}
+        storage-dir: ${DATA_STANDARD_STORAGE_DIR:/opt/dts/upload}
+    governance:
+      quality:
+        enabled: ${DTS_GOVERNANCE_QUALITY_ENABLED:true}
+        default-executor: ${DTS_GOVERNANCE_QUALITY_EXECUTOR:hive}
+        max-concurrent: ${DTS_GOVERNANCE_QUALITY_MAX_CONCURRENT:5}
+        retry-count: ${DTS_GOVERNANCE_QUALITY_RETRY:1}
+        timeout: ${DTS_GOVERNANCE_QUALITY_TIMEOUT:PT10M}
+        auto-generate-ticket: ${DTS_GOVERNANCE_QUALITY_AUTOTICKET:true}
+        task-scheduler-delay-ms: ${DTS_GOVERNANCE_QUALITY_TASK_SCHEDULER_DELAY_MS:60000}
+      compliance:
+        enabled: ${DTS_GOVERNANCE_COMPLIANCE_ENABLED:true}
+        evidence-required-default: ${DTS_GOVERNANCE_COMPLIANCE_EVIDENCE:true}
+        auto-ticket: ${DTS_GOVERNANCE_COMPLIANCE_AUTOTICKET:true}
+        sla: ${DTS_GOVERNANCE_COMPLIANCE_SLA:P7D}
+      issue:
+        default-assignee: ${DTS_GOVERNANCE_ISSUE_ASSIGNEE:}
+        default-priority: ${DTS_GOVERNANCE_ISSUE_PRIORITY:MEDIUM}
+        reminder-interval: ${DTS_GOVERNANCE_ISSUE_REMINDER:P3D}
+        auto-close-after: ${DTS_GOVERNANCE_ISSUE_AUTOCLOSE:P30D}
+      datasource:
+        primary: ${DTS_GOVERNANCE_PRIMARY_SOURCE:foundation-hive}
+        allow-multiple: ${DTS_GOVERNANCE_ALLOW_MULTIPLE:false}
+        optional-sources: ${DTS_GOVERNANCE_OPTIONAL_SOURCES:}

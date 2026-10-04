@@ -1,0 +1,12 @@
+dts:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DTS_DBT_DEV_HOST') }}"
+      port: "{{ env_var('DTS_DBT_DEV_PORT', '5432') | int }}"
+      user: "{{ env_var('DTS_DBT_DEV_USER') }}"
+      password: "{{ env_var('DTS_DBT_DEV_PASSWORD') }}"
+      dbname: "{{ env_var('DTS_DBT_DEV_DATABASE') }}"
+      schema: "{{ env_var('DTS_DBT_DEV_SCHEMA', 'public') }}"
+      threads: 4

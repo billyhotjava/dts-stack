@@ -1,0 +1,43 @@
+Command:
+RUN_LIVE=1 worklog/v2.2.3/sprint-38-202606/it/scripts/jdbc-file-regression.sh
+
+Result:
+jdbc_source_id=a0000000-0000-0000-0000-000000000001
+CREATE SCHEMA
+NOTICE:  schema "s38_regression" already exists, skipping
+DROP TABLE
+CREATE TABLE
+INSERT 0 2
+GRANT
+GRANT
+ALTER DEFAULT PRIVILEGES
+NOTICE:  table "s38_it09_jdbc_orders_1781251838179" does not exist, skipping
+jdbc_task_id=94
+jdbc_trigger_status=200
+jdbc_execution_id=140
+jdbc_airflow_run_id=manual__2026-06-12T08:10:44.308543+00:00
+jdbc_execution_status=success
+jdbc_airflow_dag_id=task_task_s38_it09_jdbc_1781251838179_manual
+jdbc_airflow_task_id=addax_s38_it09_jdbc_orders_1781251838179
+jdbc_airflow_task_state=success
+jdbc_target_table=public.s38_it09_jdbc_orders_1781251838179
+jdbc_target_rows=2
+jdbc_target_min_order=J-001
+jdbc_target_max_order=J-002
+jdbc_target_amount_sum=32.50
+jdbc_target_tagged_rows=2
+file_source_name=s38-it09-file-1781251838179.csv
+NOTICE:  table "s38_it09_file_orders_1781251838179" does not exist, skipping
+file_task_id=95
+file_trigger_status=200
+file_execution_id=141
+file_airflow_run_id=manual__2026-06-12T08:11:12.316658+00:00
+file_execution_status=success
+file_airflow_dag_id=task_task_s38_it09_file_1781251838179_manual
+file_airflow_task_id=addax_s38_it09_file_orders_1781251838179
+file_airflow_task_state=success
+file_target_table=public.s38_it09_file_orders_1781251838179
+file_target_rows=2
+file_target_min_order=F-001
+file_target_max_order=F-002
+file_target_tagged_rows=2

@@ -1,0 +1,985 @@
+{
+  "schemaVersion": "1.0",
+  "id": "prs-flowerbiz-change-board-v1",
+  "name": "PRS 变更与租期调整看板",
+  "description": "金额变更、货物变更、起租期变化和确认耗时。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "autoHeight": false,
+  "backgroundColor": "#0b2f5f",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2022-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectName",
+      "label": "项目",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "customerName",
+      "label": "客户",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "bizCategory",
+      "label": "业务大类",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "statusName",
+      "label": "状态",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "curingUser",
+      "label": "养护人",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "recoveryType",
+      "label": "回收类型",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "changeType",
+      "label": "变更类型",
+      "type": "string",
+      "defaultValue": ""
+    },
+    {
+      "key": "operationKind",
+      "label": "操作分类",
+      "type": "string",
+      "defaultValue": ""
+    }
+  ],
+  "components": [
+    {
+      "id": "bg-base",
+      "type": "shape",
+      "name": "背景底色",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#0b2f5f",
+        "borderColor": "#0b2f5f",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "bg-grid",
+      "type": "richtext",
+      "name": "背景网格",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;background:linear-gradient(180deg,rgba(12,68,126,.96),rgba(4,22,54,.98));\"><div style=\"position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.10) 1px, transparent 1px),linear-gradient(90deg, rgba(255,255,255,.10) 1px, transparent 1px);background-size:28px 28px;opacity:.42\"></div><div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,rgba(39,216,255,.22),transparent 58%);\"></div></div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "header-clock",
+      "type": "datetime",
+      "name": "当前时间",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "domain-label",
+      "type": "title",
+      "name": "PRS · Flowerbiz Command Center",
+      "x": 24,
+      "y": 26,
+      "width": 420,
+      "height": 20,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS · Flowerbiz Command Center",
+        "fontSize": 12,
+        "fontWeight": "500",
+        "color": "#d9eeff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "screen-title",
+      "type": "title",
+      "name": "PRS 变更与租期调整看板",
+      "x": 560,
+      "y": 18,
+      "width": 800,
+      "height": 44,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "PRS 变更与租期调整看板",
+        "fontSize": 30,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "filter-date-range",
+      "type": "filter-date-range",
+      "name": "统计周期",
+      "x": 1130,
+      "y": 24,
+      "width": 320,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "统计周期",
+        "startKey": "dateFrom",
+        "endKey": "dateTo",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff"
+      }
+    },
+    {
+      "id": "filter-project",
+      "type": "filter-select",
+      "name": "项目",
+      "x": 1468,
+      "y": 24,
+      "width": 160,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "项目",
+        "variableKey": "projectName",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT project_name AS label, project_name AS value FROM public.xycyl_dwd_flowerbiz_main WHERE project_name IS NOT NULL AND project_name <> '' ORDER BY project_name",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
+      }
+    },
+    {
+      "id": "filter-change",
+      "type": "filter-select",
+      "name": "变更类型",
+      "x": 1640,
+      "y": 24,
+      "width": 140,
+      "height": 58,
+      "zIndex": 50,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "label": "变更类型",
+        "variableKey": "changeType",
+        "placeholder": "全部",
+        "labelColor": "#ffffff",
+        "inputBackground": "rgba(88, 180, 255, 0.20)",
+        "inputBorderColor": "rgba(39, 216, 255, 0.18)",
+        "inputTextColor": "#ffffff",
+        "optionSourceMode": "data",
+        "dataOptionLabelField": "label",
+        "dataOptionValueField": "value",
+        "dataOptionMax": 500,
+        "optionBackground": "#0b2652",
+        "optionTextColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT DISTINCT \"变更类型\" AS label, \"变更类型\" AS value FROM public.xycyl_ads_flowerbiz_change_log WHERE \"变更类型\" IS NOT NULL AND \"变更类型\" <> '' ORDER BY \"变更类型\"",
+          "queryTimeoutSeconds": 10,
+          "maxRows": 500
+        }
+      }
+    },
+    {
+      "id": "kpi-1",
+      "type": "number-card",
+      "name": "变更单数",
+      "x": 44,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "变更单数",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "变更单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-2",
+      "type": "number-card",
+      "name": "货物变更",
+      "x": 350,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "货物变更",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "货物变更"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-3",
+      "type": "number-card",
+      "name": "金额变更",
+      "x": 656,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "金额变更",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "金额变更"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-4",
+      "type": "number-card",
+      "name": "比率变更",
+      "x": 962,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "比率变更",
+        "value": 0,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "比率变更"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-5",
+      "type": "number-card",
+      "name": "金额差额",
+      "x": 1268,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "金额差额",
+        "value": 0,
+        "suffix": "元",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "金额差额"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kpi-6",
+      "type": "number-card",
+      "name": "平均确认耗时",
+      "x": 1574,
+      "y": 112,
+      "width": 280,
+      "height": 104,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "平均确认耗时",
+        "value": 0,
+        "suffix": "天",
+        "precision": 2,
+        "titleFontSize": 16,
+        "valueFontSize": 34,
+        "titleColor": "#e2ffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "平均确认耗时"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\", COUNT(*) FILTER (WHERE c.\"是否比率变更\") AS \"比率变更\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", ROUND(AVG(c.\"确认耗时天数\")::numeric,2) AS \"平均确认耗时\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-change-type",
+      "type": "title",
+      "name": "变更类型分布",
+      "x": 44,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "变更类型分布",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "pie-change-type",
+      "type": "pie-chart",
+      "name": "变更类型分布",
+      "x": 44,
+      "y": 288,
+      "width": 575,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 18,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
+        "legend": {
+          "show": true,
+          "position": "right",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "变更类型",
+        "valueKey": "数量",
+        "pieInnerRadius": 45,
+        "pieOuterRadius": 78
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT c.\"变更类型\", COUNT(*) AS \"数量\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]] GROUP BY c.\"变更类型\" ORDER BY COUNT(*) DESC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 200,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-change-month",
+      "type": "title",
+      "name": "变更月度趋势",
+      "x": 672,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "变更月度趋势",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "line-change-month",
+      "type": "line-chart",
+      "name": "变更月度趋势",
+      "x": 650,
+      "y": 288,
+      "width": 560,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "category",
+          "name": "变更月份"
+        },
+        "yAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "变更月份",
+        "series": [
+          {
+            "name": "变更单数",
+            "dataKey": "变更单数",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "货物变更",
+            "dataKey": "货物变更",
+            "color": "#2ee6a6"
+          },
+          {
+            "name": "金额变更",
+            "dataKey": "金额变更",
+            "color": "#ffc645"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT c.\"变更月份\", COUNT(*) AS \"变更单数\", COUNT(*) FILTER (WHERE c.\"是否货物变更\") AS \"货物变更\", COUNT(*) FILTER (WHERE c.\"是否纯金额变更\") AS \"金额变更\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]] GROUP BY c.\"变更月份\" ORDER BY c.\"变更月份\"",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-change-project",
+      "type": "title",
+      "name": "项目金额差额 TOP",
+      "x": 1280,
+      "y": 252,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目金额差额 TOP",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "bar-change-project",
+      "type": "bar-chart",
+      "name": "项目金额差额 TOP",
+      "x": 1266,
+      "y": 288,
+      "width": 590,
+      "height": 300,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "xAxis": {
+          "type": "value",
+          "name": ""
+        },
+        "yAxis": {
+          "type": "category",
+          "name": ""
+        },
+        "orientation": "horizontal",
+        "legend": {
+          "show": true
+        },
+        "colors": [
+          "#27d8ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#45a4ff",
+          "#ff8f45",
+          "#94a3b8"
+        ],
+        "categoryKey": "项目",
+        "series": [
+          {
+            "name": "金额差额",
+            "dataKey": "金额差额",
+            "color": "#27d8ff"
+          },
+          {
+            "name": "变更单数",
+            "dataKey": "变更单数",
+            "color": "#2ee6a6"
+          }
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT c.\"项目\", ROUND(SUM(c.\"金额差额\")::numeric,2) AS \"金额差额\", COUNT(*) AS \"变更单数\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]] GROUP BY c.\"项目\" ORDER BY ABS(SUM(c.\"金额差额\")) DESC NULLS LAST LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "t-change-table",
+      "type": "title",
+      "name": "变更明细",
+      "x": 44,
+      "y": 620,
+      "width": 360,
+      "height": 28,
+      "zIndex": 30,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "变更明细",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "tbl-change",
+      "type": "table",
+      "name": "变更明细",
+      "x": 44,
+      "y": 656,
+      "width": 1820,
+      "height": 360,
+      "zIndex": 15,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "columns": [
+          {
+            "source": "变更单号",
+            "alias": "变更单号",
+            "width": 130
+          },
+          {
+            "source": "报花单号",
+            "alias": "报花单号",
+            "width": 130
+          },
+          {
+            "source": "项目",
+            "alias": "项目",
+            "width": 180
+          },
+          {
+            "source": "客户",
+            "alias": "客户",
+            "width": 180
+          },
+          {
+            "source": "变更类型",
+            "alias": "变更类型",
+            "width": 100
+          },
+          {
+            "source": "变更状态",
+            "alias": "变更状态",
+            "width": 90
+          },
+          {
+            "source": "申请人",
+            "alias": "申请人",
+            "width": 90
+          },
+          {
+            "source": "确认人",
+            "alias": "确认人",
+            "width": 90
+          },
+          {
+            "source": "确认耗时天数",
+            "alias": "确认耗时天数",
+            "width": 110
+          },
+          {
+            "source": "金额差额",
+            "alias": "金额差额",
+            "width": 110
+          },
+          {
+            "source": "起租期变化天数",
+            "alias": "起租期变化天数",
+            "width": 120
+          },
+          {
+            "source": "是否更换绿植",
+            "alias": "是否更换绿植",
+            "width": 110
+          }
+        ],
+        "pageSize": 12,
+        "showHeader": true,
+        "headerColor": "#d9eeff",
+        "stripeColor": "rgba(88,180,255,0.08)",
+        "backgroundColor": "rgba(9,36,90,0.50)",
+        "titleFontSize": 0,
+        "chartPaddingTop": 36,
+        "bodyColor": "#ffffff",
+        "freezeHeader": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT c.\"变更单号\", c.\"报花单号\", c.\"项目\", c.\"客户\", c.\"变更类型\", c.\"变更状态\", c.\"申请人\", c.\"确认人\", c.\"确认耗时天数\", c.\"金额差额\", c.\"起租期变化天数\", c.\"是否更换绿植\" FROM public.xycyl_ads_flowerbiz_change_log c WHERE c.\"申请时间\" >= {{dateFrom}}::date AND c.\"申请时间\" <= {{dateTo}}::date [[AND c.\"项目\" = {{projectName}}]] [[AND c.\"变更类型\" = {{changeType}}]] ORDER BY c.\"申请时间\" DESC LIMIT 300",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 500,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "projectName",
+              "variableKey": "projectName"
+            },
+            {
+              "name": "changeType",
+              "variableKey": "changeType"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

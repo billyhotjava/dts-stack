@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="ingestion-direct-dbt-retirement-postgres-it-fixture" author="codex" dbms="postgresql">
+        <createTable tableName="ingestion_task">
+            <column name="id" type="bigint"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="dbt_model_selector" type="varchar(255)"/>
+            <column name="dbt_dag_selector" type="varchar(255)"/>
+        </createTable>
+    </changeSet>
+
+    <include file="config/liquibase/changelog/20260801_03_retire_ingestion_task_direct_dbt.xml"/>
+</databaseChangeLog>

@@ -1,0 +1,6 @@
+run_at=20260214T150732Z
+mode=normal
+arch=x86_64
+hours=24
+ingestion_log=/opt/prod/s10/logs/dts-ingestion/app.log
+status=missing_log

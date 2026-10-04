@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20260912-01-f9-permission-audit" author="codex">
+        <sql><![CDATA[
+            WITH desired(action_code,module_key,module_name,operation_name,operation_kind,resource_type) AS (VALUES
+('MODELING_IDENTITY_DENIED','modeling','数据建模','建模身份核验拒绝','READ','model_spec'),
+('MODELING_OPERATION_SCOPE_DENIED','modeling','数据建模','模型操作权限拒绝','UPDATE','model_spec'),
+('MODELING_MODEL_EDIT_DENIED','modeling','数据建模','模型编辑权限拒绝','UPDATE','model_spec'),
+('MODELING_MODEL_ACCESS_GRANT','modeling','数据建模','授予模型编辑共享','UPDATE','model_spec'),
+('MODELING_MODEL_ACCESS_REVOKE','modeling','数据建模','撤销模型编辑共享','UPDATE','model_spec'),
+('CATALOG_CLASSIFICATION_DOWNGRADE_REJECTED','catalog','数据资产','拒绝降低资产密级','UPDATE','dataset'),
+('CATALOG_CLASSIFICATION_RAISE','catalog','数据资产','调高资产密级','UPDATE','dataset'))
+            INSERT INTO audit_action_catalog(source_system,action_code,module_key,module_name,operation_code,operation_name,operation_kind,resource_type,allow_empty_targets,enabled,version,updated_at)
+            SELECT 'platform',action_code,module_key,module_name,action_code,operation_name,operation_kind,resource_type,true,true,'sprint-104-f9',CURRENT_TIMESTAMP FROM desired
+            ON CONFLICT(source_system,action_code) DO UPDATE SET operation_name=EXCLUDED.operation_name,enabled=true,version=EXCLUDED.version,updated_at=CURRENT_TIMESTAMP;
+        ]]></sql>
+        <rollback><sql>SELECT 1 /* Retain action meanings for historical audit records. */</sql></rollback>
+    </changeSet>
+    <changeSet id="20260912-02-f9-modeling-menu-roles" author="codex">
+        <sql><![CDATA[
+            WITH RECURSIVE modeling_menus AS (
+                SELECT id FROM portal_menu WHERE deleted=false AND path IN ('modeling','/modeling')
+                UNION ALL SELECT child.id FROM portal_menu child JOIN modeling_menus parent ON child.parent_id=parent.id WHERE child.deleted=false
+            ), authors(role_code) AS (VALUES ('ROLE_DEPT_DATA_OWNER'),('ROLE_DEPT_LEADER'),('ROLE_INST_DATA_OWNER'),('ROLE_INST_LEADER'))
+            INSERT INTO portal_menu_visibility(id,menu_id,role_code,permission_code,data_level,created_by,created_date,last_modified_by,last_modified_date)
+            SELECT nextval('portal_menu_visibility_seq'),m.id,a.role_code,NULL,'INTERNAL','system',CURRENT_TIMESTAMP,'system',CURRENT_TIMESTAMP
+              FROM modeling_menus m CROSS JOIN authors a
+             WHERE NOT EXISTS(SELECT 1 FROM portal_menu_visibility v WHERE v.menu_id=m.id AND upper(v.role_code)=a.role_code);
+        ]]></sql>
+        <rollback><sql>SELECT 1 /* Keep explicit role bindings; disable modeling when rolling back its authorization implementation. */</sql></rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Frontend Product Consistency"
+  short_description: "Keep DTS frontend workflows consistent"
+  default_prompt: "Use $dts-frontend-product-consistency to align this DTS frontend change with existing product patterns."

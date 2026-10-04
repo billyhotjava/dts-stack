@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-06-catalog-dataset-physical-locator-audit" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <columnExists tableName="catalog_dataset" columnName="source_id"/>
+            <columnExists tableName="catalog_dataset" columnName="hive_database"/>
+            <columnExists tableName="catalog_dataset" columnName="hive_table"/>
+        </preConditions>
+        <comment>
+            Refuse to install the physical-locator authority until operators resolve every
+            source/schema/table duplicate. The exception contains a bounded repair list.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $locator_audit$
+            DECLARE
+                duplicate_locators text;
+            BEGIN
+                SELECT string_agg(locator, ', ' ORDER BY locator)
+                  INTO duplicate_locators
+                  FROM (
+                      SELECT format(
+                                 '%s:%s.%s(count=%s)',
+                                 source_id,
+                                 lower(btrim(hive_database)),
+                                 lower(btrim(hive_table)),
+                                 count(*)
+                             ) AS locator
+                        FROM catalog_dataset
+                       WHERE source_id IS NOT NULL
+                         AND nullif(btrim(hive_database), '') IS NOT NULL
+                         AND nullif(btrim(hive_table), '') IS NOT NULL
+                       GROUP BY source_id,
+                                lower(btrim(hive_database)),
+                                lower(btrim(hive_table))
+                      HAVING count(*) > 1
+                       ORDER BY source_id,
+                                lower(btrim(hive_database)),
+                                lower(btrim(hive_table))
+                       LIMIT 20
+                  ) duplicates;
+                IF duplicate_locators IS NOT NULL THEN
+                    RAISE EXCEPTION
+                        'CATALOG_DATASET_PHYSICAL_LOCATOR_DUPLICATES_EXIST: %',
+                        duplicate_locators;
+                END IF;
+            END
+            $locator_audit$;
+        ]]></sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260728-06-catalog-dataset-physical-locator-index" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <not>
+                <indexExists
+                    tableName="catalog_dataset"
+                    indexName="uk_catalog_dataset_physical_locator"/>
+            </not>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX uk_catalog_dataset_physical_locator
+                ON catalog_dataset (
+                    source_id,
+                    lower(btrim(hive_database)),
+                    lower(btrim(hive_table))
+                )
+             WHERE source_id IS NOT NULL
+               AND nullif(btrim(hive_database), '') IS NOT NULL
+               AND nullif(btrim(hive_table), '') IS NOT NULL;
+        ]]></sql>
+        <rollback>
+            <dropIndex
+                tableName="catalog_dataset"
+                indexName="uk_catalog_dataset_physical_locator"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,244 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260916-03-portal-menu-implementation-order" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="portal_menu" columnName="sort_order"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+        <comment>
+            Sprint-104 F10：按技术协议与业务实施顺序调整门户菜单排序。一级为 工作台、数仓规划、数据集成、数据建模、
+            数据开发与运维、数据治理、数据分析与服务，大屏管理保持一级且本迁移不改动。只按 titleKey 定位并更新
+            sort_order，不改名称、层级、路径、元数据与角色绑定；改动前快照排序、修改人与种子哈希，回滚原样恢复。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT TEXT := 'portal-menu-implementation-order-20260916';
+                snapshot_key CONSTANT TEXT := 'portal.menu.order.snapshot.20260916-03';
+                seed_hash CONSTANT TEXT := '9dc18d6b69d874144f400b0f35da43243bb8cb2e645cfaef16a7cda6bdb36a0f';
+                rec RECORD;
+                match_count INTEGER;
+                menu_id BIGINT;
+                menu_parent BIGINT;
+                target_ids BIGINT[] := ARRAY[]::BIGINT[];
+                target_orders INTEGER[] := ARRAY[]::INTEGER[];
+                menu_snapshot JSONB := '[]'::JSONB;
+                seed_snapshot JSONB;
+                screens_count INTEGER;
+                screens_before TEXT;
+                screens_after TEXT;
+                updated_count INTEGER;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:implementation-order:20260916-03', 0));
+
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'Portal menu implementation-order snapshot already exists: %', snapshot_key;
+                END IF;
+
+                FOR rec IN
+                    SELECT *
+                      FROM (VALUES
+                          ('sys.nav.portal.dataArchitecture', NULL, 2),
+                          ('sys.nav.portal.dataIntegration', NULL, 3),
+                          ('sys.nav.portal.dataStandards', 'sys.nav.portal.studioDataModeling', 1),
+                          ('sys.nav.portal.dimensionalModeling', 'sys.nav.portal.studioDataModeling', 2),
+                          ('sys.nav.portal.dataMetrics', 'sys.nav.portal.studioDataModeling', 3),
+                          ('sys.nav.portal.modelingGraphs', 'sys.nav.portal.studioDataModeling', 4),
+                          ('sys.nav.portal.modelingHomeWorkspace', 'sys.nav.portal.studioDataModeling', 5),
+                          ('sys.nav.portal.modelingTools', 'sys.nav.portal.studioDataModeling', 6),
+                          ('sys.nav.portal.metricAtomic', 'sys.nav.portal.dataMetrics', 1),
+                          ('sys.nav.portal.metricComposite', 'sys.nav.portal.dataMetrics', 3),
+                          ('sys.nav.portal.governanceClassification', 'sys.nav.portal.governanceOperations', 2),
+                          ('sys.nav.portal.governanceQualityRules', 'sys.nav.portal.governanceOperations', 3),
+                          ('sys.nav.portal.governanceQualityReport', 'sys.nav.portal.governanceOperations', 4),
+                          ('sys.nav.portal.serviceCenter', 'sys.nav.portal.dataConsumption', 1),
+                          ('sys.nav.portal.businessIntelligenceApps', 'sys.nav.portal.dataConsumption', 2)
+                      ) AS desired(title_key, parent_key, target_order)
+                LOOP
+                    SELECT COUNT(*), MIN(m.id)
+                      INTO match_count, menu_id
+                      FROM portal_menu m
+                     WHERE m.deleted = FALSE
+                       AND (m.name = rec.title_key OR m.metadata::jsonb ->> 'titleKey' = rec.title_key);
+                    IF match_count <> 1 THEN
+                        RAISE EXCEPTION 'Portal menu % must match exactly one active row; found %', rec.title_key, match_count;
+                    END IF;
+
+                    SELECT m.parent_id INTO menu_parent FROM portal_menu m WHERE m.id = menu_id FOR UPDATE;
+                    IF rec.parent_key IS NULL THEN
+                        IF menu_parent IS NOT NULL THEN
+                            RAISE EXCEPTION 'Portal menu % must be a root menu; parent id is %', rec.title_key, menu_parent;
+                        END IF;
+                    ELSIF menu_parent IS NULL OR NOT EXISTS (
+                        SELECT 1
+                          FROM portal_menu p
+                         WHERE p.id = menu_parent
+                           AND p.deleted = FALSE
+                           AND (p.name = rec.parent_key OR p.metadata::jsonb ->> 'titleKey' = rec.parent_key)
+                    ) THEN
+                        RAISE EXCEPTION 'Portal menu % must be under %; parent id is %', rec.title_key, rec.parent_key, menu_parent;
+                    END IF;
+
+                    menu_snapshot := menu_snapshot || (
+                        SELECT jsonb_build_object(
+                                   'id', m.id,
+                                   'titleKey', rec.title_key,
+                                   'sortOrder', m.sort_order,
+                                   'lastModifiedBy', m.last_modified_by,
+                                   'lastModifiedDate', m.last_modified_date
+                               )
+                          FROM portal_menu m
+                         WHERE m.id = menu_id
+                    );
+                    target_ids := target_ids || menu_id;
+                    target_orders := target_orders || rec.target_order;
+                END LOOP;
+
+                SELECT COUNT(*) INTO screens_count
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.biScreens' OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.biScreens');
+                IF screens_count <> 1 THEN
+                    RAISE EXCEPTION 'Portal screen management menu must match exactly one active row; found %', screens_count;
+                END IF;
+                SELECT row_to_json(m)::TEXT || '|' || COALESCE((
+                           SELECT string_agg(row_to_json(v)::TEXT, ',' ORDER BY v.id)
+                             FROM portal_menu_visibility v
+                            WHERE v.menu_id = m.id
+                       ), '')
+                  INTO screens_before
+                  FROM portal_menu m
+                 WHERE m.deleted = FALSE
+                   AND (m.name = 'sys.nav.portal.biScreens' OR m.metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.biScreens');
+
+                SELECT jsonb_build_object(
+                           'value', cfg_value,
+                           'lastModifiedBy', last_modified_by,
+                           'lastModifiedDate', last_modified_date
+                       )
+                  INTO seed_snapshot
+                  FROM system_config
+                 WHERE cfg_key = 'portal.menu.seed.hash';
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key,
+                    jsonb_build_object('seed', seed_snapshot, 'menus', menu_snapshot)::TEXT,
+                    'Rollback snapshot for portal menu implementation order',
+                    'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Portal menu implementation order rollback snapshot', 'RUNTIME', FALSE, 'platform',
+                    actor, now(), actor, now()
+                );
+
+                UPDATE portal_menu menu
+                   SET sort_order = targets.target_order,
+                       last_modified_by = actor,
+                       last_modified_date = now()
+                  FROM unnest(target_ids, target_orders) AS targets(id, target_order)
+                 WHERE menu.id = targets.id;
+                GET DIAGNOSTICS updated_count = ROW_COUNT;
+                IF updated_count <> 15 THEN
+                    RAISE EXCEPTION 'Portal menu implementation order expected 15 updates, updated %', updated_count;
+                END IF;
+
+                SELECT row_to_json(m)::TEXT || '|' || COALESCE((
+                           SELECT string_agg(row_to_json(v)::TEXT, ',' ORDER BY v.id)
+                             FROM portal_menu_visibility v
+                            WHERE v.menu_id = m.id
+                       ), '')
+                  INTO screens_after
+                  FROM portal_menu m
+                 WHERE m.deleted = FALSE
+                   AND (m.name = 'sys.nav.portal.biScreens' OR m.metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.biScreens');
+                IF screens_after IS DISTINCT FROM screens_before THEN
+                    RAISE EXCEPTION 'Portal screen management menu must stay unchanged by the implementation-order migration';
+                END IF;
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                    'Portal menu seed hash', 'RUNTIME', FALSE, 'platform', actor, now(), actor, now()
+                ) ON CONFLICT (cfg_key) DO UPDATE
+                    SET cfg_value = EXCLUDED.cfg_value, last_modified_by = actor, last_modified_date = now();
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT TEXT := 'portal-menu-implementation-order-20260916';
+                    snapshot_key CONSTANT TEXT := 'portal.menu.order.snapshot.20260916-03';
+                    snapshot JSONB;
+                    saved_seed JSONB;
+                    expected_count INTEGER;
+                    owned_count INTEGER;
+                    restored_count INTEGER;
+                BEGIN
+                    PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:implementation-order:20260916-03', 0));
+
+                    SELECT cfg_value::jsonb INTO snapshot FROM system_config WHERE cfg_key = snapshot_key;
+                    IF snapshot IS NULL OR jsonb_typeof(snapshot -> 'menus') <> 'array' THEN
+                        RAISE EXCEPTION 'Portal menu implementation-order rollback snapshot is missing: %', snapshot_key;
+                    END IF;
+
+                    expected_count := jsonb_array_length(snapshot -> 'menus');
+                    SELECT COUNT(*) INTO owned_count
+                      FROM portal_menu menu
+                      JOIN jsonb_array_elements(snapshot -> 'menus') item
+                        ON menu.id = (item ->> 'id')::BIGINT
+                     WHERE menu.last_modified_by = actor;
+                    IF owned_count <> expected_count THEN
+                        RAISE EXCEPTION 'Portal menu order changed after migration (% of % rows still owned); refusing to overwrite it',
+                            owned_count, expected_count;
+                    END IF;
+                    IF NOT EXISTS (
+                        SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash' AND last_modified_by = actor
+                    ) THEN
+                        RAISE EXCEPTION 'Portal seed hash changed after migration; refusing to overwrite it';
+                    END IF;
+
+                    UPDATE portal_menu menu
+                       SET sort_order = (item ->> 'sortOrder')::INTEGER,
+                           last_modified_by = item ->> 'lastModifiedBy',
+                           last_modified_date = (item ->> 'lastModifiedDate')::TIMESTAMP
+                      FROM jsonb_array_elements(snapshot -> 'menus') item
+                     WHERE menu.id = (item ->> 'id')::BIGINT;
+                    GET DIAGNOSTICS restored_count = ROW_COUNT;
+                    IF restored_count <> expected_count THEN
+                        RAISE EXCEPTION 'Portal menu order rollback expected % rows, restored %', expected_count, restored_count;
+                    END IF;
+
+                    saved_seed := snapshot -> 'seed';
+                    IF saved_seed IS NULL OR jsonb_typeof(saved_seed) = 'null' THEN
+                        DELETE FROM system_config WHERE cfg_key = 'portal.menu.seed.hash';
+                    ELSE
+                        UPDATE system_config
+                           SET cfg_value = saved_seed ->> 'value',
+                               last_modified_by = saved_seed ->> 'lastModifiedBy',
+                               last_modified_date = (saved_seed ->> 'lastModifiedDate')::TIMESTAMP
+                         WHERE cfg_key = 'portal.menu.seed.hash';
+                    END IF;
+
+                    DELETE FROM system_config WHERE cfg_key = snapshot_key;
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

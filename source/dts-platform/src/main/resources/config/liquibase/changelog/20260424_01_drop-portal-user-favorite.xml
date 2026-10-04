@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-15 / F2 — Drop the legacy `portal_user_favorite` table.
+
+        The workbench "我的收藏" entry was removed from the menu long ago, and the
+        backend entity / repository / REST endpoints are being deleted alongside
+        this changeset. The data-rollback material (full schema + data dump) is
+        stored at:
+
+            worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_full.sql
+            worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_dump.sql
+            worklog/v2.2.3/sprint-15-202604/assets/dump.checksum
+
+        Operations must replace the placeholder dumps with a real
+        `pg_dump -t portal_user_favorite ...` export before production rollout.
+        See `worklog/v2.2.3/sprint-15-202604/assets/README.md` for the runbook.
+    -->
+    <!--
+        Step 1 — Refuse to proceed if the table still has rows. Operators must
+        run `pg_dump -t portal_user_favorite ...` and replace the placeholder
+        dumps in worklog/v2.2.3/sprint-15-202604/assets/ first. The
+        `tableExists` precondition with onFail=MARK_RAN means we silently
+        succeed in fresh environments where the table never existed.
+    -->
+    <changeSet id="20260424-1000-portal-user-favorite-empty-check" author="billy">
+        <!--
+            A single preConditions block (XSD allows only one per changeSet).
+            Pass when EITHER the table is already gone OR it still exists but has 0 rows.
+            Otherwise HALT with the operator runbook message.
+        -->
+        <preConditions onFail="HALT"
+                       onFailMessage="portal_user_favorite still has rows. BEFORE running this migration: (1) replace placeholder dumps in worklog/v2.2.3/sprint-15-202604/assets/ with a real pg_dump; (2) update assets/dump.checksum; (3) verify rollback runbook in assets/README.md. Re-run liquibase update only after dump is real.">
+            <or>
+                <not>
+                    <tableExists tableName="portal_user_favorite"/>
+                </not>
+                <sqlCheck expectedResult="0">SELECT count(*) FROM portal_user_favorite</sqlCheck>
+            </or>
+        </preConditions>
+        <!-- No-op: this changeSet exists purely to guard the destructive drop in step 2. -->
+        <sql>SELECT 1</sql>
+        <rollback>
+            <sql>SELECT 1</sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260424-1000-drop-portal-user-favorite" author="billy">
+        <preConditions onFail="MARK_RAN" onFailMessage="portal_user_favorite already dropped.">
+            <tableExists tableName="portal_user_favorite"/>
+        </preConditions>
+
+        <dropTable tableName="portal_user_favorite"/>
+
+        <rollback>
+            <!--
+                Rollback is NOT automated on purpose. To restore data, operators
+                must run the dumps at
+                `worklog/v2.2.3/sprint-15-202604/assets/portal_user_favorite_full.sql`
+                and `.../portal_user_favorite_dump.sql` manually against the target
+                database. See assets/README.md for the full procedure.
+            -->
+            <sql>SELECT 1; -- placeholder: operators must restore the table manually from the stored dump</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251008-02-svc-api" author="platform">
+        <createTable tableName="svc_api">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="dataset_name" type="varchar(160)"/>
+            <column name="method" type="varchar(16)"/>
+            <column name="path" type="varchar(256)"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="qps_limit" type="int"/>
+            <column name="daily_limit" type="int"/>
+            <column name="current_qps" type="int"/>
+            <column name="policy_json" type="text"/>
+            <column name="request_schema_json" type="text"/>
+            <column name="response_schema_json" type="text"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="latest_version" type="varchar(32)"/>
+            <column name="last_published_at" type="timestamp"/>
+            <column name="tags" type="varchar(256)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_svc_api_status" tableName="svc_api">
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_svc_api_classification" tableName="svc_api">
+            <column name="classification"/>
+        </createIndex>
+        <createIndex indexName="idx_svc_api_dataset" tableName="svc_api">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-03-svc-api-metric" author="platform">
+        <createTable tableName="svc_api_metric_hourly">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="api_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bucket_start" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="call_count" type="bigint" defaultValueNumeric="0"/>
+            <column name="qps_peak" type="int" defaultValueNumeric="0"/>
+            <column name="masked_hits" type="int" defaultValueNumeric="0"/>
+            <column name="deny_count" type="int" defaultValueNumeric="0"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="svc_api_metric_hourly"
+            baseColumnNames="api_id"
+            referencedTableName="svc_api"
+            referencedColumnNames="id"
+            constraintName="fk_svc_api_metric_api"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_svc_api_metric_api" tableName="svc_api_metric_hourly">
+            <column name="api_id"/>
+        </createIndex>
+        <createIndex indexName="idx_svc_api_metric_bucket" tableName="svc_api_metric_hourly">
+            <column name="bucket_start"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-04-svc-data-product" author="platform">
+        <createTable tableName="svc_data_product">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="varchar(160)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_type" type="varchar(32)"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="sla" type="varchar(64)"/>
+            <column name="refresh_frequency" type="varchar(64)"/>
+            <column name="latency_objective" type="varchar(64)"/>
+            <column name="failure_policy" type="varchar(256)"/>
+            <column name="subscriptions" type="int" defaultValueNumeric="0"/>
+            <column name="current_version" type="varchar(32)"/>
+            <column name="description" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_svc_data_product_status" tableName="svc_data_product">
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_svc_data_product_type" tableName="svc_data_product">
+            <column name="product_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-05-svc-data-product-version" author="platform">
+        <createTable tableName="svc_data_product_version">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="product_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)"/>
+            <column name="released_at" type="timestamp"/>
+            <column name="diff_summary" type="varchar(1024)"/>
+            <column name="schema_json" type="text"/>
+            <column name="consumption_json" type="text"/>
+            <column name="metadata_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="svc_data_product_version"
+            baseColumnNames="product_id"
+            referencedTableName="svc_data_product"
+            referencedColumnNames="id"
+            constraintName="fk_svc_data_product_version_product"
+            onDelete="CASCADE"
+        />
+        <addUniqueConstraint
+            tableName="svc_data_product_version"
+            columnNames="product_id,version"
+            constraintName="uk_svc_data_product_version"
+        />
+        <createIndex indexName="idx_svc_data_product_version_product" tableName="svc_data_product_version">
+            <column name="product_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-06-svc-data-product-dataset" author="platform">
+        <createTable tableName="svc_data_product_dataset">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="product_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_id" type="uuid"/>
+            <column name="dataset_name" type="varchar(160)"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="svc_data_product_dataset"
+            baseColumnNames="product_id"
+            referencedTableName="svc_data_product"
+            referencedColumnNames="id"
+            constraintName="fk_svc_data_product_dataset_product"
+            onDelete="CASCADE"
+        />
+        <createIndex indexName="idx_svc_data_product_dataset_product" tableName="svc_data_product_dataset">
+            <column name="product_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-07-svc-token-hint" author="platform">
+        <addColumn tableName="svc_token">
+            <column name="token_hint" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

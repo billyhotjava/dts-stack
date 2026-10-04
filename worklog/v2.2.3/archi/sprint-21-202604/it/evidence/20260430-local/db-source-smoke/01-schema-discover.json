@@ -1,0 +1,137 @@
+{
+  "status" : 200,
+  "message" : "OK",
+  "code" : null,
+  "data" : {
+    "dataSourceId" : "a0000000-0000-0000-0000-000000000001",
+    "dataSourceName" : "数据仓库 (biadmin)",
+    "connectorKey" : null,
+    "databaseProduct" : "PostgreSQL",
+    "databaseVersion" : "17.6 (Debian 17.6-2.pgdg13+1)",
+    "schemas" : [ "dts_smoke" ],
+    "tables" : [ {
+      "schema" : "dts_smoke",
+      "name" : "erp_project",
+      "type" : "TABLE",
+      "comment" : null,
+      "view" : false,
+      "columns" : [ {
+        "name" : "project_id",
+        "dataType" : "varchar",
+        "nativeType" : "varchar",
+        "nullable" : false,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 1,
+        "primaryKey" : true,
+        "indexed" : true,
+        "incrementalCandidate" : false
+      }, {
+        "name" : "project_name",
+        "dataType" : "varchar",
+        "nativeType" : "varchar",
+        "nullable" : false,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 2,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false
+      }, {
+        "name" : "owner_name",
+        "dataType" : "varchar",
+        "nativeType" : "varchar",
+        "nullable" : true,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 3,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false
+      }, {
+        "name" : "budget_amount",
+        "dataType" : "numeric",
+        "nativeType" : "numeric",
+        "nullable" : true,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 4,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false
+      }, {
+        "name" : "progress_pct",
+        "dataType" : "numeric",
+        "nativeType" : "numeric",
+        "nullable" : true,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 5,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false
+      }, {
+        "name" : "update_time",
+        "dataType" : "timestamp",
+        "nativeType" : "timestamp",
+        "nullable" : false,
+        "defaultValue" : null,
+        "comment" : null,
+        "ordinalPosition" : 6,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : true
+      }, {
+        "name" : "is_active",
+        "dataType" : "bool",
+        "nativeType" : "bool",
+        "nullable" : true,
+        "defaultValue" : "true",
+        "comment" : null,
+        "ordinalPosition" : 7,
+        "primaryKey" : false,
+        "indexed" : false,
+        "incrementalCandidate" : false
+      } ],
+      "primaryKeys" : [ "project_id" ],
+      "indexes" : [ {
+        "name" : "erp_project_pkey",
+        "unique" : true,
+        "columns" : [ "project_id" ]
+      } ],
+      "incrementalCandidates" : [ "update_time" ],
+      "sampleRows" : [ {
+        "project_id" : "P-1001",
+        "project_name" : "Connector Center baseline",
+        "owner_name" : "ops",
+        "budget_amount" : 120000.00,
+        "progress_pct" : 35.50,
+        "update_time" : "2026-04-29T02:00:00Z",
+        "is_active" : true
+      }, {
+        "project_id" : "P-1002",
+        "project_name" : "ODS lineage smoke",
+        "owner_name" : "data",
+        "budget_amount" : 86000.00,
+        "progress_pct" : 61.00,
+        "update_time" : "2026-04-29T03:00:00Z",
+        "is_active" : true
+      }, {
+        "project_id" : "P-1003",
+        "project_name" : "Precheck threshold case",
+        "owner_name" : "qa",
+        "budget_amount" : 42000.00,
+        "progress_pct" : 15.00,
+        "update_time" : "2026-04-29T04:00:00Z",
+        "is_active" : true
+      } ]
+    } ],
+    "elapsedMs" : 23,
+    "status" : "SUCCESS",
+    "error" : null,
+    "discoveredAt" : "2026-04-30T06:45:56.645879337Z",
+    "cached" : false,
+    "cacheKey" : "schema-discover:28a52df7cc53fa1a8081fd2c4f45fbd3",
+    "drift" : null
+  }
+}

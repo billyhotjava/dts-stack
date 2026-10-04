@@ -1,0 +1,228 @@
+package com.yuzhi.dts.platform.service.governance;
+
+import com.yuzhi.dts.platform.domain.governance.GovQualityRun;
+import com.yuzhi.dts.platform.domain.governance.GovRule;
+import com.yuzhi.dts.platform.domain.governance.GovRuleBinding;
+import com.yuzhi.dts.platform.repository.governance.GovQualityRunRepository;
+import com.yuzhi.dts.platform.repository.governance.GovRuleBindingRepository;
+import com.yuzhi.dts.platform.repository.governance.GovRuleRepository;
+import com.yuzhi.dts.platform.repository.catalog.CatalogDatasetRepository;
+import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto;
+import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto.FailingDataset;
+import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto.RecentRun;
+import com.yuzhi.dts.platform.service.governance.dto.QualityDashboardDto.TrendPoint;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+@Transactional(readOnly = true)
+public class QualityDashboardService {
+
+    private static final Logger log = LoggerFactory.getLogger(QualityDashboardService.class);
+
+    private final GovRuleRepository ruleRepository;
+    private final GovRuleBindingRepository bindingRepository;
+    private final GovQualityRunRepository runRepository;
+    private final CatalogDatasetRepository datasetRepository;
+    private final QualityDatasetReadGuard datasetReadGuard;
+
+    public QualityDashboardService(
+        GovRuleRepository ruleRepository,
+        GovRuleBindingRepository bindingRepository,
+        GovQualityRunRepository runRepository,
+        CatalogDatasetRepository datasetRepository,
+        QualityDatasetReadGuard datasetReadGuard
+    ) {
+        this.ruleRepository = ruleRepository;
+        this.bindingRepository = bindingRepository;
+        this.runRepository = runRepository;
+        this.datasetRepository = datasetRepository;
+        this.datasetReadGuard = datasetReadGuard;
+    }
+
+    public QualityDashboardDto getDashboard(String activeDeptHeader) {
+        var datasets = datasetRepository.findAll();
+        Set<UUID> readableDatasetIds = datasetReadGuard.readableDatasetIds(datasets, activeDeptHeader);
+
+        // 1. ruleCount: enabled rules
+        int ruleCount = (int) ruleRepository
+            .findAll()
+            .stream()
+            .filter(rule -> Boolean.TRUE.equals(rule.getEnabled()))
+            .filter(rule -> rule.getDatasetId() != null && readableDatasetIds.contains(rule.getDatasetId()))
+            .count();
+
+        // 2. coveredDatasets: distinct readable dataset IDs from bindings
+        long coveredDatasets = bindingRepository
+            .findAll()
+            .stream()
+            .map(GovRuleBinding::getDatasetId)
+            .filter(readableDatasetIds::contains)
+            .distinct()
+            .count();
+
+        // 3. totalDatasets: only assets readable in the current department scope
+        int totalDatasets = readableDatasetIds.size();
+
+        // 4 & 5. todayPassed / todayFailed
+        ZoneId zone = ZoneId.systemDefault();
+        Instant todayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant();
+        List<GovQualityRun> todayRuns = visibleRuns(
+            runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(todayStart),
+            readableDatasetIds
+        );
+
+        int todayPassed = 0;
+        int todayFailed = 0;
+        for (GovQualityRun run : todayRuns) {
+            if (isPassed(run.getStatus())) {
+                todayPassed++;
+            } else if ("FAILED".equalsIgnoreCase(run.getStatus())) {
+                todayFailed++;
+            }
+        }
+
+        // 5. pendingFixRows: sum actual failing row counts from visible failed runs
+        List<GovQualityRun> failedRuns = visibleRuns(
+            runRepository.findTop100ByStatusOrderByCreatedDateDesc("FAILED"),
+            readableDatasetIds
+        );
+        long pendingFixRows = failedRuns
+            .stream()
+            .map(GovQualityRun::getFailingRowCount)
+            .filter(Objects::nonNull)
+            .mapToLong(value -> Math.max(0, value))
+            .sum();
+
+        // 6. trend7d: pass rate per day for the last 7 days
+        Instant sevenDaysAgo = Instant.now().minus(7, ChronoUnit.DAYS);
+        List<GovQualityRun> recentRuns = visibleRuns(
+            runRepository.findByCreatedDateAfterOrderByCreatedDateAsc(sevenDaysAgo),
+            readableDatasetIds
+        );
+        List<TrendPoint> trend7d = computeTrend(recentRuns, zone);
+
+        // 7. topFailingDatasets: group FAILED runs by datasetId, sum failingRows, top 5
+        List<FailingDataset> topFailingDatasets = computeTopFailingDatasets(failedRuns);
+
+        // 8. recentFailedRuns: last 10 failed runs
+        List<RecentRun> recentFailedRuns = failedRuns.stream()
+            .limit(10)
+            .map(this::toRecentRun)
+            .toList();
+
+        return new QualityDashboardDto(
+            ruleCount,
+            (int) coveredDatasets,
+            totalDatasets,
+            todayPassed,
+            todayFailed,
+            pendingFixRows,
+            trend7d,
+            topFailingDatasets,
+            recentFailedRuns
+        );
+    }
+
+    private List<GovQualityRun> visibleRuns(List<GovQualityRun> runs, Set<UUID> readableDatasetIds) {
+        if (runs == null || runs.isEmpty() || readableDatasetIds.isEmpty()) {
+            return List.of();
+        }
+        return runs
+            .stream()
+            .filter(run -> run.getDatasetId() != null && readableDatasetIds.contains(run.getDatasetId()))
+            .toList();
+    }
+
+    private List<TrendPoint> computeTrend(List<GovQualityRun> runs, ZoneId zone) {
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
+        LocalDate today = LocalDate.now(zone);
+        LocalDate startDate = today.minusDays(6); // 7 days including today
+
+        Map<LocalDate, List<GovQualityRun>> byDay = runs.stream()
+            .filter(r -> r.getFinishedAt() != null || r.getCreatedDate() != null)
+            .collect(Collectors.groupingBy(r -> {
+                Instant ts = r.getFinishedAt() != null ? r.getFinishedAt() : r.getCreatedDate();
+                return ts.atZone(zone).toLocalDate();
+            }));
+
+        List<TrendPoint> trend = new ArrayList<>();
+        for (LocalDate day = startDate; !day.isAfter(today); day = day.plusDays(1)) {
+            List<GovQualityRun> dayRuns = byDay.get(day);
+            if (dayRuns != null && !dayRuns.isEmpty()) {
+                long total = dayRuns.size();
+                long passed = dayRuns.stream().filter(r -> isPassed(r.getStatus())).count();
+                double passRate = Math.round((double) passed / total * 10000.0) / 100.0;
+                trend.add(new TrendPoint(day.format(fmt), passRate));
+            } else {
+                trend.add(new TrendPoint(day.format(fmt), 0.0));
+            }
+        }
+        return trend;
+    }
+
+    private List<FailingDataset> computeTopFailingDatasets(List<GovQualityRun> failedRuns) {
+        Map<UUID, Long> byDataset = new LinkedHashMap<>();
+        Map<UUID, String> datasetNames = new LinkedHashMap<>();
+
+        for (GovQualityRun run : failedRuns) {
+            if (run.getDatasetId() == null) {
+                continue;
+            }
+            long failingRows = run.getFailingRowCount() != null ? Math.max(0, run.getFailingRowCount()) : 0L;
+            byDataset.merge(run.getDatasetId(), failingRows, Long::sum);
+            // Use rule name as a proxy for dataset name if binding alias isn't available
+            if (!datasetNames.containsKey(run.getDatasetId()) && run.getBinding() != null) {
+                String alias = run.getBinding().getDatasetAlias();
+                if (alias != null && !alias.isBlank()) {
+                    datasetNames.put(run.getDatasetId(), alias);
+                }
+            }
+        }
+
+        return byDataset.entrySet().stream()
+            .sorted(Map.Entry.<UUID, Long>comparingByValue().reversed())
+            .limit(5)
+            .map(e -> new FailingDataset(
+                datasetNames.getOrDefault(e.getKey(), e.getKey().toString()),
+                e.getValue()
+            ))
+            .toList();
+    }
+
+    private RecentRun toRecentRun(GovQualityRun run) {
+        String ruleName = "";
+        if (run.getRule() != null && run.getRule().getName() != null) {
+            ruleName = run.getRule().getName();
+        }
+        String dataset = "";
+        if (run.getBinding() != null && run.getBinding().getDatasetAlias() != null) {
+            dataset = run.getBinding().getDatasetAlias();
+        } else if (run.getDatasetId() != null) {
+            dataset = run.getDatasetId().toString();
+        }
+        String time = run.getFinishedAt() != null ? run.getFinishedAt().toString() : "";
+        String status = run.getStatus() != null ? run.getStatus() : "";
+        return new RecentRun(ruleName, dataset, time, status);
+    }
+
+    private boolean isPassed(String status) {
+        return "SUCCESS".equalsIgnoreCase(status) || "SUCCEEDED".equalsIgnoreCase(status) || "PASSED".equalsIgnoreCase(status);
+    }
+}

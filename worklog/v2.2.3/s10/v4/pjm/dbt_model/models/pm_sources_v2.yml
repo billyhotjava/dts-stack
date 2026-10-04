@@ -1,0 +1,1117 @@
+version: 2
+sources:
+- name: pm_ods_v2
+  schema: public
+  description: 项目管理 ODS v2 源表。ODS 只承载原始接入与追溯，业务语义统一经 STG 收敛。
+  tables:
+  - name: project_subject_domain_v2
+    identifier: ods_project_subject_domain_v2
+    description: 进度信息汇总表 — 项目节点/里程碑事实（33个业务字段）
+    columns:
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: node_task
+      description: 节点任务
+      data_type: character varying
+    - name: plan_start_date
+      description: 计划START日期
+      data_type: character varying
+    - name: plan_date
+      description: 计划日期
+      data_type: character varying
+    - name: plan_week
+      description: 计划周
+      data_type: character varying
+    - name: deliverable
+      description: DELIVERABLE
+      data_type: character varying
+    - name: node_type
+      description: 节点类型
+      data_type: character varying
+    - name: owner
+      description: 负责人
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: dept_leader
+      description: 部门负责人
+      data_type: character varying
+    - name: completion_status
+      description: 完成状态
+      data_type: character varying
+    - name: collab_dept
+      description: COLLAB部门
+      data_type: character varying
+    - name: supervisor_dept
+      description: SUPERVISOR部门
+      data_type: character varying
+    - name: delay_expected_date
+      description: DELAYEXPECTED日期
+      data_type: character varying
+    - name: incomplete_reason
+      description: 未完成原因
+      data_type: character varying
+    - name: risk_level
+      description: 风险等级
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: delay_impact
+      description: DELAYIMPACT
+      data_type: character varying
+    - name: actual_start_date
+      description: 实际START日期
+      data_type: character varying
+    - name: actual_date
+      description: 实际日期
+      data_type: character varying
+    - name: actual_week
+      description: 实际周
+      data_type: character varying
+    - name: institute_leader
+      description: INSTITUTE负责人
+      data_type: character varying
+    - name: source
+      description: 源
+      data_type: character varying
+    - name: original_plan_date
+      description: ORIGINAL计划日期
+      data_type: character varying
+    - name: delay_days_changed
+      description: DELAY天数CHANGED
+      data_type: character varying
+    - name: delay_days_unchanged
+      description: DELAY天数UNCHANGED
+      data_type: character varying
+    - name: delay_applied
+      description: DELAYAPPLIED
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: highlight
+      description: HIGHLIGHT
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_source_table
+      description: DTS源表
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+    - name: _dts_batch_id
+      description: DTSBATCH标识
+      data_type: character varying
+    - name: _dts_execution_id
+      description: DTSEXECUTION标识
+      data_type: character varying
+    - name: _dts_task_id
+      description: DTS任务标识
+      data_type: character varying
+    - name: _dts_source_file
+      description: DTS源FILE
+      data_type: character varying
+    - name: _dts_source_sheet
+      description: DTS源SHEET
+      data_type: character varying
+    - name: _dts_file_hash
+      description: DTSFILEHASH
+      data_type: character varying
+    - name: _dts_row_number
+      description: DTS行NUMBER
+      data_type: integer
+    - name: id
+      description: 标识
+      data_type: bigint
+  - name: progress_measure_v2
+    identifier: ods_progress_measure_v2
+    description: 进度跟进措施表 — 已纳入项目跟进闭环 STG/DWD/DWS/ADS 语义链路
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: node_task
+      description: 节点任务
+      data_type: character varying
+    - name: plan_date
+      description: 计划日期
+      data_type: character varying
+    - name: plan_week
+      description: 计划周
+      data_type: character varying
+    - name: completion_status
+      description: 完成状态
+      data_type: character varying
+    - name: measure_category
+      description: MEASURE分类
+      data_type: character varying
+    - name: measure_title
+      description: MEASURETITLE
+      data_type: character varying
+    - name: follow_up_person
+      description: FOLLOWUPPERSON
+      data_type: character varying
+    - name: main_recipient
+      description: MAINRECIPIENT
+      data_type: character varying
+    - name: cc_recipient
+      description: CCRECIPIENT
+      data_type: character varying
+    - name: follow_up_date
+      description: FOLLOWUP日期
+      data_type: character varying
+    - name: follow_up_week
+      description: FOLLOWUP周
+      data_type: character varying
+    - name: closure_status
+      description: CLOSURE状态
+      data_type: character varying
+    - name: final_closure_date
+      description: FINALCLOSURE日期
+      data_type: character varying
+    - name: final_closure_week
+      description: FINALCLOSURE周
+      data_type: character varying
+    - name: closure_deliverable_type
+      description: CLOSUREDELIVERABLE类型
+      data_type: character varying
+    - name: closure_deliverable
+      description: CLOSUREDELIVERABLE
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+  - name: quality_issue_v2
+    identifier: ods_quality_issue_v2
+    description: 质量信息汇总表 — 质量问题事实（21个业务字段）
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: issue_name
+      description: 问题名称
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: team_leader
+      description: TEAM负责人
+      data_type: character varying
+    - name: dept_leader
+      description: 部门负责人
+      data_type: character varying
+    - name: issue_date
+      description: 问题日期
+      data_type: character varying
+    - name: issue_week
+      description: 问题周
+      data_type: character varying
+    - name: issue_summary
+      description: 问题SUMMARY
+      data_type: character varying
+    - name: issue_category
+      description: 问题分类
+      data_type: character varying
+    - name: zero_plan
+      description: ZERO计划
+      data_type: character varying
+    - name: zero_plan_synced
+      description: ZERO计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: status
+      description: 状态
+      data_type: character varying
+    - name: current_progress
+      description: CURRENTPROGRESS
+      data_type: character varying
+    - name: zero_complete_date
+      description: ZEROCOMPLETE日期
+      data_type: character varying
+    - name: zero_complete_week
+      description: ZEROCOMPLETE周
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+  - name: quality_measure_v2
+    identifier: ods_quality_measure_v2
+    description: 质量跟进措施表 — 已纳入质量措施闭环 STG/DWD/DWS/ADS 语义链路
+    columns:
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: issue_name
+      description: 问题名称
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: team_leader
+      description: TEAM负责人
+      data_type: character varying
+    - name: dept_leader
+      description: 部门负责人
+      data_type: character varying
+    - name: issue_date
+      description: 问题日期
+      data_type: character varying
+    - name: issue_week
+      description: 问题周
+      data_type: character varying
+    - name: issue_summary
+      description: 问题SUMMARY
+      data_type: character varying
+    - name: issue_category
+      description: 问题分类
+      data_type: character varying
+    - name: zero_plan
+      description: ZERO计划
+      data_type: character varying
+    - name: zero_plan_synced
+      description: ZERO计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: status
+      description: 状态
+      data_type: character varying
+    - name: current_progress
+      description: CURRENTPROGRESS
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: measure_category
+      description: MEASURE分类
+      data_type: character varying
+    - name: measure_title
+      description: MEASURETITLE
+      data_type: character varying
+    - name: follow_up_person
+      description: FOLLOWUPPERSON
+      data_type: character varying
+    - name: main_recipient
+      description: MAINRECIPIENT
+      data_type: character varying
+    - name: cc_recipient
+      description: CCRECIPIENT
+      data_type: character varying
+    - name: follow_up_date
+      description: FOLLOWUP日期
+      data_type: character varying
+    - name: follow_up_week
+      description: FOLLOWUP周
+      data_type: character varying
+    - name: closure_status
+      description: CLOSURE状态
+      data_type: character varying
+    - name: final_closure_date
+      description: FINALCLOSURE日期
+      data_type: character varying
+    - name: final_closure_week
+      description: FINALCLOSURE周
+      data_type: character varying
+    - name: closure_deliverable_type
+      description: CLOSUREDELIVERABLE类型
+      data_type: character varying
+    - name: closure_deliverable
+      description: CLOSUREDELIVERABLE
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_source_table
+      description: DTS源表
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+    - name: _dts_batch_id
+      description: DTSBATCH标识
+      data_type: character varying
+    - name: _dts_execution_id
+      description: DTSEXECUTION标识
+      data_type: character varying
+    - name: _dts_task_id
+      description: DTS任务标识
+      data_type: character varying
+    - name: _dts_source_file
+      description: DTS源FILE
+      data_type: character varying
+    - name: _dts_source_sheet
+      description: DTS源SHEET
+      data_type: character varying
+    - name: _dts_file_hash
+      description: DTSFILEHASH
+      data_type: character varying
+    - name: _dts_row_number
+      description: DTS行NUMBER
+      data_type: integer
+    - name: id
+      description: 标识
+      data_type: bigint
+  - name: tech_state_v2
+    identifier: ods_tech_state_v2
+    description: 技术状态信息汇总表 — 技术状态变更事实（33个业务字段）
+    columns:
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: tech_state_name
+      description: 技术状态名称
+      data_type: character varying
+    - name: change_item
+      description: 更改条目
+      data_type: character varying
+    - name: owner
+      description: 负责人
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: dept_leader
+      description: 部门负责人
+      data_type: character varying
+    - name: change_submit_time
+      description: 更改SUBMIT时间
+      data_type: character varying
+    - name: change_submit_week
+      description: 更改SUBMIT周
+      data_type: character varying
+    - name: completion_signature
+      description: 完成签署
+      data_type: character varying
+    - name: signature_closure_date
+      description: 签署CLOSURE日期
+      data_type: character varying
+    - name: signature_closure_week
+      description: 签署CLOSURE周
+      data_type: character varying
+    - name: change_reason
+      description: 更改原因
+      data_type: character varying
+    - name: change_category
+      description: 更改分类
+      data_type: character varying
+    - name: plan_file_closure_date
+      description: 计划FILECLOSURE日期
+      data_type: character varying
+    - name: plan_file_closure_week
+      description: 计划FILECLOSURE周
+      data_type: character varying
+    - name: plan_reform_date
+      description: 计划整改日期
+      data_type: character varying
+    - name: plan_reform_week
+      description: 计划整改周
+      data_type: character varying
+    - name: plan_synced
+      description: 计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: review_situation
+      description: REVIEWSITUATION
+      data_type: character varying
+    - name: affected_files
+      description: AFFECTEDFILES
+      data_type: character varying
+    - name: affected_objects
+      description: AFFECTEDOBJECTS
+      data_type: character varying
+    - name: file_signature_status
+      description: FILE签署状态
+      data_type: character varying
+    - name: file_signature_date
+      description: FILE签署日期
+      data_type: character varying
+    - name: file_signature_week
+      description: FILE签署周
+      data_type: character varying
+    - name: reform_status
+      description: 整改状态
+      data_type: character varying
+    - name: reform_date
+      description: 整改日期
+      data_type: character varying
+    - name: reform_week
+      description: 整改周
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_source_table
+      description: DTS源表
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+    - name: _dts_batch_id
+      description: DTSBATCH标识
+      data_type: character varying
+    - name: _dts_execution_id
+      description: DTSEXECUTION标识
+      data_type: character varying
+    - name: _dts_task_id
+      description: DTS任务标识
+      data_type: character varying
+    - name: _dts_source_file
+      description: DTS源FILE
+      data_type: character varying
+    - name: _dts_source_sheet
+      description: DTS源SHEET
+      data_type: character varying
+    - name: _dts_file_hash
+      description: DTSFILEHASH
+      data_type: character varying
+    - name: _dts_row_number
+      description: DTS行NUMBER
+      data_type: integer
+    - name: id
+      description: 标识
+      data_type: bigint
+  - name: tech_state_measure_v2
+    identifier: ods_tech_state_measure_v2
+    description: 技术状态跟进措施表 — 已纳入技术状态措施闭环 STG/DWD/DWS/ADS 语义链路
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: tech_state_name
+      description: 技术状态名称
+      data_type: character varying
+    - name: change_item
+      description: 更改条目
+      data_type: character varying
+    - name: owner
+      description: 负责人
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: dept_leader
+      description: 部门负责人
+      data_type: character varying
+    - name: change_submit_time
+      description: 更改SUBMIT时间
+      data_type: character varying
+    - name: change_submit_week
+      description: 更改SUBMIT周
+      data_type: character varying
+    - name: completion_signature
+      description: 完成签署
+      data_type: character varying
+    - name: signature_closure_date
+      description: 签署CLOSURE日期
+      data_type: character varying
+    - name: signature_closure_week
+      description: 签署CLOSURE周
+      data_type: character varying
+    - name: change_reason
+      description: 更改原因
+      data_type: character varying
+    - name: change_category
+      description: 更改分类
+      data_type: character varying
+    - name: plan_file_closure_date
+      description: 计划FILECLOSURE日期
+      data_type: character varying
+    - name: plan_file_closure_week
+      description: 计划FILECLOSURE周
+      data_type: character varying
+    - name: plan_reform_date
+      description: 计划整改日期
+      data_type: character varying
+    - name: plan_reform_week
+      description: 计划整改周
+      data_type: character varying
+    - name: plan_synced
+      description: 计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: affected_files
+      description: AFFECTEDFILES
+      data_type: character varying
+    - name: affected_objects
+      description: AFFECTEDOBJECTS
+      data_type: character varying
+    - name: file_signature_status
+      description: FILE签署状态
+      data_type: character varying
+    - name: reform_status
+      description: 整改状态
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: measure_category
+      description: MEASURE分类
+      data_type: character varying
+    - name: measure_title
+      description: MEASURETITLE
+      data_type: character varying
+    - name: follow_up_person
+      description: FOLLOWUPPERSON
+      data_type: character varying
+    - name: main_recipient
+      description: MAINRECIPIENT
+      data_type: character varying
+    - name: cc_recipient
+      description: CCRECIPIENT
+      data_type: character varying
+    - name: follow_up_date
+      description: FOLLOWUP日期
+      data_type: character varying
+    - name: follow_up_week
+      description: FOLLOWUP周
+      data_type: character varying
+    - name: closure_status
+      description: CLOSURE状态
+      data_type: character varying
+    - name: final_closure_date
+      description: FINALCLOSURE日期
+      data_type: character varying
+    - name: final_closure_week
+      description: FINALCLOSURE周
+      data_type: character varying
+    - name: closure_deliverable_type
+      description: CLOSUREDELIVERABLE类型
+      data_type: character varying
+    - name: closure_deliverable
+      description: CLOSUREDELIVERABLE
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+  - name: risk_info_v2
+    identifier: ods_risk_info_v2
+    description: 风险信息汇总表 — 风险台账事实（31个业务字段）
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: risk_name
+      description: 风险名称
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: belonging_unit
+      description: BELONGINGUNIT
+      data_type: character varying
+    - name: risk_description
+      description: 风险说明
+      data_type: character varying
+    - name: risk_submit_time
+      description: 风险SUBMIT时间
+      data_type: character varying
+    - name: risk_submit_week
+      description: 风险SUBMIT周
+      data_type: character varying
+    - name: risk_phase
+      description: 风险PHASE
+      data_type: character varying
+    - name: risk_category
+      description: 风险分类
+      data_type: character varying
+    - name: risk_level
+      description: 风险等级
+      data_type: character varying
+    - name: impact_scope
+      description: IMPACT范围
+      data_type: character varying
+    - name: response_measure
+      description: RESPONSEMEASURE
+      data_type: character varying
+    - name: final_release_time
+      description: FINAL释放时间
+      data_type: character varying
+    - name: final_release_week
+      description: FINAL释放周
+      data_type: character varying
+    - name: monthly_control_plan
+      description: MONTHLYCONTROL计划
+      data_type: character varying
+    - name: weekly_release_plan
+      description: WEEKLY释放计划
+      data_type: character varying
+    - name: release_plan_synced
+      description: 释放计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: progress_stat_time
+      description: PROGRESSSTAT时间
+      data_type: character varying
+    - name: progress_stat_week
+      description: PROGRESSSTAT周
+      data_type: character varying
+    - name: progress_situation
+      description: PROGRESSSITUATION
+      data_type: character varying
+    - name: response_owner
+      description: RESPONSE负责人
+      data_type: character varying
+    - name: control_owner
+      description: CONTROL负责人
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: risk_status
+      description: 风险状态
+      data_type: character varying
+    - name: risk_release_date
+      description: 风险释放日期
+      data_type: character varying
+    - name: risk_release_week
+      description: 风险释放周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+  - name: risk_measure_v2
+    identifier: ods_risk_measure_v2
+    description: 风险跟进措施表 — 已纳入风险措施闭环 STG/DWD/DWS/ADS 语义链路
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: risk_name
+      description: 风险名称
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: belonging_unit
+      description: BELONGINGUNIT
+      data_type: character varying
+    - name: risk_description
+      description: 风险说明
+      data_type: character varying
+    - name: risk_submit_time
+      description: 风险SUBMIT时间
+      data_type: character varying
+    - name: risk_submit_week
+      description: 风险SUBMIT周
+      data_type: character varying
+    - name: risk_phase
+      description: 风险PHASE
+      data_type: character varying
+    - name: risk_category
+      description: 风险分类
+      data_type: character varying
+    - name: risk_level
+      description: 风险等级
+      data_type: character varying
+    - name: impact_scope
+      description: IMPACT范围
+      data_type: character varying
+    - name: response_measure
+      description: RESPONSEMEASURE
+      data_type: character varying
+    - name: final_release_time
+      description: FINAL释放时间
+      data_type: character varying
+    - name: monthly_control_plan
+      description: MONTHLYCONTROL计划
+      data_type: character varying
+    - name: weekly_release_plan
+      description: WEEKLY释放计划
+      data_type: character varying
+    - name: release_plan_synced
+      description: 释放计划SYNCED
+      data_type: character varying
+    - name: new_plan_count
+      description: 新增计划数量
+      data_type: character varying
+    - name: progress_stat_time
+      description: PROGRESSSTAT时间
+      data_type: character varying
+    - name: progress_stat_week
+      description: PROGRESSSTAT周
+      data_type: character varying
+    - name: progress_situation
+      description: PROGRESSSITUATION
+      data_type: character varying
+    - name: response_owner
+      description: RESPONSE负责人
+      data_type: character varying
+    - name: control_owner
+      description: CONTROL负责人
+      data_type: character varying
+    - name: dept
+      description: 部门
+      data_type: character varying
+    - name: risk_status
+      description: 风险状态
+      data_type: character varying
+    - name: project_manager
+      description: 项目MANAGER
+      data_type: character varying
+    - name: measure_category
+      description: MEASURE分类
+      data_type: character varying
+    - name: measure_title
+      description: MEASURETITLE
+      data_type: character varying
+    - name: follow_up_person
+      description: FOLLOWUPPERSON
+      data_type: character varying
+    - name: main_recipient
+      description: MAINRECIPIENT
+      data_type: character varying
+    - name: cc_recipient
+      description: CCRECIPIENT
+      data_type: character varying
+    - name: follow_up_date
+      description: FOLLOWUP日期
+      data_type: character varying
+    - name: follow_up_week
+      description: FOLLOWUP周
+      data_type: character varying
+    - name: closure_status
+      description: CLOSURE状态
+      data_type: character varying
+    - name: final_closure_date
+      description: FINALCLOSURE日期
+      data_type: character varying
+    - name: final_closure_week
+      description: FINALCLOSURE周
+      data_type: character varying
+    - name: closure_deliverable_type
+      description: CLOSUREDELIVERABLE类型
+      data_type: character varying
+    - name: closure_deliverable
+      description: CLOSUREDELIVERABLE
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: filled_by
+      description: FILLEDBY
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+  - name: material_info_v2
+    identifier: ods_material_info_v2
+    description: 重要物料信息表 — 已纳入重要物料交付 STG/DWD/DWS/ADS 语义链路
+    columns:
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: subsystem
+      description: SUBSYSTEM
+      data_type: character varying
+    - name: pbs_no
+      description: PBS编号
+      data_type: character varying
+    - name: pbs_name
+      description: PBS名称
+      data_type: character varying
+    - name: self_or_outsource
+      description: SELFOROUTSOURCE
+      data_type: character varying
+    - name: supplier_name
+      description: SUPPLIER名称
+      data_type: character varying
+    - name: is_long_cycle
+      description: 是否LONGCYCLE
+      data_type: character varying
+    - name: contract_negotiation_date
+      description: CONTRACTNEGOTIATION日期
+      data_type: character varying
+    - name: contract_negotiation_week
+      description: CONTRACTNEGOTIATION周
+      data_type: character varying
+    - name: contract_delivery_date
+      description: CONTRACTDELIVERY日期
+      data_type: character varying
+    - name: contract_delivery_week
+      description: CONTRACTDELIVERY周
+      data_type: character varying
+    - name: actual_delivery_date
+      description: 实际DELIVERY日期
+      data_type: character varying
+    - name: actual_delivery_week
+      description: 实际DELIVERY周
+      data_type: character varying
+    - name: plan_inspect_date
+      description: 计划INSPECT日期
+      data_type: character varying
+    - name: plan_inspect_week
+      description: 计划INSPECT周
+      data_type: character varying
+    - name: complete_inspect_date
+      description: COMPLETEINSPECT日期
+      data_type: character varying
+    - name: complete_inspect_week
+      description: COMPLETEINSPECT周
+      data_type: character varying
+    - name: install_date
+      description: INSTALL日期
+      data_type: character varying
+    - name: install_week
+      description: INSTALL周
+      data_type: character varying
+    - name: dept_owner
+      description: 部门负责人
+      data_type: character varying
+    - name: control_dept_owner
+      description: CONTROL部门负责人
+      data_type: character varying
+    - name: weekly_progress
+      description: WEEKLYPROGRESS
+      data_type: character varying
+    - name: affects_major_node
+      description: AFFECTS重大节点
+      data_type: character varying
+    - name: risk_level
+      description: 风险等级
+      data_type: character varying
+    - name: risk_content
+      description: 风险内容
+      data_type: character varying
+    - name: delay_impact
+      description: DELAYIMPACT
+      data_type: character varying
+    - name: last_update_time
+      description: LASTUPDATE时间
+      data_type: character varying
+    - name: last_update_week
+      description: LASTUPDATE周
+      data_type: character varying
+    - name: remark
+      description: 备注
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_source_table
+      description: DTS源表
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+    - name: _dts_batch_id
+      description: DTSBATCH标识
+      data_type: character varying
+    - name: _dts_execution_id
+      description: DTSEXECUTION标识
+      data_type: character varying
+    - name: _dts_task_id
+      description: DTS任务标识
+      data_type: character varying
+    - name: _dts_source_file
+      description: DTS源FILE
+      data_type: character varying
+    - name: _dts_source_sheet
+      description: DTS源SHEET
+      data_type: character varying
+    - name: _dts_file_hash
+      description: DTSFILEHASH
+      data_type: character varying
+    - name: _dts_row_number
+      description: DTS行NUMBER
+      data_type: integer
+    - name: id
+      description: 标识
+      data_type: bigint
+  - name: budget_v2
+    identifier: ods_budget_v2
+    description: 预算执行台账表 — 科研经费三本账快照（9个业务字段，含业务快照日期）
+    columns:
+    - name: id
+      description: 标识
+      data_type: integer
+    - name: project_no
+      description: 项目编号
+      data_type: character varying
+    - name: budget_no
+      description: 预算编号
+      data_type: character varying
+    - name: subtopic
+      description: SUBTOPIC
+      data_type: character varying
+    - name: research_lab
+      description: 研究室
+      data_type: character varying
+    - name: budget_amount_adjusted
+      description: 预算金额ADJUSTED
+      data_type: character varying
+    - name: prepaid_amount
+      description: 预付金额
+      data_type: character varying
+    - name: book_cost_amount
+      description: 账面成本金额
+      data_type: character varying
+    - name: payable_amount
+      description: 应付金额
+      data_type: character varying
+    - name: _dts_source_system
+      description: DTS源系统
+      data_type: character varying
+    - name: _dts_import_time
+      description: DTSIMPORT时间
+      data_type: timestamp without time zone
+    - name: snapshot_date
+      description: 业务快照日期；不得使用 _dts_import_time 代替
+      data_type: date

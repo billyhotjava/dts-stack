@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260328-20-drop-topic-binding" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="topic_binding"/>
+        </preConditions>
+        <dropTable tableName="topic_binding"/>
+    </changeSet>
+
+    <changeSet id="20260328-21-drop-topic-template-entity" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="topic_template_entity"/>
+        </preConditions>
+        <dropTable tableName="topic_template_entity"/>
+    </changeSet>
+
+    <changeSet id="20260328-22-drop-topic-template" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="topic_template"/>
+        </preConditions>
+        <dropTable tableName="topic_template"/>
+    </changeSet>
+
+    <changeSet id="20260328-23-drop-project-cockpit-issue" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_project_cockpit_issue"/>
+        </preConditions>
+        <dropTable tableName="infra_project_cockpit_issue"/>
+    </changeSet>
+
+    <changeSet id="20260328-24-drop-project-cockpit-row" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_project_cockpit_row"/>
+        </preConditions>
+        <dropTable tableName="infra_project_cockpit_row"/>
+    </changeSet>
+
+    <changeSet id="20260328-25-drop-project-cockpit-batch" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_project_cockpit_batch"/>
+        </preConditions>
+        <dropTable tableName="infra_project_cockpit_batch"/>
+    </changeSet>
+
+</databaseChangeLog>

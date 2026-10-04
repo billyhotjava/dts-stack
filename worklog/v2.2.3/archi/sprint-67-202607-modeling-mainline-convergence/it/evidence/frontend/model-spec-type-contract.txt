@@ -1,0 +1,31 @@
+Sprint-67 F3-T01 ModelSpec v2 frontend type and source-contract verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Actual GREEN command:
+  cd source/dts-platform-webapp
+  node --test \
+    src/pages/modeling/modelSpecV2Contract.test.ts \
+    src/pages/modeling/modelSpecWorkbench.test.ts \
+    src/api/modelSpecApi.source-contract.test.ts \
+    src/pages/modeling/canonicalModelingPages.source-contract.test.ts
+
+Node test result:
+- 4 test files passed;
+- 4 passed, 0 failed, 0 skipped, 0 cancelled;
+- observed command exit code: 0.
+
+Covered behavior:
+- TypeScript create/update fields and JSON Schema enforce contractVersion=2 and reject retired objectId/processId metadata;
+- update commands omit create-only idempotencyKey and generate the same strong ETag shape as the backend;
+- DIMENSION, FACT, SUMMARY and APPLICATION use their own deterministic required-field rules;
+- FACT keeps optional businessActivityRef, while other model types neither render it into nor submit it with a ModelSpec command;
+- workbench payloads preserve grain, sources, time semantics, pinned upstream/dimension revisions and application consumption scenario without a business object;
+- the canonical client owns one /modeling/model-specs CRUD surface and applies If-Match on updates;
+- canonical dimension/list/detail pages use only ModelSpec v2 APIs and do not consume semantic business-object APIs;
+- static and dynamic route definitions resolve the same canonical list and detail targets.
+
+Evidence boundary:
+- This is a direct Node contract/source-contract run, not a production pnpm build or Chrome 95 browser acceptance.
+- Browser interaction, responsive behavior and authenticated navigation remain later F4/F6 acceptance work.
+- No frontend production source was changed while repairing and rerunning this evidence slice.

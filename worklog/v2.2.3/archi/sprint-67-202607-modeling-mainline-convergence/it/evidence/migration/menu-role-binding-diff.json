@@ -1,0 +1,25 @@
+{
+  "verifiedAt": "2026-07-19T22:22:56+08:00",
+  "database": "dts_admin",
+  "liquibase": {
+    "id": "20260719-01-sprint67-modeling-menu-convergence",
+    "author": "codex",
+    "status": "EXECUTED"
+  },
+  "menuIds": [7, 9424, 9428, 9430, 9435, 11502, 11504, 11505, 11506, 11507, 11751],
+  "visibility": {
+    "before": { "rows": 22, "menus": 11, "roles": 2 },
+    "after": { "rows": 22, "menus": 11, "roles": 2 },
+    "roleCodes": ["ROLE_INST_DATA_OWNER", "ROLE_INST_LEADER"],
+    "lostBindings": 0
+  },
+  "canonical": {
+    "9430": { "title": "业务分类", "target": "/governance/subjects", "deleted": false },
+    "11504": { "title": "维度目录", "target": "/modeling/dimensions", "deleted": false },
+    "11506": { "title": "模型中心", "target": "/modeling/models", "deleted": false },
+    "9424": { "title": "高级建模（SQL/dbt）", "target": "/studio/sql-modeling", "deleted": false },
+    "11502": { "title": "指标工作台", "target": "/modeling/metric-workbench", "deleted": false }
+  },
+  "softDeleted": [7, 9428, 9435, 11505, 11507, 11751],
+  "rollbackImages": ["dts-admin:sprint67-f4-before", "dts-platform-webapp:sprint67-f4-before"]
+}

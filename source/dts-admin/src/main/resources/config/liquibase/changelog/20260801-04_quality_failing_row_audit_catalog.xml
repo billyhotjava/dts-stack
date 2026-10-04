@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-04-quality-failing-row-audit-catalog" author="codex">
+        <comment>登记质量失败行敏感明细读取审计动作</comment>
+        <sql><![CDATA[
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            ) VALUES (
+                'platform',
+                'GOV_QUALITY_FAILING_ROW_VIEW',
+                'governance.qualityRuns',
+                '质量运行',
+                'GOV_QUALITY_FAILING_ROW_VIEW',
+                '查看质量失败行明细',
+                'QUERY',
+                'data_quality',
+                FALSE,
+                TRUE,
+                'prototype-dq-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at
+        ]]></sql>
+        <rollback>
+            <sql><![CDATA[
+                DELETE FROM audit_action_catalog
+                 WHERE source_system = 'platform'
+                   AND action_code = 'GOV_QUALITY_FAILING_ROW_VIEW'
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

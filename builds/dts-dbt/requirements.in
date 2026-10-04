@@ -1,0 +1,4 @@
+# H83-01 candidate direct dependencies.
+# Keep both Core and the PostgreSQL adapter exact; F0/T05 owns certification.
+dbt-core==1.10.22
+dbt-postgres==1.10.0

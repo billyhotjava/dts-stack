@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-03-indicator-business-context-expand" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="gov_indicator_definition"/>
+            <tableExists tableName="catalog_domain"/>
+            <tableExists tableName="sprint64_business_process"/>
+            <not><columnExists tableName="gov_indicator_definition" columnName="business_category_id"/></not>
+        </preConditions>
+        <comment>
+            Sprint-87 Expand phase for ADR-86-06/07. Stable business context is added without removing or
+            reinterpreting category/domain/dataset_id/is_derived. Ambiguous legacy values remain unresolved.
+        </comment>
+
+        <addColumn tableName="gov_indicator_definition">
+            <column name="business_category_id" type="uuid"/>
+            <column name="data_domain_id" type="uuid"/>
+            <column name="business_process_id" type="uuid"/>
+            <column name="metric_type" type="varchar(16)"/>
+            <column name="metric_group_code" type="varchar(64)"/>
+            <column name="source_refs" type="jsonb"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="gov_indicator_definition"
+            baseColumnNames="business_category_id"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_business_category"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="gov_indicator_definition"
+            baseColumnNames="data_domain_id"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_data_domain"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="gov_indicator_definition"
+            baseColumnNames="business_process_id"
+            referencedTableName="sprint64_business_process"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_business_process"
+            onDelete="RESTRICT"/>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_indicator_business_context">
+            <column name="business_category_id"/>
+            <column name="data_domain_id"/>
+            <column name="business_process_id"/>
+            <column name="metric_type"/>
+        </createIndex>
+
+        <createTable tableName="indicator_context_migration_batch">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_indicator_context_migration_batch"/></column>
+            <column name="preview_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="row_count" type="integer"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+            <column name="applied_at" type="timestamp with time zone"/>
+            <column name="rolled_back_at" type="timestamp with time zone"/>
+        </createTable>
+
+        <createTable tableName="indicator_context_migration_evidence">
+            <column name="batch_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="indicator_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="previous_business_category_id" type="uuid"/>
+            <column name="previous_data_domain_id" type="uuid"/>
+            <column name="previous_business_process_id" type="uuid"/>
+            <column name="previous_metric_type" type="varchar(16)"/>
+            <column name="previous_metric_group_code" type="varchar(64)"/>
+            <column name="previous_source_refs" type="jsonb"/>
+            <column name="proposed_business_category_id" type="uuid"/>
+            <column name="proposed_data_domain_id" type="uuid"/>
+            <column name="proposed_metric_type" type="varchar(16)"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addPrimaryKey
+            tableName="indicator_context_migration_evidence"
+            columnNames="batch_id,indicator_id"
+            constraintName="pk_indicator_context_migration_evidence"/>
+        <addForeignKeyConstraint
+            baseTableName="indicator_context_migration_evidence"
+            baseColumnNames="batch_id"
+            referencedTableName="indicator_context_migration_batch"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_context_evidence_batch"
+            onDelete="CASCADE"/>
+        <addForeignKeyConstraint
+            baseTableName="indicator_context_migration_evidence"
+            baseColumnNames="indicator_id"
+            referencedTableName="gov_indicator_definition"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_context_evidence_indicator"
+            onDelete="CASCADE"/>
+
+        <createTable tableName="indicator_context_migration_issue">
+            <column name="id" type="uuid"><constraints nullable="false" primaryKey="true" primaryKeyName="pk_indicator_context_migration_issue"/></column>
+            <column name="indicator_id" type="uuid"><constraints nullable="false"/></column>
+            <column name="field_name" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="legacy_value" type="varchar(512)"/>
+            <column name="reason_code" type="varchar(80)"><constraints nullable="false"/></column>
+            <column name="candidate_ids" type="jsonb" defaultValueComputed="'[]'::jsonb"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)" defaultValue="PENDING"><constraints nullable="false"/></column>
+            <column name="resolved_by" type="varchar(128)"/>
+            <column name="resolved_at" type="timestamp with time zone"/>
+            <column name="created_at" type="timestamp with time zone"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="indicator_context_migration_issue"
+            columnNames="indicator_id,field_name,status"
+            constraintName="uk_indicator_context_migration_issue"/>
+        <addForeignKeyConstraint
+            baseTableName="indicator_context_migration_issue"
+            baseColumnNames="indicator_id"
+            referencedTableName="gov_indicator_definition"
+            referencedColumnNames="id"
+            constraintName="fk_indicator_context_issue_indicator"
+            onDelete="CASCADE"/>
+        <createIndex tableName="indicator_context_migration_issue" indexName="idx_indicator_context_issue_status">
+            <column name="status"/>
+            <column name="reason_code"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE gov_indicator_definition
+                ADD CONSTRAINT ck_indicator_business_context_expand CHECK (
+                    (metric_type IS NULL OR metric_type IN ('ATOMIC', 'DERIVED', 'COMPOSITE'))
+                    AND (metric_group_code IS NULL OR metric_group_code ~ '^[A-Za-z][A-Za-z0-9_.-]{0,63}$')
+                    AND (source_refs IS NULL OR jsonb_typeof(source_refs) = 'array')
+                );
+
+            ALTER TABLE indicator_context_migration_batch
+                ADD CONSTRAINT ck_indicator_context_batch_status
+                CHECK (status IN ('APPLIED', 'ROLLED_BACK'));
+
+            ALTER TABLE indicator_context_migration_issue
+                ADD CONSTRAINT ck_indicator_context_issue_status
+                CHECK (status IN ('PENDING', 'RESOLVED', 'IGNORED'));
+        ]]></sql>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO indicator_context_migration_issue(
+                id, indicator_id, field_name, legacy_value, reason_code, candidate_ids, status, created_at
+            )
+            SELECT gen_random_uuid(), indicator.id, 'businessCategoryId', indicator.category,
+                   CASE WHEN count(candidate.id) = 0
+                        THEN 'BUSINESS_CATEGORY_MATCH_MISSING'
+                        ELSE 'BUSINESS_CATEGORY_MATCH_AMBIGUOUS' END,
+                   coalesce(jsonb_agg(candidate.id) FILTER (WHERE candidate.id IS NOT NULL), '[]'::jsonb),
+                   'PENDING', current_timestamp
+              FROM gov_indicator_definition indicator
+              LEFT JOIN catalog_domain candidate
+                ON candidate.parent_id IS NULL
+               AND (lower(btrim(candidate.code)) = lower(btrim(indicator.category))
+                    OR lower(btrim(candidate.name)) = lower(btrim(indicator.category)))
+             WHERE indicator.business_category_id IS NULL
+             GROUP BY indicator.id, indicator.category
+            HAVING count(candidate.id) <> 1;
+
+            INSERT INTO indicator_context_migration_issue(
+                id, indicator_id, field_name, legacy_value, reason_code, candidate_ids, status, created_at
+            )
+            SELECT gen_random_uuid(), indicator.id, 'metricType', indicator.is_derived::text,
+                   'DERIVED_TYPE_AMBIGUOUS', '[]'::jsonb, 'PENDING', current_timestamp
+              FROM gov_indicator_definition indicator
+             WHERE indicator.metric_type IS NULL AND indicator.is_derived IS TRUE;
+
+            INSERT INTO indicator_context_migration_issue(
+                id, indicator_id, field_name, legacy_value, reason_code, candidate_ids, status, created_at
+            )
+            SELECT gen_random_uuid(), indicator.id, 'businessProcessId', NULL,
+                   'BUSINESS_PROCESS_REQUIRED', '[]'::jsonb, 'PENDING', current_timestamp
+              FROM gov_indicator_definition indicator
+             WHERE indicator.business_process_id IS NULL
+               AND coalesce(indicator.is_derived, FALSE) IS FALSE;
+
+            INSERT INTO indicator_context_migration_issue(
+                id, indicator_id, field_name, legacy_value, reason_code, candidate_ids, status, created_at
+            )
+            SELECT gen_random_uuid(), indicator.id, 'sourceRefs', indicator.dataset_id,
+                   'SOURCE_REFS_REQUIRED', '[]'::jsonb, 'PENDING', current_timestamp
+              FROM gov_indicator_definition indicator
+             WHERE indicator.source_refs IS NULL;
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="indicator_context_migration_issue"/>
+            <dropTable tableName="indicator_context_migration_evidence"/>
+            <dropTable tableName="indicator_context_migration_batch"/>
+            <dropIndex tableName="gov_indicator_definition" indexName="idx_indicator_business_context"/>
+            <dropForeignKeyConstraint baseTableName="gov_indicator_definition" constraintName="fk_indicator_business_process"/>
+            <dropForeignKeyConstraint baseTableName="gov_indicator_definition" constraintName="fk_indicator_data_domain"/>
+            <dropForeignKeyConstraint baseTableName="gov_indicator_definition" constraintName="fk_indicator_business_category"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="source_refs"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="metric_group_code"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="metric_type"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="business_process_id"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="data_domain_id"/>
+            <dropColumn tableName="gov_indicator_definition" columnName="business_category_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

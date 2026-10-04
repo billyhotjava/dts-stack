@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/dts-upgrade-common.sh
+source "${SCRIPT_DIR}/lib/dts-upgrade-common.sh"
+SOURCE_ROOT="${DTS_UPGRADE_SOURCE_ROOT:-$(cd -- "${SCRIPT_DIR}/.." && pwd)}"
+
+DEFAULT_TARGET_DIR="${DTS_UPGRADE_DEFAULT_TARGET:-/data/dts-stack}"
+
+usage() {
+  cat <<EOF
+Usage:
+  dts-upgrade [--target <dir, default ${DEFAULT_TARGET_DIR}>] --images-dir <dir> --extra-dir <dir>
+
+This command upgrades an existing DTS deployment in place using an offline
+update package. Containers must already be stopped before running it.
+
+Target contract:
+  - Default --target is ${DEFAULT_TARGET_DIR} (operator may override).
+  - The target directory is NOT renamed/moved during upgrade.
+EOF
+}
+
+TARGET_DIR=""
+IMAGES_DIR=""
+EXTRA_DIR=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      TARGET_DIR="${2:-}"
+      shift 2
+      ;;
+    --images-dir)
+      IMAGES_DIR="${2:-}"
+      shift 2
+      ;;
+    --extra-dir)
+      EXTRA_DIR="${2:-}"
+      shift 2
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      upgrade_die "unknown option: $1"
+      ;;
+  esac
+done
+
+if [[ -z "${TARGET_DIR}" ]]; then
+  if [[ -d "${DEFAULT_TARGET_DIR}" ]]; then
+    TARGET_DIR="${DEFAULT_TARGET_DIR}"
+    upgrade_info "no --target provided; using default ${TARGET_DIR}"
+  else
+    upgrade_die "--target is required (default ${DEFAULT_TARGET_DIR} does not exist)"
+  fi
+fi
+[[ -n "${IMAGES_DIR}" ]] || upgrade_die "--images-dir is required"
+[[ -n "${EXTRA_DIR}" ]] || upgrade_die "--extra-dir is required"
+
+upgrade_require_dir "${TARGET_DIR}" "target"
+mkdir -p "${IMAGES_DIR}" "${EXTRA_DIR}"
+
+UPGRADE_TIMESTAMP="$(upgrade_timestamp)"
+upgrade_init_logs "${TARGET_DIR}" "${UPGRADE_TIMESTAMP}"
+upgrade_set_state "PRECHECK"
+upgrade_set_state "MODE_DETECT"
+upgrade_detect_mode "${SOURCE_ROOT}" "${TARGET_DIR}"
+upgrade_set_state "VERIFY_OFFLINE_PACKAGE"
+upgrade_verify_image_package "${IMAGES_DIR}" "${EXTRA_DIR}"
+upgrade_set_state "VERIFY_OLD_CONTAINERS_STOPPED"
+upgrade_check_containers_stopped "${TARGET_DIR}"
+upgrade_set_state "DB_COMPAT_CHECK"
+upgrade_check_postgres_compatibility "${SOURCE_ROOT}" "${TARGET_DIR}"
+upgrade_write_lock "${TARGET_DIR}" "${UPGRADE_TIMESTAMP}"
+upgrade_set_state "BACKUP"
+upgrade_init_backup_state "${TARGET_DIR}" "${UPGRADE_TIMESTAMP}"
+# Persist the journal even if copying runtime files fails partway through.
+trap 'upgrade_exit=$?; trap - EXIT; upgrade_write_rollback_manifests "${EXTRA_DIR}" || printf "Failed to write rollback manifest; preserve backup lists in %s\n" "${UPGRADE_BACKUP_DIR}" >&2; exit "${upgrade_exit}"' EXIT
+upgrade_backup_postgres_data_dir "${TARGET_DIR}"
+upgrade_set_state "LOAD_IMAGES"
+upgrade_load_images "${IMAGES_DIR}" "${EXTRA_DIR}"
+upgrade_set_state "MERGE_ENV"
+upgrade_merge_env_file "${SOURCE_ROOT}" "${TARGET_DIR}"
+upgrade_set_state "MERGE_COMPOSE"
+upgrade_merge_compose_files "${SOURCE_ROOT}" "${TARGET_DIR}"
+upgrade_set_state "MERGE_CONFIG"
+upgrade_merge_config_tree "${SOURCE_ROOT}" "${TARGET_DIR}" "${UPGRADE_TIMESTAMP}"
+upgrade_set_state "SYNC_NEW_FILES"
+upgrade_sync_new_files "${SOURCE_ROOT}" "${TARGET_DIR}"
+upgrade_set_state "WRITE_SUMMARY"
+upgrade_write_rollback_manifests "${EXTRA_DIR}"
+trap - EXIT
+upgrade_set_state "START_CONTAINERS"
+upgrade_start_target_stack "${TARGET_DIR}"
+upgrade_set_state "POSTCHECK"
+upgrade_postcheck "${TARGET_DIR}"
+upgrade_append_summary "- final status: success"
+
+upgrade_info "preflight checks passed"
+upgrade_info "log file: ${UPGRADE_LOG_FILE}"
+upgrade_info "summary file: ${UPGRADE_SUMMARY_FILE}"

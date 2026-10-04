@@ -1,0 +1,185 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - menu [ref=e7]:
+      - menuitem "总览图表" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: 总览图表
+      - menuitem "流水线进度" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 流水线进度
+      - menuitem "一键重跑" [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: 一键重跑
+      - menuitem "最近运行" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 最近运行
+      - menuitem "演进路线" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 演进路线
+      - menuitem "批次重算" [active] [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 批次重算
+      - menuitem "批次结果" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 批次结果
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "Metro AppPack · 算法运行面板" [level=3] [ref=e30]
+          - generic [ref=e31]: LSTM-AE 异常检测 · 阈值调优 · 反馈驱动评估（一键重跑 + 数据上传）
+          - generic [ref=e33]:
+            - generic [ref=e35]: 包标识：metro-pack
+            - generic [ref=e37]: 版本：3.0.1
+            - generic [ref=e39]: 行业：地铁
+        - button "reload 刷新" [ref=e40] [cursor=pointer]:
+          - img "reload" [ref=e400]:
+            - img [ref=e401]
+          - generic [ref=e45]: 刷新
+      - generic [ref=e47]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: 目标分（target_score）
+          - generic [ref=e54]: 67.7%
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e60]:
+              - generic [ref=e62]: 当前最佳代理F1
+              - img "info-circle" [ref=e64]:
+                - img [ref=e65]
+            - generic [ref=e69]: 100.0%
+          - generic [ref=e70]: 差距：0.3230
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: 最新离线事件数
+            - generic [ref=e77]: "2"
+          - generic [ref=e78]: 训练阈值：3.030
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - generic [ref=e83]: 训练验证损失
+            - generic [ref=e85]: "0.299009"
+          - generic [ref=e86]: 最佳候选：trial-01
+      - tabpanel [ref=e403]:
+        - generic [ref=e404]:
+          - generic [ref=e406]:
+            - generic [ref=e408]:
+              - generic [ref=e409]: 新建批次
+              - generic [ref=e410]: 上传或 DTS 导出目录 → 自动跑流水线
+            - generic [ref=e411]:
+              - button "inbox 点击或拖拽文件到此区域（支持多选） 文件会打包成一个批次，独立隔离产物" [ref=e414] [cursor=pointer]:
+                - generic [ref=e415]:
+                  - paragraph [ref=e416]:
+                    - img "inbox" [ref=e417]:
+                      - img [ref=e418]
+                  - paragraph [ref=e420]: 点击或拖拽文件到此区域（支持多选）
+                  - paragraph [ref=e421]: 文件会打包成一个批次，独立隔离产物
+              - separator [ref=e422]
+              - generic [ref=e423]:
+                - button "thunderbolt 提交批次并重算（0）" [disabled] [ref=e425]:
+                  - generic:
+                    - img "thunderbolt":
+                      - img
+                  - generic: 提交批次并重算（0）
+                - button "清 空" [disabled] [ref=e427]:
+                  - generic: 清 空
+              - separator [ref=e428]
+              - generic [ref=e429]:
+                - strong [ref=e432]: DTS 导出目录
+                - generic [ref=e434]:
+                  - generic [ref=e435]:
+                    - img "database" [ref=e437]:
+                      - img [ref=e438]
+                    - textbox [ref=e440]: /opt/prod/metro-app/sources/metro-stack/runtime/dts-export/demo-metro-20260513
+                  - button "database 创建 DTS 批次" [ref=e441] [cursor=pointer]:
+                    - img "database" [ref=e443]:
+                      - img [ref=e444]
+                    - generic [ref=e446]: 创建 DTS 批次
+          - generic [ref=e448]:
+            - generic [ref=e451]: 历史批次
+            - generic [ref=e455]:
+              - table [ref=e459]:
+                - rowgroup [ref=e468]:
+                  - row "批次 ID 状态 来源 文件数 步骤 创建时间 操作" [ref=e469]:
+                    - columnheader "批次 ID" [ref=e470]
+                    - columnheader "状态" [ref=e471]
+                    - columnheader "来源" [ref=e472]
+                    - columnheader "文件数" [ref=e473]
+                    - columnheader "步骤" [ref=e474]
+                    - columnheader "创建时间" [ref=e475]
+                    - columnheader "操作" [ref=e476]
+                - rowgroup [ref=e477]:
+                  - row "20260514T015006Z-9220d9 成功 DTS 1 6/7 成功 2026-05-14 09:50:06 重跑 删除" [ref=e478]:
+                    - cell "20260514T015006Z-9220d9" [ref=e479]:
+                      - button "20260514T015006Z-9220d9" [ref=e480] [cursor=pointer]:
+                        - generic [ref=e481]: 20260514T015006Z-9220d9
+                    - cell "成功" [ref=e482]:
+                      - generic [ref=e483]: 成功
+                    - cell "DTS" [ref=e484]:
+                      - generic [ref=e485]: DTS
+                    - cell "1" [ref=e486]
+                    - cell "6/7 成功" [ref=e487]:
+                      - generic [ref=e488]: 6/7 成功
+                    - cell "2026-05-14 09:50:06" [ref=e489]
+                    - cell "重跑 删除" [ref=e490]:
+                      - generic [ref=e491]:
+                        - button "重跑" [ref=e493] [cursor=pointer]:
+                          - generic [ref=e494]: 重跑
+                        - button "删除" [ref=e496] [cursor=pointer]:
+                          - generic [ref=e497]: 删除
+                  - row "20260514T005847Z-081e72 待运行 DTS 1 0/7 成功 2026-05-14 08:58:47 重跑 删除" [ref=e498]:
+                    - cell "20260514T005847Z-081e72" [ref=e499]:
+                      - button "20260514T005847Z-081e72" [ref=e500] [cursor=pointer]:
+                        - generic [ref=e501]: 20260514T005847Z-081e72
+                    - cell "待运行" [ref=e502]:
+                      - generic [ref=e503]: 待运行
+                    - cell "DTS" [ref=e504]:
+                      - generic [ref=e505]: DTS
+                    - cell "1" [ref=e506]
+                    - cell "0/7 成功" [ref=e507]:
+                      - generic [ref=e508]: 0/7 成功
+                    - cell "2026-05-14 08:58:47" [ref=e509]
+                    - cell "重跑 删除" [ref=e510]:
+                      - generic [ref=e511]:
+                        - button "重跑" [ref=e513] [cursor=pointer]:
+                          - generic [ref=e514]: 重跑
+                        - button "删除" [ref=e516] [cursor=pointer]:
+                          - generic [ref=e517]: 删除
+                  - row "20260413T120623Z-b0773d 成功 上传 6 7/7 成功 2026-04-13 20:06:23 重跑 删除" [ref=e518]:
+                    - cell "20260413T120623Z-b0773d" [ref=e519]:
+                      - button "20260413T120623Z-b0773d" [ref=e520] [cursor=pointer]:
+                        - generic [ref=e521]: 20260413T120623Z-b0773d
+                    - cell "成功" [ref=e522]:
+                      - generic [ref=e523]: 成功
+                    - cell "上传" [ref=e524]:
+                      - generic [ref=e525]: 上传
+                    - cell "6" [ref=e526]
+                    - cell "7/7 成功" [ref=e527]:
+                      - generic [ref=e528]: 7/7 成功
+                    - cell "2026-04-13 20:06:23" [ref=e529]
+                    - cell "重跑 删除" [ref=e530]:
+                      - generic [ref=e531]:
+                        - button "重跑" [ref=e533] [cursor=pointer]:
+                          - generic [ref=e534]: 重跑
+                        - button "删除" [ref=e536] [cursor=pointer]:
+                          - generic [ref=e537]: 删除
+                  - row "20260413T114659Z-60afaa 失败 上传 6 0/7 成功，失败 1 2026-04-13 19:46:59 重跑 删除" [ref=e538]:
+                    - cell "20260413T114659Z-60afaa" [ref=e539]:
+                      - button "20260413T114659Z-60afaa" [ref=e540] [cursor=pointer]:
+                        - generic [ref=e541]: 20260413T114659Z-60afaa
+                    - cell "失败" [ref=e542]:
+                      - generic [ref=e543]: 失败
+                    - cell "上传" [ref=e544]:
+                      - generic [ref=e545]: 上传
+                    - cell "6" [ref=e546]
+                    - cell "0/7 成功，失败 1" [ref=e547]:
+                      - generic [ref=e548]: 0/7 成功，失败 1
+                    - cell "2026-04-13 19:46:59" [ref=e549]
+                    - cell "重跑 删除" [ref=e550]:
+                      - generic [ref=e551]:
+                        - button "重跑" [ref=e553] [cursor=pointer]:
+                          - generic [ref=e554]: 重跑
+                        - button "删除" [ref=e556] [cursor=pointer]:
+                          - generic [ref=e557]: 删除
+              - list [ref=e558]:
+                - listitem "Previous Page" [ref=e559]:
+                  - button "left" [disabled] [ref=e560]:
+                    - img "left" [ref=e561]:
+                      - img [ref=e562]
+                - listitem "1" [ref=e564] [cursor=pointer]:
+                  - generic [ref=e565]: "1"
+                - listitem "Next Page" [ref=e566]:
+                  - button "right" [disabled] [ref=e567]:
+                    - img "right" [ref=e568]:
+                      - img [ref=e569]

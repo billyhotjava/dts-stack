@@ -1,0 +1,74 @@
+package com.yuzhi.dts.platform.repository.catalog;
+
+import com.yuzhi.dts.platform.domain.catalog.CatalogDatasetLineage;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CatalogDatasetLineageRepository extends JpaRepository<CatalogDatasetLineage, UUID> {
+
+    @Query(
+        """
+        select l.upstreamDatasetId, l.downstreamDatasetId
+        from CatalogDatasetLineage l
+        where lower(l.relationType) = 'dbt'
+          and l.validTo is null
+          and l.upstreamDatasetId is not null
+          and l.downstreamDatasetId is not null
+        """
+    )
+    List<Object[]> findCurrentDbtPairs();
+
+    List<CatalogDatasetLineage> findByUpstreamDatasetId(UUID upstreamDatasetId);
+
+    List<CatalogDatasetLineage> findByDownstreamDatasetId(UUID downstreamDatasetId);
+
+    List<CatalogDatasetLineage> findByDownstreamDatasetIdAndRelationTypeIgnoreCase(UUID downstreamDatasetId, String relationType);
+
+    Optional<CatalogDatasetLineage> findFirstByUpstreamDatasetIdAndDownstreamDatasetId(UUID upstreamDatasetId, UUID downstreamDatasetId);
+
+    Optional<CatalogDatasetLineage> findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCase(
+        UUID upstreamDatasetId,
+        UUID downstreamDatasetId,
+        String relationType
+    );
+
+    Optional<CatalogDatasetLineage> findFirstByUpstreamDatasetIdAndDownstreamDatasetIdAndRelationTypeIgnoreCaseAndValidToIsNull(
+        UUID upstreamDatasetId,
+        UUID downstreamDatasetId,
+        String relationType
+    );
+
+    @Query("select l from CatalogDatasetLineage l where l.upstreamDatasetId = :datasetId or l.downstreamDatasetId = :datasetId")
+    List<CatalogDatasetLineage> findByEitherSide(@Param("datasetId") UUID datasetId);
+
+    @Query(
+        """
+        select l from CatalogDatasetLineage l
+        where (l.upstreamDatasetId = :datasetId or l.downstreamDatasetId = :datasetId)
+          and (l.validFrom is null or l.validFrom <= :at)
+          and (l.validTo is null or l.validTo > :at)
+        """
+    )
+    List<CatalogDatasetLineage> findByEitherSideAt(@Param("datasetId") UUID datasetId, @Param("at") java.time.Instant at);
+
+    @Query(
+        """
+        select l from CatalogDatasetLineage l
+        where l.downstreamDatasetId = :downstreamDatasetId
+          and lower(l.relationType) = lower(:relationType)
+          and l.validTo is null
+        """
+    )
+    List<CatalogDatasetLineage> findCurrentByDownstreamDatasetIdAndRelationTypeIgnoreCase(
+        @Param("downstreamDatasetId") UUID downstreamDatasetId,
+        @Param("relationType") String relationType
+    );
+
+    boolean existsByUpstreamDatasetIdAndDownstreamDatasetId(UUID upstreamDatasetId, UUID downstreamDatasetId);
+}

@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20261030-01-add-role-display-name" author="codex">
+        <addColumn tableName="admin_custom_role">
+            <column name="display_name" type="varchar(255)"/>
+        </addColumn>
+        <sql>UPDATE admin_custom_role SET display_name = name WHERE display_name IS NULL</sql>
+    </changeSet>
+
+    <changeSet id="20261030-02-create-admin-role-member" author="codex">
+        <createTable tableName="admin_role_member">
+            <column name="id" type="bigint">
+                <constraints primaryKey="true" primaryKeyName="pk_admin_role_member" nullable="false"/>
+            </column>
+            <column name="role" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="username" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="varchar(255)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createSequence sequenceName="admin_role_member_seq" startValue="1"/>
+        <addAutoIncrement tableName="admin_role_member" columnName="id" columnDataType="bigint"/>
+        <addUniqueConstraint
+            tableName="admin_role_member"
+            columnNames="role, username"
+            constraintName="uk_admin_role_member_role_username"/>
+        <createIndex tableName="admin_role_member" indexName="idx_admin_role_member_role">
+            <column name="role"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20261030-03-drop-role-legacy-columns" author="codex">
+        <dropColumn tableName="admin_custom_role" columnName="operations"/>
+        <dropColumn tableName="admin_custom_role" columnName="max_rows"/>
+        <dropColumn tableName="admin_custom_role" columnName="allow_desensitize_json"/>
+    </changeSet>
+
+
+</databaseChangeLog>

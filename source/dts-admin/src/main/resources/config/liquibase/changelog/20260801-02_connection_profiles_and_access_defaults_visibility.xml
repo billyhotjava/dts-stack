@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260801-02-connection-profiles-and-access-defaults-visibility" author="codex">
+        <preConditions onFail="HALT">
+            <dbms type="postgresql"/>
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <sequenceExists sequenceName="portal_menu_visibility_seq"/>
+        </preConditions>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            DECLARE
+                actor CONSTANT VARCHAR := 'di-profile-menu-20260801-02';
+                runtime_id BIGINT;
+                connector_id BIGINT;
+                connection_id BIGINT;
+                overview_id BIGINT;
+                defaults_id BIGINT;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:connection-profiles:20260801-02', 0));
+
+                SELECT id INTO runtime_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.resourceRuntime'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceRuntime')
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF runtime_id IS NULL THEN
+                    RAISE EXCEPTION 'Data integration runtime menu is missing';
+                END IF;
+
+                SELECT id INTO connection_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.resourceConnections'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceConnections')
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF connection_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.resourceConnections', 'resource/runtime/connections',
+                        '/pages/foundation/access/ConnectionProfilesPage', 0,
+                        '{"key":"connections","sectionKey":"resource","entryKey":"connections","titleKey":"sys.nav.portal.resourceConnections","title":"连接管理","icon":"solar:server-square-cloud-bold-duotone","externalLink":"/foundation/connections"}',
+                        runtime_id, 'solar:server-square-cloud-bold-duotone', 'GENERAL', FALSE,
+                        actor, now(), actor, now()
+                    ) RETURNING id INTO connection_id;
+                END IF;
+
+                SELECT id INTO connector_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.resourceConnectors'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceConnectors')
+                 ORDER BY id
+                 LIMIT 1;
+
+                INSERT INTO portal_menu_visibility (
+                    id, menu_id, role_code, permission_code, data_level,
+                    created_by, created_date, last_modified_by, last_modified_date
+                )
+                SELECT nextval('portal_menu_visibility_seq'), connection_id, source.role_code,
+                       source.permission_code, source.data_level, actor, now(), actor, now()
+                  FROM (
+                      SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                        FROM portal_menu_visibility visibility
+                       WHERE visibility.menu_id IN (runtime_id, COALESCE(connector_id, runtime_id))
+                  ) source
+                 WHERE NOT EXISTS (
+                       SELECT 1 FROM portal_menu_visibility target
+                        WHERE target.menu_id = connection_id
+                          AND target.role_code = source.role_code
+                          AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                          AND target.data_level IS NOT DISTINCT FROM source.data_level
+                 );
+
+                SELECT id INTO overview_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.resourceAccessOverview'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceAccessOverview')
+                 ORDER BY id
+                 LIMIT 1;
+                SELECT id INTO defaults_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (name = 'sys.nav.portal.resourceAccessDefaults'
+                        OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceAccessDefaults')
+                 ORDER BY id
+                 LIMIT 1;
+
+                IF overview_id IS NOT NULL AND defaults_id IS NOT NULL THEN
+                    INSERT INTO portal_menu_visibility (
+                        id, menu_id, role_code, permission_code, data_level,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    )
+                    SELECT nextval('portal_menu_visibility_seq'), defaults_id, source.role_code,
+                           source.permission_code, source.data_level, actor, now(), actor, now()
+                      FROM (
+                          SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                            FROM portal_menu_visibility visibility
+                           WHERE visibility.menu_id = overview_id
+                      ) source
+                     WHERE NOT EXISTS (
+                           SELECT 1 FROM portal_menu_visibility target
+                            WHERE target.menu_id = defaults_id
+                              AND target.role_code = source.role_code
+                              AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                              AND target.data_level IS NOT DISTINCT FROM source.data_level
+                     );
+                END IF;
+            END $$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'di-profile-menu-20260801-02';
+                    connection_id BIGINT;
+                BEGIN
+                    SELECT id INTO connection_id
+                      FROM portal_menu
+                     WHERE created_by = actor
+                       AND (name = 'sys.nav.portal.resourceConnections'
+                            OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceConnections')
+                     ORDER BY id
+                     LIMIT 1;
+                    DELETE FROM portal_menu_visibility WHERE created_by = actor;
+                    DELETE FROM portal_menu WHERE id = connection_id AND created_by = actor;
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

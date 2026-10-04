@@ -1,0 +1,17 @@
+{
+  "invocationId": "b75ab4ef-b1f4-4a1c-b8d4-430213d8b108",
+  "manifest": {
+    "schemaVersion": "https://schemas.getdbt.com/dbt/manifest/v12.json",
+    "sha256": "7566e3335e885d99d78e14d3cf8d1e1f9369e179c6ce8a6f85e8dfa62c119f74"
+  },
+  "catalog": {
+    "schemaVersion": "https://schemas.getdbt.com/dbt/catalog/v1.json",
+    "sha256": "4785f7def0699e170594c2df26e18c77301ae033748d7bfc0fec91888ecb50d6"
+  },
+  "runResults": {
+    "schemaVersion": "https://schemas.getdbt.com/dbt/run-results/v6.json",
+    "sha256": "3d947d24ef2ce6af96b88e6d8db7f362faafe7e1c6eb091ec9b5c8aed3a6263f"
+  },
+  "containsArtifactBodies": false,
+  "note": "Full generated artifacts remain in the immutable certification-lab evidence bundle; this repository record pins their schemas and hashes."
+}

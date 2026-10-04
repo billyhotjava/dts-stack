@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "管理审批链：提交、同意执行与审计",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "resource",
+      "type": "backend",
+      "label": "管理接口",
+      "sublabel": "AdminApiResource"
+    },
+    {
+      "id": "service",
+      "type": "backend",
+      "label": "变更服务",
+      "sublabel": "ChangeRequestService"
+    },
+    {
+      "id": "repo",
+      "type": "database",
+      "label": "变更单存储",
+      "sublabel": "ChangeRequest"
+    },
+    {
+      "id": "audit",
+      "type": "backend",
+      "label": "审计 V2",
+      "sublabel": "AdminAuditService"
+    },
+    {
+      "id": "notify",
+      "type": "backend",
+      "label": "审批通知",
+      "sublabel": "DtsCommonNotifyClient"
+    },
+    {
+      "id": "tx",
+      "type": "backend",
+      "label": "执行事务",
+      "sublabel": "TransactionTemplate"
+    },
+    {
+      "id": "apply",
+      "type": "backend",
+      "label": "按资源分派",
+      "sublabel": "applyChangeRequest"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 520,
+      "label": "审批执行与审计"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-dedupe",
+      "from": "resource",
+      "to": "service",
+      "y": 168,
+      "label": "ensureNoDuplicate"
+    },
+    {
+      "id": "m-dedupe-back",
+      "from": "service",
+      "to": "resource",
+      "y": 196,
+      "label": "规范化 payload（重复 409）",
+      "variant": "return"
+    },
+    {
+      "id": "m-draft",
+      "from": "resource",
+      "to": "repo",
+      "y": 224,
+      "label": "save(status=DRAFT)"
+    },
+    {
+      "id": "m-draft-audit",
+      "from": "resource",
+      "to": "audit",
+      "y": 252,
+      "label": "recordDraftV2"
+    },
+    {
+      "id": "m-submit",
+      "from": "resource",
+      "to": "repo",
+      "y": 280,
+      "label": "findById → PENDING"
+    },
+    {
+      "id": "m-submit-audit",
+      "from": "resource",
+      "to": "audit",
+      "y": 308,
+      "label": "recordSubmitV2"
+    },
+    {
+      "id": "m-pending",
+      "from": "resource",
+      "to": "notify",
+      "y": 336,
+      "label": "approval_pending",
+      "variant": "dashed"
+    },
+    {
+      "id": "m-approve",
+      "from": "resource",
+      "to": "tx",
+      "y": 364,
+      "label": "approve → execute（置 APPROVED）",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-apply",
+      "from": "tx",
+      "to": "apply",
+      "y": 392,
+      "label": "applyChangeRequest"
+    },
+    {
+      "id": "m-apply-repo",
+      "from": "apply",
+      "to": "repo",
+      "y": 420,
+      "label": "成功 APPLIED / 失败 FAILED+回滚",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-applied",
+      "from": "tx",
+      "to": "resource",
+      "y": 448,
+      "label": "applied=true/false",
+      "variant": "return"
+    },
+    {
+      "id": "m-approve-audit",
+      "from": "resource",
+      "to": "audit",
+      "y": 476,
+      "label": "recordApproveV2"
+    },
+    {
+      "id": "m-result",
+      "from": "resource",
+      "to": "notify",
+      "y": 504,
+      "label": "approval_approved / failed",
+      "variant": "dashed"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "当前实现",
+      "items": [
+        "入口按三员角色集合放行，无按动作细分鉴权",
+        "按 resourceType 的 if/else 分派，无策略接口",
+        "只有同意执行包在事务模板内"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "已确认缺口",
+      "items": [
+        "同意/拒绝无 PENDING 前态校验与并发控制",
+        "提交人可自审，无禁止自审检查",
+        "通知失败被静默吞掉"
+      ]
+    }
+  ]
+}

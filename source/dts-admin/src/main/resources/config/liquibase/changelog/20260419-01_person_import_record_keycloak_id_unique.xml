@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <!--
+        Sprint-1 F1/T01 follow-up: person_import_record.keycloak_user_id was added in 20260418-01
+        with only a non-unique index. Without a UNIQUE constraint, two import records can map to
+        the same Keycloak user account, silently corrupting the person ↔ keycloak_user linkage.
+
+        This changelog:
+          1) Dedups any pre-existing rows that share the same non-null keycloak_user_id
+             by keeping the most recently inserted record (highest id) and nulling the older
+             ones so they can be re-resolved by the next import cycle.
+          2) Drops the original non-unique index.
+          3) Adds a UNIQUE constraint on keycloak_user_id (nullable; NULL values remain permitted
+             because multiple pending-provision records legitimately have no keycloak id yet).
+    -->
+
+    <changeSet id="20260419-01-person-import-record-keycloak-id-dedup" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="person_import_record"/>
+            <columnExists tableName="person_import_record" columnName="keycloak_user_id"/>
+        </preConditions>
+        <comment>Null-out duplicate keycloak_user_id values on person_import_record, keeping the newest row per keycloak_user_id</comment>
+        <sql>
+            UPDATE person_import_record AS pir
+            SET keycloak_user_id = NULL
+            WHERE keycloak_user_id IS NOT NULL
+              AND id &lt; (
+                SELECT MAX(id)
+                FROM person_import_record
+                WHERE keycloak_user_id = pir.keycloak_user_id
+              );
+        </sql>
+        <rollback>
+            <comment>Data cleanup; not reversible.</comment>
+            <empty/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260419-01-person-import-record-keycloak-id-drop-old-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <indexExists tableName="person_import_record" indexName="idx_person_record_kc_id"/>
+        </preConditions>
+        <comment>Drop the non-unique index; it will be replaced by a UNIQUE constraint (backed by its own unique index).</comment>
+        <dropIndex tableName="person_import_record" indexName="idx_person_record_kc_id"/>
+        <rollback>
+            <createIndex tableName="person_import_record" indexName="idx_person_record_kc_id">
+                <column name="keycloak_user_id"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260419-01-person-import-record-keycloak-id-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*)
+                    FROM information_schema.table_constraints
+                    WHERE table_name = 'person_import_record'
+                      AND constraint_name = 'uk_person_record_kc_id'
+                </sqlCheck>
+            </not>
+        </preConditions>
+        <comment>Enforce uniqueness of keycloak_user_id to prevent silent split-identity on person_import_record.</comment>
+        <addUniqueConstraint
+            tableName="person_import_record"
+            columnNames="keycloak_user_id"
+            constraintName="uk_person_record_kc_id"/>
+        <rollback>
+            <dropUniqueConstraint
+                tableName="person_import_record"
+                constraintName="uk_person_record_kc_id"/>
+            <createIndex tableName="person_import_record" indexName="idx_person_record_kc_id">
+                <column name="keycloak_user_id"/>
+            </createIndex>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

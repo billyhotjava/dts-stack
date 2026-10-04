@@ -1,0 +1,29 @@
+Command:
+RUN_LIVE=1 worklog/v2.2.3/sprint-38-202606/it/scripts/api-dag-migration.sh
+
+Residual scan:
+rg -n "SOURCE_CONFIG_JSON|DTS_API_BEARER_TOKEN|DTS_API_KEY|DTS_API_USERNAME|DTS_API_PASSWORD|tokenEnv|apiKeyEnv|escapeTripleQuotedJson|_request_json|_ensure_landing_table" source/dts-ingestion/src/main source/dts-platform/src/main source/dts-platform-webapp/src
+
+Residual scan result:
+no matches
+
+Live result:
+api_task=90|api|dts_api_e2e_orders|active
+rebuild_total=56
+rebuild_migrated=1
+rebuild_failed=0
+rebuild_item_action=migrated
+rebuild_item_dagId=dts_api_e2e_orders
+dag_file=services/dts-airflow/dags/dts_api_e2e_orders.py
+dag_old_markers_present=false
+airflow_run_id=s38-it08-migration-90-1781252392
+airflow_task_state=success
+migration_execution_id=143
+migration_execution_status=success
+migration_rows_read=1
+migration_rows_written=1
+rows_before=5
+rows_after=6
+checkpoint_before=2026-06-12T00:05:00Z
+checkpoint_after=2026-06-12T00:06:00Z
+checkpoint_expected=2026-06-12T00:06:00Z

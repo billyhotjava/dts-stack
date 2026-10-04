@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260822-01-quality-workflow-run" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="gov_quality_task"/>
+            <tableExists tableName="gov_quality_run"/>
+            <not><tableExists tableName="gov_quality_workflow_run"/></not>
+        </preConditions>
+        <comment>Introduce an idempotent workflow ledger above the existing quality rule execution engine.</comment>
+
+        <addColumn tableName="gov_quality_task">
+            <column name="max_retry_attempts" type="int4" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retry_backoff_seconds" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <addColumn tableName="gov_issue_ticket">
+            <column name="problem_key" type="varchar(192)"/>
+        </addColumn>
+
+        <createTable tableName="gov_quality_workflow_run">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="${uuidType}"/>
+            <column name="dataset_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rule_id" type="${uuidType}"/>
+            <column name="retry_of_id" type="${uuidType}"/>
+            <column name="attempt_no" type="int4" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="max_retry_attempts" type="int4" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="retry_backoff_seconds" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_ref" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="varchar(160)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_run_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="completed_run_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="passed_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="failed_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dispatch_failure_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scheduled_at" type="timestamp"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="error_category" type="varchar(64)"/>
+            <column name="message" type="varchar(4096)"/>
+            <column name="context_json" type="jsonb"/>
+            <column name="row_version" type="int8" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_workflow_run"
+            baseColumnNames="task_id"
+            referencedTableName="gov_quality_task"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_workflow_task"
+            onDelete="SET NULL"/>
+        <addForeignKeyConstraint
+            baseTableName="gov_quality_workflow_run"
+            baseColumnNames="retry_of_id"
+            referencedTableName="gov_quality_workflow_run"
+            referencedColumnNames="id"
+            constraintName="fk_gov_quality_workflow_retry"
+            onDelete="RESTRICT"/>
+
+        <createIndex tableName="gov_quality_workflow_run" indexName="uq_gov_quality_workflow_idempotency" unique="true">
+            <column name="idempotency_key"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_workflow_run" indexName="idx_gov_quality_workflow_status_created">
+            <column name="status"/>
+            <column name="created_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_workflow_run" indexName="idx_gov_quality_workflow_task_created">
+            <column name="task_id"/>
+            <column name="created_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_workflow_run" indexName="idx_gov_quality_workflow_dataset_created">
+            <column name="dataset_id"/>
+            <column name="created_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_workflow_run" indexName="idx_gov_quality_workflow_rule_created">
+            <column name="rule_id"/>
+            <column name="created_date" descending="true"/>
+        </createIndex>
+        <createIndex tableName="gov_quality_workflow_run" indexName="idx_gov_quality_workflow_retry">
+            <column name="retry_of_id"/>
+        </createIndex>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX uq_gov_quality_workflow_active_task
+                ON gov_quality_workflow_run (task_id)
+             WHERE task_id IS NOT NULL AND status IN ('QUEUED', 'RUNNING')
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX uq_gov_issue_ticket_open_problem
+                ON gov_issue_ticket (problem_key)
+             WHERE problem_key IS NOT NULL AND status IN ('OPEN', 'IN_PROGRESS', 'RESOLVED')
+        ]]></sql>
+        <createIndex tableName="gov_quality_run" indexName="idx_gov_quality_run_job">
+            <column name="job_id"/>
+            <column name="created_date"/>
+        </createIndex>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE gov_quality_workflow_run
+                ADD CONSTRAINT "QUALITY_WORKFLOW_STATUS_INVALID"
+                CHECK (status IN ('QUEUED', 'RUNNING', 'PASSED', 'FAILED', 'BLOCKED', 'CANCELLED'));
+            ALTER TABLE gov_quality_workflow_run
+                ADD CONSTRAINT ck_gov_quality_workflow_counts_non_negative
+                CHECK (
+                    attempt_no > 0
+                    AND max_retry_attempts BETWEEN 0 AND 5
+                    AND retry_backoff_seconds BETWEEN 0 AND 86400
+                    AND expected_run_count >= 0
+                    AND completed_run_count >= 0
+                    AND passed_count >= 0
+                    AND failed_count >= 0
+                    AND dispatch_failure_count >= 0
+                );
+            ALTER TABLE gov_quality_workflow_run
+                ADD CONSTRAINT ck_gov_quality_workflow_retry_not_self
+                CHECK (retry_of_id IS NULL OR retry_of_id <> id);
+            ALTER TABLE gov_quality_task
+                ADD CONSTRAINT ck_gov_quality_task_retry_policy
+                CHECK (max_retry_attempts BETWEEN 0 AND 5 AND retry_backoff_seconds BETWEEN 0 AND 86400);
+        ]]></sql>
+
+        <rollback>
+            <dropIndex tableName="gov_quality_run" indexName="idx_gov_quality_run_job"/>
+            <sql dbms="postgresql">DROP INDEX IF EXISTS uq_gov_issue_ticket_open_problem</sql>
+            <dropTable tableName="gov_quality_workflow_run" cascadeConstraints="true"/>
+            <dropColumn tableName="gov_issue_ticket" columnName="problem_key"/>
+            <dropColumn tableName="gov_quality_task" columnName="retry_backoff_seconds"/>
+            <dropColumn tableName="gov_quality_task" columnName="max_retry_attempts"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

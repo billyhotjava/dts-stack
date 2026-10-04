@@ -1,0 +1,53 @@
+Sprint-67 F2-T03 Phase A source inventory contract verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS (Phase A only; Task remains IN_PROGRESS)
+Implementation commit: 72300c2ce
+
+Backend GREEN commands:
+  cd source/dts-platform
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=WarehousePlanSourceInventoryContractTest test
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=WarehousePlanSourceInventoryApplicationServiceIT test
+
+Surefire results:
+- WarehousePlanSourceInventoryContractTest: 4 passed, 0 failures/errors/skips;
+- WarehousePlanSourceInventoryApplicationServiceIT: 3 passed, 0 failures/errors/skips;
+- integration test elapsed 43.627 seconds; observed exit code 0.
+
+Frontend GREEN checks:
+  cd source/dts-platform-webapp
+  node src/pages/modeling/WarehousePlanSourcesTab.source-contract.test.ts
+  node src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts
+  pnpm exec tsc --noEmit
+  pnpm build
+
+Results:
+- source workspace source-contracts: 13/13 passed;
+- plan detail source-contracts: 18/18 passed;
+- TypeScript no-emit check: passed;
+- production Vite build: passed (large-chunk warning only).
+
+Verified Phase-A behavior:
+- each source type accepts only its owner-defined locator shape;
+- existing bindings can update confirmation/exclusion without reposting a redacted locator;
+- inventory version/readiness/checkedAt and binding identity, resolved/confirmed version,
+  freshness, lastValidatedAt and display identity are server-owned;
+- every included source must be confirmed and current; EXCLUDED requires an explicit reason;
+- forbidden, missing and provider-error projections preserve only an opaque binding and never leak source identity;
+- deletion and version drift are re-resolved on GET and become diagnostics rather than completion;
+- BUSINESS_FIRST without sources is NOT_REQUIRED_YET and proceeds only when conceptual design is explicitly allowed;
+- plan switching invalidates pending source mutations, and 409 keeps the local draft for an explicit retry.
+
+Phase-B closure (2026-07-19):
+- deterministic preview reads only CONFIRMED + CURRENT + AVAILABLE owner sources;
+- candidateId covers inference version, tenant, plan, sourcesVersion, binding identity, source type/id and resolved version;
+- preview performs no ModelSpec write and creates no candidate table;
+- confirm re-previews and returns MODEL_CANDIDATE_STALE after source drift;
+- confirm rejects client sourceRefs, reconstructs the sourceRef on the server and calls canonical ModelSpec create;
+- F3 DRAFT_SAVE / IMPLEMENTATION_READY / RELEASE_READY gates cover all four model types, including DIMENSION conceptual-design deferral without implementation/release bypass.
+
+Focused result:
+- WarehousePlanModelCandidateServiceTest: 3/3 PASS.
+- ModelSpecStageGateServiceTest: 5/5 PASS.
+- warehousePlanCandidate.source-contract.test.ts included in the 88/88 frontend F2 batch.

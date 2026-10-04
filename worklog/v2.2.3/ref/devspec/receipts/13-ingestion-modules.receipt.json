@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "architecture",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/13-ingestion-modules.architecture.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/13-ingestion-modules.html",
+  "specification": {
+    "sha256": "8688b49f2e19f0bed8ab12e31e9945329515408e419ef429815d6ff9504d2796",
+    "bytes": 5199
+  },
+  "artifact": {
+    "sha256": "18b014f8b19246e31e3ed05b8e6077110f9565e606d718d1f5350c47c8e08b7b",
+    "bytes": 716503
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

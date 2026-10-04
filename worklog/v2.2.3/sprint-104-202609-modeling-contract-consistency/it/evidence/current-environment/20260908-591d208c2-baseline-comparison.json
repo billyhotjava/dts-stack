@@ -1,0 +1,49 @@
+{
+  "current": {
+    "failures": {
+      "create_shouldValidateActiveTaskBeforeSaving": 1,
+      "create_shouldVerifyManagedFileBeforeAnyActiveTaskSideEffect": 1,
+      "executeInternalApi_shouldEnsureThinDagForAirflowEnabledApiTask": 1,
+      "execute_shouldReverifyManagedFileBeforeRuntimeJobGeneration": 1,
+      "shouldCreateTaskSuccessfully": 1,
+      "shouldHandleCreateTaskFailure": 1,
+      "update_shouldRejectActiveApiRuntimeConfigChangeUntilTaskReturnsToDraft": 1,
+      "update_shouldRejectActiveExecutionConfigChangesUntilTaskReturnsToDraft": 16,
+      "update_shouldRejectActiveTaskWhenClassificationEvidenceChanges": 1,
+      "update_shouldRejectActiveTaskWhenSealBecomesInvalid": 1,
+      "update_shouldRejectDraftToActiveBypass": 1,
+      "shouldExecuteTaskWithAirflow": 1,
+      "shouldHandleExecuteTaskFailure": 1,
+      "shouldUpdateTask": 1,
+      "update_shouldAllowEvidenceChangeOnlyWhenMovingActiveTaskToDraft": 1
+    },
+    "summary": [
+      "Tests run: 92",
+      "Tests run: 92"
+    ]
+  },
+  "baseline": {
+    "failures": {
+      "create_shouldValidateActiveTaskBeforeSaving": 1,
+      "create_shouldVerifyManagedFileBeforeAnyActiveTaskSideEffect": 1,
+      "executeInternalApi_shouldEnsureThinDagForAirflowEnabledApiTask": 1,
+      "execute_shouldReverifyManagedFileBeforeRuntimeJobGeneration": 1,
+      "shouldCreateTaskSuccessfully": 1,
+      "shouldHandleCreateTaskFailure": 1,
+      "update_shouldRejectActiveApiRuntimeConfigChangeUntilTaskReturnsToDraft": 1,
+      "update_shouldRejectActiveExecutionConfigChangesUntilTaskReturnsToDraft": 16,
+      "update_shouldRejectActiveTaskWhenClassificationEvidenceChanges": 1,
+      "update_shouldRejectActiveTaskWhenSealBecomesInvalid": 1,
+      "update_shouldRejectDraftToActiveBypass": 1,
+      "shouldExecuteTaskWithAirflow": 1,
+      "shouldHandleExecuteTaskFailure": 1,
+      "shouldUpdateTask": 1,
+      "update_shouldAllowEvidenceChangeOnlyWhenMovingActiveTaskToDraft": 1
+    },
+    "summary": [
+      "Tests run: 89",
+      "Tests run: 89"
+    ]
+  },
+  "sameFailureNamesAndCounts": true
+}

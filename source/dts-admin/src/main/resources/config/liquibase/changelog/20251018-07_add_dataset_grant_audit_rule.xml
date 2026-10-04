@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251018-07-add-dataset-grant-rule" author="codex">
+        <comment>补充数据集授权接口的审计字典，展示数据集名称与ID</comment>
+        <sql>
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, status_code_regex, source_system,
+                module_name, operation_type, description_template,
+                source_table_template, param_extractors, event_class,
+                order_value, enabled
+            )
+            SELECT '/api/catalog/datasets/{datasetId}/grants','POST','2\d\d','platform',
+                   '数据目录','授权','对数据集授权：{resourceLabel|未知}（ID：{resourceId|未知}）',
+                   '数据资产','{&quot;resourceId&quot;:&quot;path.datasetId&quot;,&quot;resourceLabel&quot;:&quot;details.目标引用&quot;}',
+                   'AuditEvent',29,TRUE
+            WHERE NOT EXISTS (
+                SELECT 1 FROM audit_operation_mapping
+                 WHERE url_pattern = '/api/catalog/datasets/{datasetId}/grants'
+                   AND http_method = 'POST'
+            );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

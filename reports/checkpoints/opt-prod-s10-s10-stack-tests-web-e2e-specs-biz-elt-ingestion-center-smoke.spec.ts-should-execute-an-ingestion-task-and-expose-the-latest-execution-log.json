@@ -1,0 +1,123 @@
+{
+  "testId": "/opt/prod/s10/s10-stack/tests/web-e2e/specs/biz/elt-ingestion-center-smoke.spec.ts-should execute an ingestion task and expose the latest execution log",
+  "title": "should execute an ingestion task and expose the latest execution log",
+  "entries": [
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T06:50:16.140Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T06:50:26.910Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T06:57:46.970Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T06:57:57.718Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:02:06.114Z"
+    },
+    {
+      "step": "elt-ingestion:task-list-visible",
+      "at": "2026-03-23T07:02:07.224Z"
+    },
+    {
+      "step": "elt-ingestion:task-executed",
+      "at": "2026-03-23T07:02:11.753Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:02:26.848Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:03:15.116Z"
+    },
+    {
+      "step": "elt-ingestion:task-list-visible",
+      "at": "2026-03-23T07:03:16.439Z"
+    },
+    {
+      "step": "elt-ingestion:task-executed",
+      "at": "2026-03-23T07:03:20.959Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:03:21.956Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:03:44.373Z"
+    },
+    {
+      "step": "elt-ingestion:task-list-visible",
+      "at": "2026-03-23T07:03:45.493Z"
+    },
+    {
+      "step": "elt-ingestion:task-executed",
+      "at": "2026-03-23T07:03:50.005Z"
+    },
+    {
+      "step": "elt-ingestion:latest-log-visible",
+      "at": "2026-03-23T07:03:50.812Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:03:50.826Z",
+      "detail": {
+        "status": "passed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:06:41.969Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:06:43.088Z",
+      "detail": {
+        "status": "failed"
+      }
+    },
+    {
+      "step": "test:begin",
+      "at": "2026-03-23T07:12:49.756Z"
+    },
+    {
+      "step": "elt-ingestion:task-list-visible",
+      "at": "2026-03-23T07:12:50.788Z"
+    },
+    {
+      "step": "elt-ingestion:task-executed",
+      "at": "2026-03-23T07:12:55.264Z"
+    },
+    {
+      "step": "elt-ingestion:latest-log-visible",
+      "at": "2026-03-23T07:12:56.114Z"
+    },
+    {
+      "step": "test:complete",
+      "at": "2026-03-23T07:12:56.129Z",
+      "detail": {
+        "status": "passed"
+      }
+    }
+  ]
+}

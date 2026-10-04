@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251225_04_catalog_dataset_lineage" author="platform">
+        <createTable tableName="catalog_dataset_lineage">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="upstream_dataset_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="downstream_dataset_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="relation_type" type="varchar(32)"/>
+            <column name="notes" type="text"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="catalog_dataset_lineage"
+            columnNames="upstream_dataset_id,downstream_dataset_id"
+            constraintName="uk_catalog_dataset_lineage_pair"/>
+
+        <createIndex tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_upstream">
+            <column name="upstream_dataset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_dataset_lineage" indexName="idx_catalog_dataset_lineage_downstream">
+            <column name="downstream_dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

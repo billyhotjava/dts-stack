@@ -1,0 +1,24 @@
+[project]
+name = "dts-api-e2e"
+version = "0.1.0"
+description = "API-level E2E tests for dts-admin and dts-platform"
+requires-python = ">=3.9"
+dependencies = [
+    "pytest>=8.0",
+    "requests>=2.31",
+    "allure-pytest>=2.13",
+    "python-dotenv>=1.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["cases"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--alluredir=reports/allure-results",
+]
+markers = [
+    "admin: admin module (三员) cases",
+    "platform: platform module cases",
+    "smoke: fast connectivity checks",
+]

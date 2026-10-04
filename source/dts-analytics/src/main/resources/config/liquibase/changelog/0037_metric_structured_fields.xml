@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0037-01-metric-structured-fields" author="billy">
+        <addColumn tableName="analytics_metric">
+            <column name="base_table_id" type="bigint"/>
+            <column name="aggregation" type="varchar(30)"/>
+            <column name="expression_field" type="varchar(255)"/>
+            <column name="filter_json" type="text"/>
+            <column name="time_dimension" type="varchar(255)"/>
+            <column name="time_grain" type="varchar(20)"/>
+            <column name="display_name" type="varchar(255)"/>
+            <column name="unit" type="varchar(30)"/>
+            <column name="tags" type="varchar(500)"/>
+            <column name="visibility" type="varchar(20)" defaultValue="public"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

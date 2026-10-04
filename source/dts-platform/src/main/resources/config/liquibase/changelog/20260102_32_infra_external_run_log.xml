@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_32_infra_external_run_log" author="platform">
+        <createTable tableName="infra_external_run_log">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="entry_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_id" type="${uuidType}"/>
+            <column name="artifact_type" type="varchar(32)"/>
+            <column name="artifact_name" type="varchar(256)"/>
+
+            <column name="external_run_id" type="varchar(256)"/>
+            <column name="external_url" type="varchar(2048)"/>
+
+            <column name="status" type="varchar(32)" defaultValue="SUBMITTED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="duration_ms" type="bigint"/>
+            <column name="message" type="varchar(1024)"/>
+            <column name="metrics_json" type="text"/>
+
+            <column name="classification" type="varchar(32)" defaultValue="INTERNAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner_dept" type="varchar(64)"/>
+
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="infra_external_run_log" indexName="idx_external_run_entry_key">
+            <column name="entry_key"/>
+        </createIndex>
+        <createIndex tableName="infra_external_run_log" indexName="idx_external_run_artifact_id">
+            <column name="artifact_id"/>
+        </createIndex>
+        <createIndex tableName="infra_external_run_log" indexName="idx_external_run_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="infra_external_run_log" indexName="idx_external_run_started_at">
+            <column name="started_at"/>
+        </createIndex>
+        <createIndex tableName="infra_external_run_log" indexName="idx_external_run_enabled">
+            <column name="enabled"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

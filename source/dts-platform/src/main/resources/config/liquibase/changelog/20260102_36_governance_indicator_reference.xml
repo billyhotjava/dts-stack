@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_36_governance_indicator_reference" author="platform">
+        <comment>Governance indicators: manual reference registry for impact &amp; consistency checks</comment>
+        <createTable tableName="gov_indicator_reference">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="indicator_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ref_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ref_target" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ref_name" type="varchar(256)"/>
+            <column name="notes" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="gov_indicator_reference"
+            baseColumnNames="indicator_id"
+            referencedTableName="gov_indicator_definition"
+            referencedColumnNames="id"
+            constraintName="fk_gov_indicator_reference_indicator"/>
+
+        <createIndex tableName="gov_indicator_reference" indexName="idx_gov_indicator_ref_indicator">
+            <column name="indicator_id"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_reference" indexName="idx_gov_indicator_ref_type">
+            <column name="ref_type"/>
+        </createIndex>
+        <addUniqueConstraint
+            tableName="gov_indicator_reference"
+            columnNames="indicator_id,ref_type,ref_target"
+            constraintName="uk_gov_indicator_reference_unique"/>
+    </changeSet>
+
+</databaseChangeLog>

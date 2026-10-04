@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0053-01-data-portal-directory" author="codex">
+        <comment>为数据门户增加独立的可排序多级目录，不复用分析集合的编辑组织关系</comment>
+        <createTable tableName="analytics_data_portal_directory">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="parent_id" type="bigint"/>
+            <column name="sort_order" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version_no" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_data_portal_directory"
+            baseColumnNames="parent_id"
+            referencedTableName="analytics_data_portal_directory"
+            referencedColumnNames="id"
+            constraintName="fk_data_portal_directory_parent"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="analytics_data_portal_directory"
+            baseColumnNames="created_by"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_data_portal_directory_creator"
+            onDelete="RESTRICT"/>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            ALTER TABLE analytics_data_portal_directory
+                ADD CONSTRAINT ck_data_portal_directory_not_self
+                CHECK (parent_id IS NULL OR parent_id <> id);
+            ALTER TABLE analytics_data_portal_directory
+                ADD CONSTRAINT ck_data_portal_directory_name
+                CHECK (char_length(trim(name)) > 0);
+            ALTER TABLE analytics_data_portal_directory
+                ADD CONSTRAINT ck_data_portal_directory_sort
+                CHECK (sort_order >= 0);
+        ]]></sql>
+        <createIndex tableName="analytics_data_portal_directory" indexName="idx_data_portal_directory_parent_sort">
+            <column name="parent_id"/>
+            <column name="archived"/>
+            <column name="sort_order"/>
+            <column name="id"/>
+        </createIndex>
+        <sql dbms="postgresql" splitStatements="false" stripComments="false"><![CDATA[
+            CREATE UNIQUE INDEX uk_data_portal_directory_active_sibling_name
+                ON analytics_data_portal_directory (COALESCE(parent_id, 0), lower(name))
+                WHERE archived = FALSE
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="analytics_data_portal_directory" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="0053-02-data-portal-item" author="codex">
+        <comment>绑定已发布大屏或看板，资产本身仍由各自管理模块维护</comment>
+        <createTable tableName="analytics_data_portal_item">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="directory_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="analytics_data_portal_item"
+            baseColumnNames="directory_id"
+            referencedTableName="analytics_data_portal_directory"
+            referencedColumnNames="id"
+            constraintName="fk_data_portal_item_directory"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="analytics_data_portal_item"
+            baseColumnNames="created_by"
+            referencedTableName="analytics_user"
+            referencedColumnNames="id"
+            constraintName="fk_data_portal_item_creator"
+            onDelete="RESTRICT"/>
+        <addUniqueConstraint
+            tableName="analytics_data_portal_item"
+            columnNames="directory_id,content_type,content_id"
+            constraintName="uk_data_portal_item_content"/>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            ALTER TABLE analytics_data_portal_item
+                ADD CONSTRAINT ck_data_portal_item_type
+                CHECK (content_type IN ('SCREEN', 'DASHBOARD'));
+            ALTER TABLE analytics_data_portal_item
+                ADD CONSTRAINT ck_data_portal_item_id
+                CHECK (content_id > 0);
+            ALTER TABLE analytics_data_portal_item
+                ADD CONSTRAINT ck_data_portal_item_sort
+                CHECK (sort_order >= 0);
+        ]]></sql>
+        <createIndex tableName="analytics_data_portal_item" indexName="idx_data_portal_item_directory_sort">
+            <column name="directory_id"/>
+            <column name="sort_order"/>
+            <column name="id"/>
+        </createIndex>
+        <createIndex tableName="analytics_data_portal_item" indexName="idx_data_portal_item_content">
+            <column name="content_type"/>
+            <column name="content_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="analytics_data_portal_item" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

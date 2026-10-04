@@ -1,0 +1,4 @@
+term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes
+TERM_PERSON,自然人,个人,具有民事权利能力和民事行为能力的个体公民,人口基础,,,基础术语,v1,ACTIVE,内置标准包首版
+TERM_ORG,法人机构,组织;单位,依法成立并能独立承担民事责任的组织,机构基础,,,基础术语,v1,ACTIVE,内置标准包首版
+TERM_REGION,行政区划,区划,国家为便于行政管理而分级划分的区域单元,地址区划,,,基础术语,v1,ACTIVE,内置标准包首版

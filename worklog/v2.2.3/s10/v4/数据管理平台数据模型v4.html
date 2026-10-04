@@ -1,0 +1,3164 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>???????????????v4 PostgreSQL ????</title>
+<style>body{font-family:"Noto Sans CJK SC","Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.45}h1{text-align:center;font-size:26pt;margin:20pt 0 18pt}h2{font-size:17pt;border-bottom:1px solid #d1d5db;padding-bottom:4pt;margin-top:20pt}h3{font-size:13pt;margin-top:14pt;color:#111827}h4{font-size:11pt;margin-top:10pt;color:#111827}p{font-size:10.5pt;margin:6pt 0}table{border-collapse:collapse;width:100%;margin:8pt 0 12pt;font-size:8.3pt}th,td{border:1px solid #9ca3af;padding:4pt 5pt;vertical-align:top}th{background:#e5e7eb;font-weight:bold}pre{background:#f3f4f6;border:1px solid #d1d5db;padding:8pt;white-space:pre-wrap;font-family:Consolas,"Liberation Mono",monospace;font-size:8pt}code{font-family:Consolas,"Liberation Mono",monospace}ul,ol{font-size:10.5pt;margin:6pt 0 8pt 20pt}li{margin:3pt 0}</style></head><body><h1>数据管理平台数据模型设计文档（v4 PostgreSQL 重构版）</h1>
+<p>文档版本：V4.2</p>
+<p>文档状态：重构稿</p>
+<p>适用范围：项目管控、采购库存、考勤、专利、财务一体化数据平台</p>
+<h2>核心设计原则</h2>
+<h3>设计原则</h3>
+<p>最新记录原则：进度 / 质量 / 风险 / 技术变更仅保留最新状态，更新时覆盖原有记录；</p>
+<p>业务主键：</p>
+<table>
+<thead><tr><th>原则</th><th>说明</th></tr></thead><tbody>
+<tr><td>最新记录原则</td><td>进度 / 质量 / 风险 / 技术变更仅保留最新状态，更新时覆盖原有记录</td></tr>
+<tr><td>业务主键</td><td>为每个任务 / 问题 / 风险 / 变更生成唯一标识，作为覆盖更新依据</td></tr>
+<tr><td>STG 隔离原则</td><td>ODS 与 DWD 之间新增 STG 结构化层，统一做类型转换、占位符收敛、字段改名和来源元数据映射，不承载业务分类与派生语义</td></tr>
+<tr><td>简化存储</td><td>减少数据冗余，降低存储成本</td></tr>
+<tr><td>实时查询</td><td>直接查询 DWD/DWS/ADS 表即可获取最新状态，无需视图过滤</td></tr>
+<tr><td>PostgreSQL 适配</td><td>DDL、索引、注释、布尔、时间、自增键统一使用 PostgreSQL 语法；更新时间由 trigger 或 ETL 显式维护。</td></tr>
+</tbody></table>
+<h3>数据域更新策略</h3>
+<table>
+<thead><tr><th>数据域</th><th>更新方式</th><th>业务主键</th><th>说明</th></tr></thead><tbody>
+<tr><td>进度</td><td>覆盖更新/按批次重算</td><td>node_id / source_row_id</td><td>同一 ODS 行经 STG/DWD 解释为项目节点事实</td></tr>
+<tr><td>质量</td><td>覆盖更新/按批次重算</td><td>issue_id / source_row_id</td><td>同一质量问题经 DWD 归一状态与原因分类</td></tr>
+<tr><td>风险</td><td>覆盖更新/按批次重算</td><td>risk_id / source_row_id</td><td>同一风险台账经 DWD 归一等级、分类和释放状态</td></tr>
+<tr><td>技术变更</td><td>覆盖更新/按批次重算</td><td>tech_state_id / source_row_id</td><td>技术状态事实经 DWD 归一更改类别、签署和整改状态</td></tr>
+<tr><td>ERP采购/库存</td><td>追加新增</td><td>单据号</td><td>事务数据不覆盖</td></tr>
+<tr><td>考勤</td><td>覆盖更新</td><td>人员 + 日期</td><td>同一人同一天覆盖</td></tr>
+<tr><td>专利</td><td>覆盖更新</td><td>专利号</td><td>状态变化时更新</td></tr>
+<tr><td>财务</td><td>覆盖更新</td><td>科目 + 部门 + 月份</td><td>同周期覆盖</td></tr>
+</tbody></table>
+<h2>总体架构设计</h2>
+<h3>数据源全景</h3>
+<table>
+<thead><tr><th>序号</th><th>数据类别</th><th>数据源</th><th>表数量</th><th>接入方式</th><th>与项目关联</th></tr></thead><tbody>
+<tr><td>1</td><td>组织人员</td><td>平台业务模块</td><td>2</td><td>业务表复用</td><td>间接</td></tr>
+<tr><td>2</td><td>ERP 项目结构</td><td>ERP 系统</td><td>3</td><td>JDBC 同步</td><td>直接</td></tr>
+<tr><td>3</td><td>ERP 基础数据</td><td>ERP 系统</td><td>4</td><td>JDBC 同步</td><td>间接</td></tr>
+<tr><td>4</td><td>ERP 采购数据</td><td>ERP 系统</td><td>10</td><td>JDBC 同步</td><td>直接</td></tr>
+<tr><td>5</td><td>ERP 库存数据</td><td>ERP 系统</td><td>13</td><td>JDBC 同步</td><td>直接</td></tr>
+<tr><td>6</td><td>PMO 项目管控</td><td>离线 Excel</td><td>9</td><td>文件导入</td><td>直接</td></tr>
+<tr><td>7</td><td>考勤数据</td><td>离线 Excel</td><td>1</td><td>文件导入</td><td>无关联</td></tr>
+<tr><td>8</td><td>专利数据</td><td>离线 Excel</td><td>1</td><td>文件导入</td><td>无关联</td></tr>
+<tr><td>9</td><td>财务离线数据</td><td>离线 Excel</td><td>4</td><td>文件导入</td><td>间接</td></tr>
+</tbody></table>
+<p>总计源表：45 张（ERP/考勤/专利/财务沿用 v3，项目域由 4 张统一表调整为 9 张 v4 ODS 表）</p>
+<h3>分层架构全景</h3>
+<p>ADS 应用服务层：项目域 v4 KPI/Derived 指标、项目全景看板、科室绩效看板、考勤分析看板、专利分析看板、质量分析看板、风险分析看板、库存分析看板、成本分析看板</p>
+<p>DWS 汇总指标层：项目域按进度/质量/技术状态/风险月度汇总，其他域沿用 v3 的科室综合、考勤汇总、专利汇总、库存汇总、成本汇总</p>
+<p>DWD 明细事实层：项目域 v4 使用 biz_dwd_project_node_v2、biz_dwd_quality_issue_v2、biz_dwd_risk_info_v2、biz_dwd_tech_state_v2；采购、库存、成本、考勤、专利、财务明细沿用 v3</p>
+<p>STG 结构化层：项目域 v4 新增 stg_pm__project_subject_domain_v2、stg_pm__quality_issue_v2、stg_pm__tech_state_v2、stg_pm__risk_info_v2 四个 view，作为 ODS 到 DWD 的唯一入口；STG 只做同位字段变换和来源元数据标准化，不做业务归一化、月份派生、布尔派生或跨列计算</p>
+<p>DIM 维度层：sys_department、sys_employee、dim_project、dim_wbs、dim_date、dim_enum、dim_material、dim_supplier、dim_warehouse、dim_patent、dim_account；项目域新增 dim_*_v2 canonical 维表与 dim_*_alias 别名维表</p>
+<p>Standard 标准层：由 PostgreSQL 数据类型标准、STG 字段收敛规则、DWD canonical/alias 维表和数据质量规则共同承担</p>
+<p>ODS 贴源层：ERP 在线（30张表，沿用 v3）、PMO 项目域 v4 离线（9张表）、考勤离线（1张表）、专利离线（1张表）、财务离线（4张表）</p>
+<h2>数据标准体系</h2>
+<h3>命名规范标准</h3>
+<table>
+<thead><tr><th>规范项</th><th>标准</th><th>示例</th></tr></thead><tbody>
+<tr><td>ODS 表命名</td><td>ods_{系统或主题}_{源表名}</td><td>ods_project_subject_domain_v2</td></tr>
+<tr><td>STG 模型命名</td><td>stg_{源系统}__{源表或主题}_v{版本}</td><td>stg_pm__project_subject_domain_v2</td></tr>
+<tr><td>DIM 表命名</td><td>dim_{实体名}</td><td>dim_project_master</td></tr>
+<tr><td>DWD 表命名</td><td>biz_dwd_{主题}_{事实}_v{版本}</td><td>biz_dwd_project_node_v2</td></tr>
+<tr><td>DWS 表命名</td><td>biz_dws_{主题}_{粒度}_v{版本}</td><td>biz_dws_progress_monthly_v2</td></tr>
+<tr><td>ADS 表/视图命名</td><td>biz_ads_{主题}_{kpi|derived}_v{版本}</td><td>biz_ads_progress_kpi_v2</td></tr>
+<tr><td>字段命名</td><td>小写字母 + 下划线</td><td>project_uid</td></tr>
+<tr><td>主键命名</td><td>{实体名}_id / {实体名}_uid</td><td>task_id、project_uid</td></tr>
+<tr><td>外键命名</td><td>{关联实体名}_id</td><td>responsible_dept_id</td></tr>
+<tr><td>布尔字段</td><td>is_{含义}</td><td>is_delayed</td></tr>
+<tr><td>时间字段</td><td>{动作}_time / {动作}_date / *_at</td><td>create_time、update_time、imported_at</td></tr>
+</tbody></table>
+<h3>STG 层字段收敛标准</h3>
+<p>项目域 v4 在 ODS 和 DWD 之间设置 STG 层，所有项目事实必须先进入 <code>stg_pm__*</code> 模型，再由 DWD 进行业务解释。STG 的核心目标是把离线 Excel/ODS 的弱类型字段收敛为可复用的结构化输入，并保留来源追溯。</p>
+<table>
+<thead><tr><th>标准项</th><th>STG 允许动作</th><th>STG 禁止动作</th></tr></thead><tbody>
+<tr><td>字段处理</td><td><code>btrim</code> 去空白、占位符归 NULL、字段改名、日期/数值安全转换</td><td>枚举映射、中文值翻译、跨列拼接、拆分复合字符串</td></tr>
+<tr><td>语义处理</td><td>保留 <code>*_raw</code> 原值字段，作为 DWD alias 维表输入</td><td>生成 canonical code、label、is_* 业务布尔字段</td></tr>
+<tr><td>时间处理</td><td>将可解析日期转为 date/timestamp</td><td><code>to_char</code> 月份格式化、<code>extract</code> 年/季度派生、日期差计算</td></tr>
+<tr><td>血缘追溯</td><td>保留 <code>source_row_id</code>、<code>source_table</code>、<code>source_system</code>、<code>source_file</code>、<code>source_sheet_name</code>、<code>source_batch_id</code>、<code>source_row_num</code>、<code>imported_at</code></td><td>丢弃来源字段或直接读取旧版 <code>source_system/import_time</code> 技术字段</td></tr>
+</tbody></table>
+<p>ODS 物理表来源技术字段以入湖统一字段为准：<code>_dts_source_system</code> 映射为 STG 的 <code>source_system</code>，<code>_dts_import_time</code> 映射为 STG 的 <code>imported_at</code>。DWD/DWS/ADS 不允许直接消费 ODS，也不允许绕过 STG 读取原始项目表。</p>
+<h3>数据类型标准</h3>
+<table>
+<thead><tr><th>数据类型</th><th>使用场景</th><th>PostgreSQL 标准定义</th></tr></thead><tbody>
+<tr><td>主键 / 外键</td><td>唯一标识</td><td>varchar(50)；跨系统自然键可用 varchar(100)，内部代理键可用 bigint GENERATED BY DEFAULT AS IDENTITY</td></tr>
+<tr><td>编码字段</td><td>业务编码</td><td>varchar(50)</td></tr>
+<tr><td>名称字段</td><td>短文本</td><td>varchar(200)</td></tr>
+<tr><td>长文本</td><td>描述信息</td><td>text</td></tr>
+<tr><td>日期字段</td><td>仅日期</td><td>date</td></tr>
+<tr><td>时间字段</td><td>日期 + 时间</td><td>timestamp without time zone；跨时区接口字段使用 timestamp with time zone</td></tr>
+<tr><td>月份字段</td><td>年月</td><td>varchar(7)，格式 YYYY-MM；也可冗余 period_year/period_month 便于分区和索引</td></tr>
+<tr><td>金额字段</td><td>货币</td><td>numeric(28,8)</td></tr>
+<tr><td>数量字段</td><td>物料数量</td><td>numeric(28,8)</td></tr>
+<tr><td>比率字段</td><td>百分比</td><td>numeric(7,4) 存比例或 numeric(7,2) 存百分数，需在字段说明中明确</td></tr>
+<tr><td>计数字段</td><td>整数</td><td>integer；大计数使用 bigint</td></tr>
+<tr><td>布尔字段</td><td>是 / 否</td><td>boolean，不再使用 tinyint(1)</td></tr>
+<tr><td>枚举外键</td><td>关联枚举表</td><td>integer 或 varchar code；项目域 v4 优先 canonical code + *_id</td></tr>
+</tbody></table>
+<h3>PostgreSQL DDL 适配规则</h3>
+<table>
+<thead><tr><th>场景</th><th>原 MySQL 写法</th><th>PostgreSQL 写法</th></tr></thead><tbody>
+<tr><td>字段注释</td><td>col varchar(50) COMMENT '说明'</td><td>col varchar(50); COMMENT ON COLUMN table.col IS '说明';</td></tr>
+<tr><td>表注释</td><td>) COMMENT '表说明';</td><td>); COMMENT ON TABLE table IS '表说明';</td></tr>
+<tr><td>自增主键</td><td>BIGINT AUTO_INCREMENT PRIMARY KEY</td><td>bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY</td></tr>
+<tr><td>时间类型</td><td>DATETIME</td><td>timestamp without time zone</td></tr>
+<tr><td>布尔类型</td><td>TINYINT(1) / TINYINT DEFAULT 1</td><td>boolean DEFAULT true；季度、月份等小整数用 smallint</td></tr>
+<tr><td>金额/数量</td><td>DECIMAL(28,8)</td><td>numeric(28,8)</td></tr>
+<tr><td>更新时间</td><td>ON UPDATE CURRENT_TIMESTAMP</td><td>PostgreSQL 通过 BEFORE UPDATE trigger 维护 update_time</td></tr>
+<tr><td>索引</td><td>INDEX idx_col (col) 写在 CREATE TABLE 内</td><td>CREATE INDEX idx_table_col ON table_name (col);</td></tr>
+</tbody></table>
+<h3>枚举值域标准</h3>
+<p>包含：完成情况、风险等级、闭环状态、原因分类、质量问题状态、更改类别、专利类型、专利状态、信息来源。</p>
+<table>
+<thead><tr><th>枚举分类</th><th>标准代码</th><th>标准值</th></tr></thead><tbody>
+<tr><td>完成情况</td><td>NORMAL_PENDING</td><td>正常待完成</td></tr>
+<tr><td></td><td>ABNORMAL_PENDING</td><td>不正常待变更</td></tr>
+<tr><td></td><td>OVERDUE_NOCHANGE</td><td>超期未完成未变更</td></tr>
+<tr><td></td><td>ON_TIME</td><td>按时完成</td></tr>
+<tr><td></td><td>OVERDUE_CHANGED</td><td>超期已完成已变更</td></tr>
+<tr><td></td><td>OVERDUE_NO_CHANGE</td><td>超期已完成未变更</td></tr>
+<tr><td>风险等级</td><td>HIGH</td><td>高</td></tr>
+<tr><td></td><td>MEDIUM</td><td>中</td></tr>
+<tr><td></td><td>LOW</td><td>低</td></tr>
+<tr><td>闭环状态</td><td>CLOSED</td><td>已闭环</td></tr>
+<tr><td></td><td>RESPONDED</td><td>已回应未闭环</td></tr>
+<tr><td></td><td>NO_RESPONSE</td><td>未回应未闭环</td></tr>
+<tr><td>原因分类</td><td>DESIGN</td><td>设计</td></tr>
+<tr><td></td><td>PROCESS</td><td>工艺</td></tr>
+<tr><td></td><td>OPERATION</td><td>操作</td></tr>
+<tr><td></td><td>MANAGEMENT</td><td>管理</td></tr>
+<tr><td></td><td>OUTSOURCING</td><td>外协外购</td></tr>
+<tr><td></td><td>SOFTWARE</td><td>软件</td></tr>
+<tr><td></td><td>COMPONENT</td><td>元器件</td></tr>
+<tr><td></td><td>OTHER</td><td>其他</td></tr>
+<tr><td>质量问题状态</td><td>TECH_ZEROING</td><td>已完成技术归零</td></tr>
+<tr><td></td><td>MGMT_ZEROING</td><td>已完成管理归零</td></tr>
+<tr><td></td><td>BOTH_ZEROING</td><td>已完成技术和管理归零</td></tr>
+<tr><td></td><td>NOT_ZEROING</td><td>未完成归零</td></tr>
+<tr><td>更改类别</td><td>I</td><td>Ⅰ 类</td></tr>
+<tr><td></td><td>II</td><td>Ⅱ 类</td></tr>
+<tr><td></td><td>III</td><td>Ⅲ 类</td></tr>
+<tr><td>专利类型</td><td>INVENTION</td><td>发明专利</td></tr>
+<tr><td></td><td>UTILITY</td><td>实用新型</td></tr>
+<tr><td></td><td>DESIGN</td><td>外观设计</td></tr>
+<tr><td></td><td>ACCEPTED</td><td>已受理</td></tr>
+<tr><td></td><td>PUBLISHED</td><td>已公开</td></tr>
+<tr><td></td><td>GRANTED</td><td>已授权</td></tr>
+<tr><td>信息来源</td><td>OFFICIAL_DOC</td><td>正式发文</td></tr>
+<tr><td></td><td>ORIGINAL_DELAY</td><td>原节点延误</td></tr>
+<tr><td></td><td>TEMP_ADD</td><td>临时增加节点</td></tr>
+<tr><td></td><td>RISK_PLAN</td><td>风险管控计划</td></tr>
+<tr><td></td><td>QUALITY_PLAN</td><td>质量归零计划</td></tr>
+<tr><td></td><td>CHANGE_PLAN</td><td>技术状态变更计划</td></tr>
+</tbody></table>
+<h3>编码规范</h3>
+<table>
+<thead><tr><th>编码类型</th><th>生成规则</th><th>格式</th><th>示例</th></tr></thead><tbody>
+<tr><td>项目 UID</td><td>UUID（32 位无横线）</td><td>[a-f0-9]{32}</td><td>a1b2c3d4e5f67890abcdef1234567890</td></tr>
+<tr><td>任务 ID</td><td>MD5 (项目 + 分系统 + 节点任务)</td><td>[a-f0-9]{32}</td><td>d41d8cd98f00b204e9800998ecf8427e</td></tr>
+<tr><td>问题 ID</td><td>MD5 (项目 + 问题名称)</td><td>[a-f0-9]{32}</td><td>e10adc3949ba59abbe56e057f20f883e</td></tr>
+<tr><td>风险 ID</td><td>MD5 (项目 + 风险名称)</td><td>[a-f0-9]{32}</td><td>25d55ad283aa400af464c76d713c07ad</td></tr>
+<tr><td>变更 ID</td><td>MD5 (项目 + 技术状态项 + 更改事项)</td><td>[a-f0-9]{32}</td><td>827ccb0eea8a706c4c34a16891f84e7b</td></tr>
+<tr><td>导入批次号</td><td>BATCH_{YYYYMMDD}_{序号}</td><td>自定义</td><td>BATCH_20260115_001</td></tr>
+</tbody></table>
+<h2>ODS层设计</h2>
+<h3>ODS 层表清单（共 45 张）</h3>
+<table>
+<thead><tr><th>序号</th><th>表名</th><th>数据来源</th><th>接入方式</th><th>更新频率</th><th>更新策略</th></tr></thead><tbody>
+<tr><td>ERP 项目结构（3 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>1</td><td>ods_erp_pm_eps</td><td>ERP</td><td>JDBC</td><td>全量 / 日</td><td>覆盖</td></tr>
+<tr><td>2</td><td>ods_erp_bd_project</td><td>ERP</td><td>JDBC</td><td>增量 / 时</td><td>追加+更新</td></tr>
+<tr><td>3</td><td>ods_erp_pm_wbs</td><td>ERP</td><td>JDBC</td><td>增量 / 时</td><td>追加+更新</td></tr>
+<tr><td>ERP 基础数据（4 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>4-7</td><td>物料 / 分类 / 供应商 / 仓库</td><td>ERP</td><td>JDBC</td><td>全量 / 日</td><td>覆盖</td></tr>
+<tr><td>ERP 采购数据（10 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>8-17</td><td>请购单 / 订单 / 合同 / 到货 / 采购入库 (H/B)</td><td>ERP</td><td>JDBC</td><td>增量 / 10 分</td><td>追加</td></tr>
+<tr><td>ERP 库存数据（13 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>18-30</td><td>现存量维度表 /现存量 /采购入库单(H/B) / 其他入库单(H/B) / 普通出库单(H/B) / 材料出库单(H/B) / 期初余额(H/B) / 库存流水</td><td>ERP</td><td>JDBC</td><td>增量 / 10 分</td><td>追加/覆盖</td></tr>
+<tr><td>PMO 项目管控 v4（9 张 ODS）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>31</td><td>ods_project_subject_domain_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>32</td><td>ods_progress_measure_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>33</td><td>ods_quality_issue_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>34</td><td>ods_quality_measure_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>35</td><td>ods_tech_state_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>36</td><td>ods_tech_state_measure_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>37</td><td>ods_risk_info_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>38</td><td>ods_risk_measure_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>39</td><td>ods_material_info_v2</td><td>Excel</td><td>文件导入</td><td>月/按批次</td><td>追加（保留历史）</td></tr>
+<tr><td>考勤离线数据（1 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>40</td><td>ods_hr_attendance</td><td>Excel</td><td>文件导入</td><td>日/周</td><td>追加</td></tr>
+<tr><td>专利离线数据（1 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>41</td><td>ods_rd_patent</td><td>Excel</td><td>文件导入</td><td>季度/年</td><td>追加</td></tr>
+<tr><td>财务离线数据（4 张）</td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>42-45</td><td>自有资金表/项目经费/辅助余额/个人余额</td><td>Excel</td><td>文件导入</td><td>月/季度</td><td>追加</td></tr>
+</tbody></table>
+<h3>项目域 v4 ODS 字段映射</h3>
+<h4>ods_material_info_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>分系统/分任务</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>3</td><td>PBS编号</td><td>pbs_no</td><td>varchar</td></tr>
+<tr><td>4</td><td>PBS名称</td><td>pbs_name</td><td>varchar</td></tr>
+<tr><td>5</td><td>自研或外协</td><td>self_or_outsource</td><td>varchar</td></tr>
+<tr><td>6</td><td>供应商名称</td><td>supplier_name</td><td>varchar</td></tr>
+<tr><td>7</td><td>是否长周期物料（下拉选择）</td><td>is_long_cycle</td><td>varchar</td></tr>
+<tr><td>8</td><td>合同完成谈判时间（格式：XXXX-XX-XX）</td><td>contract_negotiation_date</td><td>varchar</td></tr>
+<tr><td>9</td><td>合同完成谈判周数</td><td>contract_negotiation_week</td><td>varchar</td></tr>
+<tr><td>10</td><td>合同要求到货时间（格式：XXXX-XX-XX）</td><td>contract_delivery_date</td><td>varchar</td></tr>
+<tr><td>11</td><td>合同要求到货周数</td><td>contract_delivery_week</td><td>varchar</td></tr>
+<tr><td>12</td><td>实际到货时间（格式：XXXX-XX-XX）</td><td>actual_delivery_date</td><td>varchar</td></tr>
+<tr><td>13</td><td>实际到货周数</td><td>actual_delivery_week</td><td>varchar</td></tr>
+<tr><td>14</td><td>计划检验时间（格式：XXXX-XX-XX）</td><td>plan_inspect_date</td><td>varchar</td></tr>
+<tr><td>15</td><td>计划检验周数</td><td>plan_inspect_week</td><td>varchar</td></tr>
+<tr><td>16</td><td>完成检验时间（格式：XXXX-XX-XX）</td><td>complete_inspect_date</td><td>varchar</td></tr>
+<tr><td>17</td><td>完成检验周数</td><td>complete_inspect_week</td><td>varchar</td></tr>
+<tr><td>18</td><td>上装时间（格式：XXXX-XX-XX）</td><td>install_date</td><td>varchar</td></tr>
+<tr><td>19</td><td>上装周数</td><td>install_week</td><td>varchar</td></tr>
+<tr><td>20</td><td>责任科室/责任人</td><td>dept_owner</td><td>varchar</td></tr>
+<tr><td>21</td><td>管控责任部门/责任人</td><td>control_dept_owner</td><td>varchar</td></tr>
+<tr><td>22</td><td>本周进展</td><td>weekly_progress</td><td>varchar</td></tr>
+<tr><td>23</td><td>当前进展是否影响重要及以上节点</td><td>affects_major_node</td><td>varchar</td></tr>
+<tr><td>24</td><td>风险等级（下拉选择）</td><td>risk_level</td><td>varchar</td></tr>
+<tr><td>25</td><td>主要风险内容及措施</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>26</td><td>延期影响分析</td><td>delay_impact</td><td>varchar</td></tr>
+<tr><td>27</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>28</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>29</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_progress_measure_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>分系统/分任务</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>3</td><td>节点任务及目标</td><td>node_task</td><td>varchar</td></tr>
+<tr><td>4</td><td>节点计划时间（格式：XXXX-XX-XX）</td><td>plan_date</td><td>varchar</td></tr>
+<tr><td>5</td><td>节点计划周数</td><td>plan_week</td><td>varchar</td></tr>
+<tr><td>6</td><td>完成情况（下拉选择）</td><td>completion_status</td><td>varchar</td></tr>
+<tr><td>7</td><td>跟进措施类别（下拉选择）</td><td>measure_category</td><td>varchar</td></tr>
+<tr><td>8</td><td>跟进措施题目</td><td>measure_title</td><td>varchar</td></tr>
+<tr><td>9</td><td>跟进人</td><td>follow_up_person</td><td>varchar</td></tr>
+<tr><td>10</td><td>主送</td><td>main_recipient</td><td>varchar</td></tr>
+<tr><td>11</td><td>抄送</td><td>cc_recipient</td><td>varchar</td></tr>
+<tr><td>12</td><td>跟进时间（格式：XXXX-XX-XX）</td><td>follow_up_date</td><td>varchar</td></tr>
+<tr><td>13</td><td>跟进周数</td><td>follow_up_week</td><td>varchar</td></tr>
+<tr><td>14</td><td>闭环状态（下拉选择）</td><td>closure_status</td><td>varchar</td></tr>
+<tr><td>15</td><td>最终闭环时间（格式：XXXX-XX-XX）</td><td>final_closure_date</td><td>varchar</td></tr>
+<tr><td>16</td><td>最终闭环周数</td><td>final_closure_week</td><td>varchar</td></tr>
+<tr><td>17</td><td>闭环交付物类别（下拉选择）</td><td>closure_deliverable_type</td><td>varchar</td></tr>
+<tr><td>18</td><td>闭环交付物</td><td>closure_deliverable</td><td>varchar</td></tr>
+<tr><td>19</td><td>主要风险内容</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>20</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>21</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>22</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+<tr><td>23</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_project_subject_domain_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>分系统/分任务</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>3</td><td>节点任务及目标</td><td>node_task</td><td>varchar</td></tr>
+<tr><td>4</td><td>计划开始日期</td><td>plan_start_date</td><td>varchar</td></tr>
+<tr><td>5</td><td>节点计划时间</td><td>plan_date</td><td>varchar</td></tr>
+<tr><td>6</td><td>节点计划周数</td><td>plan_week</td><td>varchar</td></tr>
+<tr><td>7</td><td>交付物</td><td>deliverable</td><td>varchar</td></tr>
+<tr><td>8</td><td>节点类型</td><td>node_type</td><td>varchar</td></tr>
+<tr><td>9</td><td>负责人</td><td>owner</td><td>varchar</td></tr>
+<tr><td>10</td><td>责任科室</td><td>dept</td><td>varchar</td></tr>
+<tr><td>11</td><td>分管室领导</td><td>dept_leader</td><td>varchar</td></tr>
+<tr><td>12</td><td>完成情况</td><td>completion_status</td><td>varchar</td></tr>
+<tr><td>13</td><td>协同部门</td><td>collab_dept</td><td>varchar</td></tr>
+<tr><td>14</td><td>责任监管部门</td><td>supervisor_dept</td><td>varchar</td></tr>
+<tr><td>15</td><td>延期预计完成时间</td><td>delay_expected_date</td><td>varchar</td></tr>
+<tr><td>16</td><td>未完成原因及当前进展</td><td>incomplete_reason</td><td>varchar</td></tr>
+<tr><td>17</td><td>风险等级</td><td>risk_level</td><td>varchar</td></tr>
+<tr><td>18</td><td>主要风险内容及措施</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>19</td><td>延期影响分析</td><td>delay_impact</td><td>varchar</td></tr>
+<tr><td>20</td><td>实际开始日期</td><td>actual_start_date</td><td>varchar</td></tr>
+<tr><td>21</td><td>实际完成时间</td><td>actual_date</td><td>varchar</td></tr>
+<tr><td>22</td><td>实际完成周数</td><td>actual_week</td><td>varchar</td></tr>
+<tr><td>23</td><td>所领导</td><td>institute_leader</td><td>varchar</td></tr>
+<tr><td>24</td><td>来源</td><td>source</td><td>varchar</td></tr>
+<tr><td>25</td><td>延期项目原计划时间</td><td>original_plan_date</td><td>varchar</td></tr>
+<tr><td>26</td><td>计划延误时间（已变更）</td><td>delay_days_changed</td><td>varchar</td></tr>
+<tr><td>27</td><td>计划延误时间（未变更）</td><td>delay_days_unchanged</td><td>varchar</td></tr>
+<tr><td>28</td><td>是否提交延期申请</td><td>delay_applied</td><td>varchar</td></tr>
+<tr><td>29</td><td>项目主管</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>30</td><td>最后更新时间</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>31</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>32</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+<tr><td>33</td><td>亮点工作</td><td>highlight</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_quality_issue_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>分系统/分任务</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>3</td><td>问题名称</td><td>issue_name</td><td>varchar</td></tr>
+<tr><td>4</td><td>责任单位（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>5</td><td>团队及负责人</td><td>team_leader</td><td>varchar</td></tr>
+<tr><td>6</td><td>责任单位领导</td><td>dept_leader</td><td>varchar</td></tr>
+<tr><td>7</td><td>质量问题发生时间（格式：XXXX-XX-XX）</td><td>issue_date</td><td>varchar</td></tr>
+<tr><td>8</td><td>质量问题发生周数</td><td>issue_week</td><td>varchar</td></tr>
+<tr><td>9</td><td>问题概述</td><td>issue_summary</td><td>varchar</td></tr>
+<tr><td>10</td><td>原因分类（下拉选择）</td><td>issue_category</td><td>varchar</td></tr>
+<tr><td>11</td><td>归零计划</td><td>zero_plan</td><td>varchar</td></tr>
+<tr><td>12</td><td>归零计划是否已在进度信息汇总表中更新（下拉选择）</td><td>zero_plan_synced</td><td>varchar</td></tr>
+<tr><td>13</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>14</td><td>状态（下拉选择）</td><td>status</td><td>varchar</td></tr>
+<tr><td>15</td><td>当前进展</td><td>current_progress</td><td>varchar</td></tr>
+<tr><td>16</td><td>归零完成时间（格式：XXXX-XX-XX）</td><td>zero_complete_date</td><td>varchar</td></tr>
+<tr><td>17</td><td>归零完成周数</td><td>zero_complete_week</td><td>varchar</td></tr>
+<tr><td>18</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>19</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>20</td><td>项目主管（下拉选择）</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>21</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_quality_measure_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>分系统/分任务</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>3</td><td>问题名称</td><td>issue_name</td><td>varchar</td></tr>
+<tr><td>4</td><td>责任单位（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>5</td><td>团队及负责人</td><td>team_leader</td><td>varchar</td></tr>
+<tr><td>6</td><td>责任单位领导</td><td>dept_leader</td><td>varchar</td></tr>
+<tr><td>7</td><td>质量问题发生时间（格式：XXXX-XX-XX）</td><td>issue_date</td><td>varchar</td></tr>
+<tr><td>8</td><td>质量问题发生周数</td><td>issue_week</td><td>varchar</td></tr>
+<tr><td>9</td><td>问题概述</td><td>issue_summary</td><td>varchar</td></tr>
+<tr><td>10</td><td>原因分类（下拉选择）</td><td>issue_category</td><td>varchar</td></tr>
+<tr><td>11</td><td>归零计划</td><td>zero_plan</td><td>varchar</td></tr>
+<tr><td>12</td><td>归零计划是否已在进度信息汇总表中更新（下拉选择）</td><td>zero_plan_synced</td><td>varchar</td></tr>
+<tr><td>13</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>14</td><td>状态（下拉选择）</td><td>status</td><td>varchar</td></tr>
+<tr><td>15</td><td>当前进展</td><td>current_progress</td><td>varchar</td></tr>
+<tr><td>16</td><td>项目主管（下拉选择）</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>17</td><td>跟进措施类别（下拉选择）</td><td>measure_category</td><td>varchar</td></tr>
+<tr><td>18</td><td>跟进措施题目</td><td>measure_title</td><td>varchar</td></tr>
+<tr><td>19</td><td>跟进人</td><td>follow_up_person</td><td>varchar</td></tr>
+<tr><td>20</td><td>主送</td><td>main_recipient</td><td>varchar</td></tr>
+<tr><td>21</td><td>抄送</td><td>cc_recipient</td><td>varchar</td></tr>
+<tr><td>22</td><td>跟进时间（格式：XXXX-XX-XX）</td><td>follow_up_date</td><td>varchar</td></tr>
+<tr><td>23</td><td>跟进周数</td><td>follow_up_week</td><td>varchar</td></tr>
+<tr><td>24</td><td>闭环状态（下拉选择）</td><td>closure_status</td><td>varchar</td></tr>
+<tr><td>25</td><td>最终闭环时间（格式：XXXX-XX-XX）</td><td>final_closure_date</td><td>varchar</td></tr>
+<tr><td>26</td><td>最终闭环周数</td><td>final_closure_week</td><td>varchar</td></tr>
+<tr><td>27</td><td>闭环交付物类别（下拉选择）</td><td>closure_deliverable_type</td><td>varchar</td></tr>
+<tr><td>28</td><td>闭环交付物</td><td>closure_deliverable</td><td>varchar</td></tr>
+<tr><td>29</td><td>主要风险内容</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>30</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>31</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>32</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+<tr><td>33</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_risk_info_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>风险名称</td><td>risk_name</td><td>varchar</td></tr>
+<tr><td>3</td><td>所属分系统</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>4</td><td>所属单机</td><td>belonging_unit</td><td>varchar</td></tr>
+<tr><td>5</td><td>风险描述（按条目梳理当前存在的主要具体风险点）</td><td>risk_description</td><td>varchar</td></tr>
+<tr><td>6</td><td>风险提出时间（格式：XXXX-XX-XX）</td><td>risk_submit_time</td><td>varchar</td></tr>
+<tr><td>7</td><td>风险提出周数</td><td>risk_submit_week</td><td>varchar</td></tr>
+<tr><td>8</td><td>风险阶段（下拉选择）</td><td>risk_phase</td><td>varchar</td></tr>
+<tr><td>9</td><td>风险分类（下拉选择）</td><td>risk_category</td><td>varchar</td></tr>
+<tr><td>10</td><td>风险等级（下拉选择）</td><td>risk_level</td><td>varchar</td></tr>
+<tr><td>11</td><td>影响域（关联影响分析，PBS产品层）</td><td>impact_scope</td><td>varchar</td></tr>
+<tr><td>12</td><td>风险应对措施</td><td>response_measure</td><td>varchar</td></tr>
+<tr><td>13</td><td>最终风险释放时间</td><td>final_release_time</td><td>varchar</td></tr>
+<tr><td>14</td><td>最终风险释放周数</td><td>final_release_week</td><td>varchar</td></tr>
+<tr><td>15</td><td>风险管控月计划</td><td>monthly_control_plan</td><td>varchar</td></tr>
+<tr><td>16</td><td>风险释放措施及周计划</td><td>weekly_release_plan</td><td>varchar</td></tr>
+<tr><td>17</td><td>风险释放计划是否已在进度信息汇总表中更新（下拉选择）</td><td>release_plan_synced</td><td>varchar</td></tr>
+<tr><td>18</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>19</td><td>进展统计时间（格式：XXXX-XX-XX）</td><td>progress_stat_time</td><td>varchar</td></tr>
+<tr><td>20</td><td>进展统计周数</td><td>progress_stat_week</td><td>varchar</td></tr>
+<tr><td>21</td><td>进展情况</td><td>progress_situation</td><td>varchar</td></tr>
+<tr><td>22</td><td>风险应对负责人（具体实施责任人）</td><td>response_owner</td><td>varchar</td></tr>
+<tr><td>23</td><td>风险防控负责人（总责任人，一般为分管副总）</td><td>control_owner</td><td>varchar</td></tr>
+<tr><td>24</td><td>责任科室（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>25</td><td>风险状态（下拉选择）</td><td>risk_status</td><td>varchar</td></tr>
+<tr><td>26</td><td>风险释放时间（格式：XXXX-XX-XX）</td><td>risk_release_date</td><td>varchar</td></tr>
+<tr><td>27</td><td>风险释放周数</td><td>risk_release_week</td><td>varchar</td></tr>
+<tr><td>28</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+<tr><td>29</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>30</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>31</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_risk_measure_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>风险名称</td><td>risk_name</td><td>varchar</td></tr>
+<tr><td>3</td><td>所属分系统</td><td>subsystem</td><td>varchar</td></tr>
+<tr><td>4</td><td>所属单机</td><td>belonging_unit</td><td>varchar</td></tr>
+<tr><td>5</td><td>风险描述</td><td>risk_description</td><td>varchar</td></tr>
+<tr><td>6</td><td>风险提出时间（格式：XXXX-XX-XX）</td><td>risk_submit_time</td><td>varchar</td></tr>
+<tr><td>7</td><td>风险提出周数</td><td>risk_submit_week</td><td>varchar</td></tr>
+<tr><td>8</td><td>风险阶段（下拉选择）</td><td>risk_phase</td><td>varchar</td></tr>
+<tr><td>9</td><td>风险分类（下拉选择）</td><td>risk_category</td><td>varchar</td></tr>
+<tr><td>10</td><td>风险等级（下拉选择）</td><td>risk_level</td><td>varchar</td></tr>
+<tr><td>11</td><td>影响域（PBS产品层）</td><td>impact_scope</td><td>varchar</td></tr>
+<tr><td>12</td><td>风险应对措施</td><td>response_measure</td><td>varchar</td></tr>
+<tr><td>13</td><td>最终风险释放时间（格式：XXXX-XX-XX）</td><td>final_release_time</td><td>varchar</td></tr>
+<tr><td>14</td><td>风险管控月计划</td><td>monthly_control_plan</td><td>varchar</td></tr>
+<tr><td>15</td><td>风险释放措施及周计划</td><td>weekly_release_plan</td><td>varchar</td></tr>
+<tr><td>16</td><td>风险释放计划是否已在进度信息汇总表中更新（下拉选择）</td><td>release_plan_synced</td><td>varchar</td></tr>
+<tr><td>17</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>18</td><td>进展统计时间（格式：XXXX-XX-XX）</td><td>progress_stat_time</td><td>varchar</td></tr>
+<tr><td>19</td><td>进展统计周数</td><td>progress_stat_week</td><td>varchar</td></tr>
+<tr><td>20</td><td>进展情况</td><td>progress_situation</td><td>varchar</td></tr>
+<tr><td>21</td><td>风险应对负责人（具体实施责任人）</td><td>response_owner</td><td>varchar</td></tr>
+<tr><td>22</td><td>风险防控负责人（总责任人，一般为分管副总）</td><td>control_owner</td><td>varchar</td></tr>
+<tr><td>23</td><td>责任科室（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>24</td><td>风险状态（下拉选择）</td><td>risk_status</td><td>varchar</td></tr>
+<tr><td>25</td><td>项目主管（下拉选择）</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>26</td><td>跟进措施类别（下拉选择）</td><td>measure_category</td><td>varchar</td></tr>
+<tr><td>27</td><td>跟进措施题目</td><td>measure_title</td><td>varchar</td></tr>
+<tr><td>28</td><td>跟进人</td><td>follow_up_person</td><td>varchar</td></tr>
+<tr><td>29</td><td>主送</td><td>main_recipient</td><td>varchar</td></tr>
+<tr><td>30</td><td>抄送</td><td>cc_recipient</td><td>varchar</td></tr>
+<tr><td>31</td><td>跟进时间（格式：XXXX-XX-XX）</td><td>follow_up_date</td><td>varchar</td></tr>
+<tr><td>32</td><td>跟进周数</td><td>follow_up_week</td><td>varchar</td></tr>
+<tr><td>33</td><td>闭环状态（下拉选择）</td><td>closure_status</td><td>varchar</td></tr>
+<tr><td>34</td><td>最终闭环时间（格式：XXXX-XX-XX）</td><td>final_closure_date</td><td>varchar</td></tr>
+<tr><td>35</td><td>最终闭环周数</td><td>final_closure_week</td><td>varchar</td></tr>
+<tr><td>36</td><td>闭环交付物类别（下拉选择）</td><td>closure_deliverable_type</td><td>varchar</td></tr>
+<tr><td>37</td><td>闭环交付物</td><td>closure_deliverable</td><td>varchar</td></tr>
+<tr><td>38</td><td>主要风险内容</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>39</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>40</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>41</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+<tr><td>42</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_tech_state_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>技术状态项名称、代号</td><td>tech_state_name</td><td>varchar</td></tr>
+<tr><td>3</td><td>更改事项</td><td>change_item</td><td>varchar</td></tr>
+<tr><td>4</td><td>负责人</td><td>owner</td><td>varchar</td></tr>
+<tr><td>5</td><td>责任科室（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>6</td><td>分管室领导</td><td>dept_leader</td><td>varchar</td></tr>
+<tr><td>7</td><td>更改提出时间（格式：XXXX-XX-XX）</td><td>change_submit_time</td><td>varchar</td></tr>
+<tr><td>8</td><td>更改提出周数</td><td>change_submit_week</td><td>varchar</td></tr>
+<tr><td>9</td><td>技术状态变更单是否完成签署（下拉选择）</td><td>completion_signature</td><td>varchar</td></tr>
+<tr><td>10</td><td>技术状态变更单闭环签署时间（格式：XXXX-XX-XX）</td><td>signature_closure_date</td><td>varchar</td></tr>
+<tr><td>11</td><td>技术状态变更单闭环签署周数</td><td>signature_closure_week</td><td>varchar</td></tr>
+<tr><td>12</td><td>简要更改原因及内容</td><td>change_reason</td><td>varchar</td></tr>
+<tr><td>13</td><td>更改类别（下拉选择）</td><td>change_category</td><td>varchar</td></tr>
+<tr><td>14</td><td>计划完成文件闭环签署时间（格式：XXXX-XX-XX）</td><td>plan_file_closure_date</td><td>varchar</td></tr>
+<tr><td>15</td><td>计划完成文件闭环签署周数</td><td>plan_file_closure_week</td><td>varchar</td></tr>
+<tr><td>16</td><td>计划完成整改落实时间（格式：XXXX-XX-XX）</td><td>plan_reform_date</td><td>varchar</td></tr>
+<tr><td>17</td><td>计划完成整改落实周数</td><td>plan_reform_week</td><td>varchar</td></tr>
+<tr><td>18</td><td>计划是否已在进度信息汇总表中更新（下拉选择）</td><td>plan_synced</td><td>varchar</td></tr>
+<tr><td>19</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>20</td><td>更改论证情况/评估评审情况</td><td>review_situation</td><td>varchar</td></tr>
+<tr><td>21</td><td>受影响文件</td><td>affected_files</td><td>varchar</td></tr>
+<tr><td>22</td><td>受影响实物（PBS名称）</td><td>affected_objects</td><td>varchar</td></tr>
+<tr><td>23</td><td>文件签署状态（下拉选择）</td><td>file_signature_status</td><td>varchar</td></tr>
+<tr><td>24</td><td>文件完成签署时间（格式：XXXX-XX-XX）</td><td>file_signature_date</td><td>varchar</td></tr>
+<tr><td>25</td><td>文件完成签署周数</td><td>file_signature_week</td><td>varchar</td></tr>
+<tr><td>26</td><td>整改落实状态（下拉选择）</td><td>reform_status</td><td>varchar</td></tr>
+<tr><td>27</td><td>整改落实时间（格式：XXXX-XX-XX）</td><td>reform_date</td><td>varchar</td></tr>
+<tr><td>28</td><td>整改落实周数</td><td>reform_week</td><td>varchar</td></tr>
+<tr><td>29</td><td>项目主管（下拉选择）</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>30</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>31</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>32</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+<tr><td>33</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+</tbody></table>
+<h4>ods_tech_state_measure_v2</h4>
+<table>
+<thead><tr><th>序号</th><th>Excel 表头</th><th>ODS 字段名</th><th>类型</th></tr></thead><tbody>
+<tr><td>1</td><td>项目编号（下拉选择）</td><td>project_no</td><td>varchar</td></tr>
+<tr><td>2</td><td>技术状态项名称、代号</td><td>tech_state_name</td><td>varchar</td></tr>
+<tr><td>3</td><td>更改事项</td><td>change_item</td><td>varchar</td></tr>
+<tr><td>4</td><td>负责人</td><td>owner</td><td>varchar</td></tr>
+<tr><td>5</td><td>责任科室（下拉选择）</td><td>dept</td><td>varchar</td></tr>
+<tr><td>6</td><td>分管室领导</td><td>dept_leader</td><td>varchar</td></tr>
+<tr><td>7</td><td>更改提出时间（格式：XXXX-XX-XX）</td><td>change_submit_time</td><td>varchar</td></tr>
+<tr><td>8</td><td>更改提出周数</td><td>change_submit_week</td><td>varchar</td></tr>
+<tr><td>9</td><td>技术状态变更单是否完成签署（下拉选择）</td><td>completion_signature</td><td>varchar</td></tr>
+<tr><td>10</td><td>技术状态变更单闭环签署时间（格式：XXXX-XX-XX）</td><td>signature_closure_date</td><td>varchar</td></tr>
+<tr><td>11</td><td>技术状态变更单闭环签署周数</td><td>signature_closure_week</td><td>varchar</td></tr>
+<tr><td>12</td><td>简要更改原因及内容</td><td>change_reason</td><td>varchar</td></tr>
+<tr><td>13</td><td>更改类别（下拉选择）</td><td>change_category</td><td>varchar</td></tr>
+<tr><td>14</td><td>计划完成文件闭环签署时间（格式：XXXX-XX-XX）</td><td>plan_file_closure_date</td><td>varchar</td></tr>
+<tr><td>15</td><td>计划完成文件闭环签署周数</td><td>plan_file_closure_week</td><td>varchar</td></tr>
+<tr><td>16</td><td>计划完成整改落实时间（格式：XXXX-XX-XX）</td><td>plan_reform_date</td><td>varchar</td></tr>
+<tr><td>17</td><td>计划完成整改落实周数</td><td>plan_reform_week</td><td>varchar</td></tr>
+<tr><td>18</td><td>计划是否已在进度信息汇总表中更新（下拉选择）</td><td>plan_synced</td><td>varchar</td></tr>
+<tr><td>19</td><td>新增计划数量</td><td>new_plan_count</td><td>varchar</td></tr>
+<tr><td>20</td><td>受影响文件</td><td>affected_files</td><td>varchar</td></tr>
+<tr><td>21</td><td>受影响实物（PBS名称）</td><td>affected_objects</td><td>varchar</td></tr>
+<tr><td>22</td><td>文件签署状态（下拉选择）</td><td>file_signature_status</td><td>varchar</td></tr>
+<tr><td>23</td><td>整改落实状态（下拉选择）</td><td>reform_status</td><td>varchar</td></tr>
+<tr><td>24</td><td>项目主管</td><td>project_manager</td><td>varchar</td></tr>
+<tr><td>25</td><td>跟进措施类别（下拉选择）</td><td>measure_category</td><td>varchar</td></tr>
+<tr><td>26</td><td>跟进措施题目</td><td>measure_title</td><td>varchar</td></tr>
+<tr><td>27</td><td>跟进人</td><td>follow_up_person</td><td>varchar</td></tr>
+<tr><td>28</td><td>主送</td><td>main_recipient</td><td>varchar</td></tr>
+<tr><td>29</td><td>抄送</td><td>cc_recipient</td><td>varchar</td></tr>
+<tr><td>30</td><td>跟进时间（格式：XXXX-XX-XX）</td><td>follow_up_date</td><td>varchar</td></tr>
+<tr><td>31</td><td>跟进周数</td><td>follow_up_week</td><td>varchar</td></tr>
+<tr><td>32</td><td>闭环状态（下拉选择）</td><td>closure_status</td><td>varchar</td></tr>
+<tr><td>33</td><td>最终闭环时间（格式：XXXX-XX-XX）</td><td>final_closure_date</td><td>varchar</td></tr>
+<tr><td>34</td><td>最终闭环周数</td><td>final_closure_week</td><td>varchar</td></tr>
+<tr><td>35</td><td>闭环交付物类别（下拉选择）</td><td>closure_deliverable_type</td><td>varchar</td></tr>
+<tr><td>36</td><td>闭环交付物</td><td>closure_deliverable</td><td>varchar</td></tr>
+<tr><td>37</td><td>主要风险内容</td><td>risk_content</td><td>varchar</td></tr>
+<tr><td>38</td><td>最后更新时间（格式：XXXX-XX-XX）</td><td>last_update_time</td><td>varchar</td></tr>
+<tr><td>39</td><td>最后更新周数</td><td>last_update_week</td><td>varchar</td></tr>
+<tr><td>40</td><td>备注</td><td>remark</td><td>varchar</td></tr>
+<tr><td>41</td><td>填写人</td><td>filled_by</td><td>varchar</td></tr>
+</tbody></table>
+<h2>DIM 维度层设计</h2>
+<h3>DIM 层表清单（共 10 张）</h3>
+<table>
+<thead><tr><th>序号</th><th>表名</th><th>来源</th><th>主键</th><th>更新策略</th><th>说明</th></tr></thead><tbody>
+<tr><td>1</td><td>sys_department</td><td>平台业务模块</td><td>dept_id</td><td>业务维护</td><td>复用</td></tr>
+<tr><td>2</td><td>sys_employee</td><td>平台业务模块</td><td>emp_id</td><td>业务维护</td><td>复用</td></tr>
+<tr><td>3</td><td>dim_project_master</td><td>融合生成</td><td>project_uid</td><td>覆盖更新</td><td>项目主数据</td></tr>
+<tr><td>4</td><td>dim_wbs</td><td>融合生成</td><td>wbs_uid</td><td>覆盖更新</td><td>WBS 结构</td></tr>
+<tr><td>5</td><td>dim_material</td><td>ERP 同步</td><td>material_uid</td><td>覆盖更新</td><td>物料维度</td></tr>
+<tr><td>6</td><td>dim_supplier</td><td>ERP 同步</td><td>supplier_uid</td><td>覆盖更新</td><td>供应商维度</td></tr>
+<tr><td>7</td><td>dim_warehouse</td><td>ERP 同步</td><td>warehouse_uid</td><td>覆盖更新</td><td>仓库维度</td></tr>
+<tr><td>8</td><td>dim_date</td><td>脚本生成</td><td>date_id</td><td>不更新</td><td>日期维度</td></tr>
+<tr><td>9</td><td>dim_enum</td><td>初始化</td><td>enum_id</td><td>手工维护</td><td>枚举维度</td></tr>
+<tr><td>10</td><td>dim_patent</td><td>离线加工</td><td>patent_uid</td><td>覆盖更新</td><td>专利维度</td></tr>
+</tbody></table>
+<h3>核心维度表结构</h3>
+<h3>科室信息表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 科室信息表（平台业务模块，复用）</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE sys_department (
+  dept_id varchar(50) PRIMARY KEY,
+  dept_code varchar(50),
+  dept_name varchar(100) NOT NULL,
+  dept_short_name varchar(50),
+  dept_alias varchar(500),
+  parent_dept_id varchar(50),
+  dept_level integer,
+  dept_path varchar(500),
+  dept_type varchar(20),
+  leader_id varchar(50),
+  leader_name varchar(50),
+  sort_order integer DEFAULT 0,
+  is_active boolean DEFAULT true,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE sys_department IS &#x27;科室信息表&#x27;;
+COMMENT ON COLUMN sys_department.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN sys_department.dept_code IS &#x27;科室编码&#x27;;
+COMMENT ON COLUMN sys_department.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN sys_department.dept_short_name IS &#x27;科室简称&#x27;;
+COMMENT ON COLUMN sys_department.dept_alias IS &#x27;科室别名（逗号分隔）&#x27;;
+COMMENT ON COLUMN sys_department.parent_dept_id IS &#x27;上级科室ID&#x27;;
+COMMENT ON COLUMN sys_department.dept_level IS &#x27;科室层级（1-所级/2-室级/3-组级）&#x27;;
+COMMENT ON COLUMN sys_department.dept_path IS &#x27;科室完整路径&#x27;;
+COMMENT ON COLUMN sys_department.dept_type IS &#x27;科室类型&#x27;;
+COMMENT ON COLUMN sys_department.leader_id IS &#x27;负责人ID&#x27;;
+COMMENT ON COLUMN sys_department.leader_name IS &#x27;负责人姓名&#x27;;
+COMMENT ON COLUMN sys_department.sort_order IS &#x27;排序&#x27;;
+COMMENT ON COLUMN sys_department.is_active IS &#x27;是否有效&#x27;;
+COMMENT ON COLUMN sys_department.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN sys_department.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_parent ON sys_department (parent_dept_id);
+CREATE INDEX idx_code ON sys_department (dept_code);
+CREATE INDEX idx_active ON sys_department (is_active);
+CREATE INDEX idx_type ON sys_department (dept_type);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>人员信息表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 人员信息表（平台业务模块，复用）</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE sys_employee (
+  emp_id varchar(50) PRIMARY KEY,
+  emp_code varchar(50),
+  emp_name varchar(50) NOT NULL,
+  emp_name_pinyin varchar(100),
+  emp_name_alias varchar(200),
+  dept_id varchar(50),
+  dept_name varchar(100),
+  position varchar(50),
+  position_level varchar(20),
+  role_type varchar(50),
+  email varchar(100),
+  phone varchar(20),
+  mobile varchar(20),
+  card_no varchar(50),
+  is_active boolean DEFAULT true,
+  entry_date date,
+  leave_date date,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE sys_employee IS &#x27;人员信息表&#x27;;
+COMMENT ON COLUMN sys_employee.emp_id IS &#x27;人员ID&#x27;;
+COMMENT ON COLUMN sys_employee.emp_code IS &#x27;工号&#x27;;
+COMMENT ON COLUMN sys_employee.emp_name IS &#x27;姓名&#x27;;
+COMMENT ON COLUMN sys_employee.emp_name_pinyin IS &#x27;姓名拼音&#x27;;
+COMMENT ON COLUMN sys_employee.emp_name_alias IS &#x27;姓名别名（逗号分隔）&#x27;;
+COMMENT ON COLUMN sys_employee.dept_id IS &#x27;所属科室ID&#x27;;
+COMMENT ON COLUMN sys_employee.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN sys_employee.position IS &#x27;岗位&#x27;;
+COMMENT ON COLUMN sys_employee.position_level IS &#x27;岗位级别&#x27;;
+COMMENT ON COLUMN sys_employee.role_type IS &#x27;角色类型&#x27;;
+COMMENT ON COLUMN sys_employee.email IS &#x27;邮箱&#x27;;
+COMMENT ON COLUMN sys_employee.phone IS &#x27;电话&#x27;;
+COMMENT ON COLUMN sys_employee.mobile IS &#x27;手机&#x27;;
+COMMENT ON COLUMN sys_employee.card_no IS &#x27;门禁卡号（关联考勤）&#x27;;
+COMMENT ON COLUMN sys_employee.is_active IS &#x27;是否在职&#x27;;
+COMMENT ON COLUMN sys_employee.entry_date IS &#x27;入职日期&#x27;;
+COMMENT ON COLUMN sys_employee.leave_date IS &#x27;离职日期&#x27;;
+COMMENT ON COLUMN sys_employee.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN sys_employee.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_dept ON sys_employee (dept_id);
+CREATE INDEX idx_code ON sys_employee (emp_code);
+CREATE INDEX idx_name ON sys_employee (emp_name);
+CREATE INDEX idx_card ON sys_employee (card_no);
+CREATE INDEX idx_active ON sys_employee (is_active);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>融合项目主数据表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_project_master (
+  project_uid varchar(50) PRIMARY KEY,
+  pmo_project_name varchar(200) NOT NULL,
+  pmo_project_alias varchar(500),
+  project_manager_id varchar(50),
+  project_manager varchar(50),
+  responsible_dept_id varchar(50),
+  responsible_dept varchar(100),
+  erp_pk_project varchar(20),
+  erp_project_code varchar(40),
+  erp_project_name varchar(200),
+  estimate_mny numeric(28,8),
+  plan_start_date date,
+  plan_finish_date date,
+  data_source varchar(20),
+  is_verified boolean DEFAULT false,
+  is_active boolean DEFAULT true,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_pmo_name UNIQUE (pmo_project_name)
+);
+COMMENT ON TABLE dim_project_master IS &#x27;融合项目主数据表&#x27;;
+COMMENT ON COLUMN dim_project_master.project_uid IS &#x27;项目统一标识&#x27;;
+COMMENT ON COLUMN dim_project_master.pmo_project_name IS &#x27;PMO项目名称&#x27;;
+COMMENT ON COLUMN dim_project_master.pmo_project_alias IS &#x27;项目别名&#x27;;
+COMMENT ON COLUMN dim_project_master.project_manager_id IS &#x27;项目主管ID&#x27;;
+COMMENT ON COLUMN dim_project_master.project_manager IS &#x27;项目主管姓名&#x27;;
+COMMENT ON COLUMN dim_project_master.responsible_dept_id IS &#x27;责任科室ID&#x27;;
+COMMENT ON COLUMN dim_project_master.responsible_dept IS &#x27;责任科室名称&#x27;;
+COMMENT ON COLUMN dim_project_master.erp_pk_project IS &#x27;ERP项目主键&#x27;;
+COMMENT ON COLUMN dim_project_master.erp_project_code IS &#x27;ERP项目编码&#x27;;
+COMMENT ON COLUMN dim_project_master.erp_project_name IS &#x27;ERP项目名称&#x27;;
+COMMENT ON COLUMN dim_project_master.estimate_mny IS &#x27;估算金额&#x27;;
+COMMENT ON COLUMN dim_project_master.plan_start_date IS &#x27;计划开始日期&#x27;;
+COMMENT ON COLUMN dim_project_master.plan_finish_date IS &#x27;计划完成日期&#x27;;
+COMMENT ON COLUMN dim_project_master.data_source IS &#x27;PMO/ERP/BOTH&#x27;;
+COMMENT ON COLUMN dim_project_master.is_verified IS &#x27;是否人工确认&#x27;;
+CREATE INDEX idx_erp_pk ON dim_project_master (erp_pk_project);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>WBS融合维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- WBS融合维度表</code></pre>
+<pre><code>-- 来源：PMO分系统/任务 + ERP pm_wbs 融合生成</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_wbs (
+  wbs_uid varchar(50) PRIMARY KEY,
+  -- ========== 关联项目 ==========
+  project_uid varchar(50) NOT NULL,
+  pmo_project_name varchar(200) NOT NULL,
+  -- ========== PMO层级信息（离线Excel，权威） ==========
+  pmo_sub_system varchar(200),
+  pmo_task_node varchar(200),
+  pmo_wbs_level varchar(20),
+  pmo_parent_name varchar(200),
+  pmo_full_path varchar(500),
+  -- ========== 关联平台业务表 ==========
+  responsible_person_id varchar(50),
+  responsible_person varchar(50),
+  responsible_dept_id varchar(50),
+  responsible_dept varchar(100),
+  -- ========== ERP WBS信息（在线ERP） ==========
+  erp_pk_wbs varchar(20),
+  erp_wbs_code varchar(40),
+  erp_wbs_name varchar(80),
+  erp_pk_parent varchar(20),
+  erp_pk_project varchar(20),
+  erp_tasklevel integer,
+  erp_taskindex integer,
+  erp_tasktype integer,
+  erp_wbs_state integer,
+  erp_ismilestone char(1),
+  erp_keytaskflag char(1),
+  erp_childprojectflag char(1),
+  erp_quality_check_p char(1),
+  -- ========== 任务描述 ==========
+  description varchar(200),
+  memo varchar(200),
+  -- ========== 进度信息 ==========
+  plan_start_date date,
+  plan_finish_date date,
+  plan_date_num integer,
+  actu_start_date date,
+  actu_finish_date date,
+  actu_date_num integer,
+  actpercent numeric(28,8),
+  scheduleratio integer,
+  scheduleratioflag char(1),
+  -- ========== 排程信息 ==========
+  early_start_date date,
+  early_finish_date date,
+  late_start_date date,
+  late_finish_date date,
+  sort_start_date date,
+  sort_finish_date date,
+  sort_date_num integer,
+  slack integer,
+  sortlockedflag char(1),
+  -- ========== 限制信息 ==========
+  limittime date,
+  limittype varchar(50),
+  -- ========== 责任人信息 ==========
+  pk_dutyer varchar(20),
+  pk_duty_dept varchar(20),
+  pk_planmaker varchar(20),
+  plan_auth integer,
+  -- ========== 质检信息 ==========
+  quality_check_c varchar(50),
+  -- ========== 更新时间 ==========
+  schedule_last_date date,
+  -- ========== ERP任务信息（bd_project作为任务） ==========
+  erp_pk_task varchar(20),
+  erp_task_code varchar(40),
+  erp_task_name varchar(200),
+  erp_pk_parenttask varchar(20),
+  -- ========== 映射信息 ==========
+  match_method varchar(20),
+  match_confidence numeric(3,2),
+  is_verified boolean DEFAULT false,
+  -- ========== 状态 ==========
+  is_active boolean DEFAULT true,
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE dim_wbs IS &#x27;WBS融合维度表&#x27;;
+COMMENT ON COLUMN dim_wbs.wbs_uid IS &#x27;WBS统一标识（平台生成UUID）&#x27;;
+COMMENT ON COLUMN dim_wbs.project_uid IS &#x27;关联dim_project_master&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_project_name IS &#x27;PMO项目名称&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_sub_system IS &#x27;PMO分系统/分任务名称&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_task_node IS &#x27;PMO节点任务及目标&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_wbs_level IS &#x27;PMO层级：SUB_SYSTEM-分系统/TASK-任务/NODE-节点&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_parent_name IS &#x27;PMO上级名称&#x27;;
+COMMENT ON COLUMN dim_wbs.pmo_full_path IS &#x27;PMO完整路径&#x27;;
+COMMENT ON COLUMN dim_wbs.responsible_person_id IS &#x27;负责人ID（关联sys_employee）&#x27;;
+COMMENT ON COLUMN dim_wbs.responsible_person IS &#x27;负责人姓名&#x27;;
+COMMENT ON COLUMN dim_wbs.responsible_dept_id IS &#x27;责任科室ID（关联sys_department）&#x27;;
+COMMENT ON COLUMN dim_wbs.responsible_dept IS &#x27;责任科室名称&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_pk_wbs IS &#x27;ERP WBS主键（pm_wbs.pk_wbs）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_wbs_code IS &#x27;ERP WBS编码（pm_wbs.wbs_code）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_wbs_name IS &#x27;ERP WBS名称（pm_wbs.wbs_name）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_pk_parent IS &#x27;上级WBS（pm_wbs.pk_parent）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_pk_project IS &#x27;所属项目（pm_wbs.pk_project）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_tasklevel IS &#x27;任务等级（pm_wbs.tasklevel）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_taskindex IS &#x27;任务序号（pm_wbs.taskindex）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_tasktype IS &#x27;任务类型（pm_wbs.tasktype）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_wbs_state IS &#x27;任务状态（pm_wbs.wbs_state）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_ismilestone IS &#x27;是否里程碑（pm_wbs.ismilestone）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_keytaskflag IS &#x27;是否关键任务（pm_wbs.keytaskflag）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_childprojectflag IS &#x27;是否子项目（pm_wbs.childprojectflag）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_quality_check_p IS &#x27;是否质检点（pm_wbs.quality_check_p）&#x27;;
+COMMENT ON COLUMN dim_wbs.description IS &#x27;任务描述（pm_wbs.description）&#x27;;
+COMMENT ON COLUMN dim_wbs.memo IS &#x27;备注（pm_wbs.memo）&#x27;;
+COMMENT ON COLUMN dim_wbs.plan_start_date IS &#x27;计划开始日期&#x27;;
+COMMENT ON COLUMN dim_wbs.plan_finish_date IS &#x27;计划结束日期&#x27;;
+COMMENT ON COLUMN dim_wbs.plan_date_num IS &#x27;计划工期（天）&#x27;;
+COMMENT ON COLUMN dim_wbs.actu_start_date IS &#x27;实际开始日期&#x27;;
+COMMENT ON COLUMN dim_wbs.actu_finish_date IS &#x27;实际结束日期&#x27;;
+COMMENT ON COLUMN dim_wbs.actu_date_num IS &#x27;实际工期（天）&#x27;;
+COMMENT ON COLUMN dim_wbs.actpercent IS &#x27;实际完成百分比&#x27;;
+COMMENT ON COLUMN dim_wbs.scheduleratio IS &#x27;权重（用于汇总进度）&#x27;;
+COMMENT ON COLUMN dim_wbs.scheduleratioflag IS &#x27;是否按权重汇总进度&#x27;;
+COMMENT ON COLUMN dim_wbs.early_start_date IS &#x27;排程最早开始时间&#x27;;
+COMMENT ON COLUMN dim_wbs.early_finish_date IS &#x27;排程最早结束时间&#x27;;
+COMMENT ON COLUMN dim_wbs.late_start_date IS &#x27;排程最晚开始时间&#x27;;
+COMMENT ON COLUMN dim_wbs.late_finish_date IS &#x27;排程最晚结束时间&#x27;;
+COMMENT ON COLUMN dim_wbs.sort_start_date IS &#x27;排程开始日期&#x27;;
+COMMENT ON COLUMN dim_wbs.sort_finish_date IS &#x27;排程完成日期&#x27;;
+COMMENT ON COLUMN dim_wbs.sort_date_num IS &#x27;排程工期&#x27;;
+COMMENT ON COLUMN dim_wbs.slack IS &#x27;排程机动时间&#x27;;
+COMMENT ON COLUMN dim_wbs.sortlockedflag IS &#x27;排程是否锁定&#x27;;
+COMMENT ON COLUMN dim_wbs.limittime IS &#x27;限制日期&#x27;;
+COMMENT ON COLUMN dim_wbs.limittype IS &#x27;限制类型&#x27;;
+COMMENT ON COLUMN dim_wbs.pk_dutyer IS &#x27;责任人（pm_wbs.pk_dutyer）&#x27;;
+COMMENT ON COLUMN dim_wbs.pk_duty_dept IS &#x27;责任部门（pm_wbs.pk_duty_dept）&#x27;;
+COMMENT ON COLUMN dim_wbs.pk_planmaker IS &#x27;编制人（pm_wbs.pk_planmaker）&#x27;;
+COMMENT ON COLUMN dim_wbs.plan_auth IS &#x27;编制人权限&#x27;;
+COMMENT ON COLUMN dim_wbs.quality_check_c IS &#x27;质检结论&#x27;;
+COMMENT ON COLUMN dim_wbs.schedule_last_date IS &#x27;进度更新日期&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_pk_task IS &#x27;ERP任务主键（bd_project.pk_project作为任务）&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_task_code IS &#x27;ERP任务编码&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_task_name IS &#x27;ERP任务名称&#x27;;
+COMMENT ON COLUMN dim_wbs.erp_pk_parenttask IS &#x27;父任务（bd_project.pk_parenttask）&#x27;;
+COMMENT ON COLUMN dim_wbs.match_method IS &#x27;映射方式：AUTO/MANUAL/RULE&#x27;;
+COMMENT ON COLUMN dim_wbs.match_confidence IS &#x27;匹配置信度（0-1）&#x27;;
+COMMENT ON COLUMN dim_wbs.is_verified IS &#x27;是否人工确认&#x27;;
+COMMENT ON COLUMN dim_wbs.is_active IS &#x27;是否有效&#x27;;
+COMMENT ON COLUMN dim_wbs.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dim_wbs.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_project ON dim_wbs (project_uid);
+CREATE INDEX idx_pmo_name ON dim_wbs (pmo_project_name);
+CREATE INDEX idx_pmo_sub ON dim_wbs (pmo_sub_system);
+CREATE INDEX idx_pmo_level ON dim_wbs (pmo_wbs_level);
+CREATE INDEX idx_pmo_parent ON dim_wbs (pmo_parent_name);
+CREATE INDEX idx_erp_wbs ON dim_wbs (erp_pk_wbs);
+CREATE INDEX idx_erp_code ON dim_wbs (erp_wbs_code);
+CREATE INDEX idx_erp_task ON dim_wbs (erp_pk_task);
+CREATE INDEX idx_erp_parent ON dim_wbs (erp_pk_parent);
+CREATE INDEX idx_erp_project ON dim_wbs (erp_pk_project);
+CREATE INDEX idx_responsible_person ON dim_wbs (responsible_person_id);
+CREATE INDEX idx_responsible_dept ON dim_wbs (responsible_dept_id);
+CREATE INDEX idx_milestone ON dim_wbs (erp_ismilestone);
+CREATE INDEX idx_keytask ON dim_wbs (erp_keytaskflag);
+CREATE INDEX idx_active ON dim_wbs (is_active);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>物料维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 物料维度表</code></pre>
+<pre><code>-- 来源：ERP bd_material_v + bd_marbasclass</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_material (
+  material_uid varchar(50) PRIMARY KEY,
+  -- ========== ERP物料信息 ==========
+  erp_pk_material varchar(20) NOT NULL,
+  material_code varchar(40) NOT NULL,
+  material_name varchar(200),
+  material_shortname varchar(200),
+  material_spec varchar(400),
+  material_type varchar(400),
+  graphid varchar(50),
+  materialbarcode varchar(30),
+  materialmnecode varchar(50),
+  -- ========== 物料分类 ==========
+  pk_marbasclass varchar(20),
+  class_code varchar(40),
+  class_name varchar(200),
+  class_parent varchar(20),
+  class_level integer,
+  class_path varchar(500),
+  -- ========== 物料属性 ==========
+  pk_mattaxes varchar(20),
+  pk_marasstframe varchar(20),
+  pk_measdoc varchar(20),
+  unit_name varchar(50),
+  storeunitnum numeric(20,8),
+  -- ========== 品牌/产地 ==========
+  pk_brand varchar(20),
+  brand_name varchar(100),
+  prodarea varchar(20),
+  productfamily char(1),
+  pk_prodline varchar(20),
+  -- ========== 物料标志 ==========
+  fee char(1),
+  isfeature char(1),
+  setpartsflag char(1),
+  iselectrans char(1),
+  electronicsale char(1),
+  retail char(1),
+  discountflag char(1),
+  ishproitems char(1),
+  -- ========== 物料管理 ==========
+  materialmgt integer,
+  prolifeperiod integer,
+  -- ========== 容差设置 ==========
+  intolerance numeric(20,4),
+  outtolerance numeric(20,4),
+  outcloselowerlimit numeric(20,4),
+  -- ========== 物理属性 ==========
+  unitlength varchar(20),
+  unitwidth varchar(20),
+  unitheight varchar(20),
+  unitvolume numeric(20,8),
+  unitweight numeric(20,8),
+  -- ========== 分类属性 ==========
+  averagemmahead numeric(28,8),
+  averagepurahead integer,
+  avgprice numeric(28,8),
+  -- ========== 其他信息 ==========
+  pk_goodscode varchar(20),
+  goodsprtname varchar(200),
+  featureclass varchar(20),
+  -- ========== 多语言 ==========
+  ename varchar(200),
+  ematerialspec varchar(400),
+  -- ========== 备注 ==========
+  memo varchar(100),
+  -- ========== 状态 ==========
+  enablestate integer,
+  is_active boolean DEFAULT true,
+  -- ========== 审计字段 ==========
+  erp_creator varchar(20),
+  erp_creationtime timestamp without time zone,
+  erp_modifier varchar(20),
+  erp_modifiedtime timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_erp_material UNIQUE (erp_pk_material),
+  CONSTRAINT uk_code UNIQUE (material_code)
+);
+COMMENT ON TABLE dim_material IS &#x27;物料维度表&#x27;;
+COMMENT ON COLUMN dim_material.material_uid IS &#x27;物料统一标识（平台生成）&#x27;;
+COMMENT ON COLUMN dim_material.erp_pk_material IS &#x27;ERP物料主键（bd_material_v.pk_material）&#x27;;
+COMMENT ON COLUMN dim_material.material_code IS &#x27;物料编码（bd_material_v.code）&#x27;;
+COMMENT ON COLUMN dim_material.material_name IS &#x27;物料名称（bd_material_v.name）&#x27;;
+COMMENT ON COLUMN dim_material.material_shortname IS &#x27;物料简称（bd_material_v.materialshortname）&#x27;;
+COMMENT ON COLUMN dim_material.material_spec IS &#x27;规格（bd_material_v.materialspec）&#x27;;
+COMMENT ON COLUMN dim_material.material_type IS &#x27;型号（bd_material_v.materialtype）&#x27;;
+COMMENT ON COLUMN dim_material.graphid IS &#x27;图号（bd_material_v.graphid）&#x27;;
+COMMENT ON COLUMN dim_material.materialbarcode IS &#x27;条形码（bd_material_v.materialbarcode）&#x27;;
+COMMENT ON COLUMN dim_material.materialmnecode IS &#x27;助记码（bd_material_v.materialmnecode）&#x27;;
+COMMENT ON COLUMN dim_material.pk_marbasclass IS &#x27;物料分类主键（bd_material_v.pk_marbasclass）&#x27;;
+COMMENT ON COLUMN dim_material.class_code IS &#x27;分类编码（bd_marbasclass.code）&#x27;;
+COMMENT ON COLUMN dim_material.class_name IS &#x27;分类名称（bd_marbasclass.name）&#x27;;
+COMMENT ON COLUMN dim_material.class_parent IS &#x27;上级分类（bd_marbasclass.pk_parent）&#x27;;
+COMMENT ON COLUMN dim_material.class_level IS &#x27;分类层级&#x27;;
+COMMENT ON COLUMN dim_material.class_path IS &#x27;分类路径&#x27;;
+COMMENT ON COLUMN dim_material.pk_mattaxes IS &#x27;物料税类&#x27;;
+COMMENT ON COLUMN dim_material.pk_marasstframe IS &#x27;辅助属性结构&#x27;;
+COMMENT ON COLUMN dim_material.pk_measdoc IS &#x27;主计量单位&#x27;;
+COMMENT ON COLUMN dim_material.unit_name IS &#x27;单位名称&#x27;;
+COMMENT ON COLUMN dim_material.storeunitnum IS &#x27;多少标准存储单位&#x27;;
+COMMENT ON COLUMN dim_material.pk_brand IS &#x27;品牌主键&#x27;;
+COMMENT ON COLUMN dim_material.brand_name IS &#x27;品牌名称&#x27;;
+COMMENT ON COLUMN dim_material.prodarea IS &#x27;产地&#x27;;
+COMMENT ON COLUMN dim_material.productfamily IS &#x27;产品簇&#x27;;
+COMMENT ON COLUMN dim_material.pk_prodline IS &#x27;产品线&#x27;;
+COMMENT ON COLUMN dim_material.fee IS &#x27;是否服务类&#x27;;
+COMMENT ON COLUMN dim_material.isfeature IS &#x27;是否特征件&#x27;;
+COMMENT ON COLUMN dim_material.setpartsflag IS &#x27;是否成套件&#x27;;
+COMMENT ON COLUMN dim_material.iselectrans IS &#x27;是否电子采购&#x27;;
+COMMENT ON COLUMN dim_material.electronicsale IS &#x27;是否电子销售&#x27;;
+COMMENT ON COLUMN dim_material.retail IS &#x27;是否适用零售&#x27;;
+COMMENT ON COLUMN dim_material.discountflag IS &#x27;是否有价格折扣&#x27;;
+COMMENT ON COLUMN dim_material.ishproitems IS &#x27;是否助促销品&#x27;;
+COMMENT ON COLUMN dim_material.materialmgt IS &#x27;实物物料管理模式&#x27;;
+COMMENT ON COLUMN dim_material.prolifeperiod IS &#x27;产品生命周期&#x27;;
+COMMENT ON COLUMN dim_material.intolerance IS &#x27;入库容差（%）&#x27;;
+COMMENT ON COLUMN dim_material.outtolerance IS &#x27;出库容差（%）&#x27;;
+COMMENT ON COLUMN dim_material.outcloselowerlimit IS &#x27;出库关闭下容差（%）&#x27;;
+COMMENT ON COLUMN dim_material.unitlength IS &#x27;长度&#x27;;
+COMMENT ON COLUMN dim_material.unitwidth IS &#x27;宽度&#x27;;
+COMMENT ON COLUMN dim_material.unitheight IS &#x27;高度&#x27;;
+COMMENT ON COLUMN dim_material.unitvolume IS &#x27;单位体积&#x27;;
+COMMENT ON COLUMN dim_material.unitweight IS &#x27;单位重量&#x27;;
+COMMENT ON COLUMN dim_material.averagemmahead IS &#x27;平均生产提前期&#x27;;
+COMMENT ON COLUMN dim_material.averagepurahead IS &#x27;平均采购提前期&#x27;;
+COMMENT ON COLUMN dim_material.avgprice IS &#x27;平均单价&#x27;;
+COMMENT ON COLUMN dim_material.pk_goodscode IS &#x27;海关商品代码&#x27;;
+COMMENT ON COLUMN dim_material.goodsprtname IS &#x27;海关商品打印名称&#x27;;
+COMMENT ON COLUMN dim_material.featureclass IS &#x27;特征类&#x27;;
+COMMENT ON COLUMN dim_material.ename IS &#x27;英文名称&#x27;;
+COMMENT ON COLUMN dim_material.ematerialspec IS &#x27;英文规格&#x27;;
+COMMENT ON COLUMN dim_material.memo IS &#x27;备注&#x27;;
+COMMENT ON COLUMN dim_material.enablestate IS &#x27;启用状态（1-启用/0-停用）&#x27;;
+COMMENT ON COLUMN dim_material.is_active IS &#x27;是否有效&#x27;;
+COMMENT ON COLUMN dim_material.erp_creator IS &#x27;ERP创建人&#x27;;
+COMMENT ON COLUMN dim_material.erp_creationtime IS &#x27;ERP创建时间&#x27;;
+COMMENT ON COLUMN dim_material.erp_modifier IS &#x27;ERP修改人&#x27;;
+COMMENT ON COLUMN dim_material.erp_modifiedtime IS &#x27;ERP修改时间&#x27;;
+COMMENT ON COLUMN dim_material.create_time IS &#x27;平台创建时间&#x27;;
+COMMENT ON COLUMN dim_material.update_time IS &#x27;平台更新时间&#x27;;
+CREATE INDEX idx_class ON dim_material (pk_marbasclass);
+CREATE INDEX idx_name ON dim_material (material_name);
+CREATE INDEX idx_brand ON dim_material (pk_brand);
+CREATE INDEX idx_active ON dim_material (is_active);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>供应商维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 供应商维度表</code></pre>
+<pre><code>-- 来源：ERP bd_supplier</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_supplier (
+  supplier_uid varchar(50) PRIMARY KEY,
+  -- ========== ERP供应商信息 ==========
+  erp_pk_supplier varchar(20) NOT NULL,
+  supplier_code varchar(40) NOT NULL,
+  supplier_name varchar(200),
+  supplier_shortname varchar(200),
+  ename varchar(200),
+  mnecode varchar(50),
+  -- ========== 分类信息 ==========
+  pk_supplierclass varchar(20),
+  class_name varchar(100),
+  pk_areacl varchar(20),
+  pk_country varchar(20),
+  trade varchar(20),
+  -- ========== 证件信息 ==========
+  buslicensenum varchar(200),
+  taxpayerid varchar(20),
+  vatcode varchar(50),
+  isvat char(1),
+  -- ========== 企业信息 ==========
+  legalbody varchar(200),
+  registerfund numeric(14,2),
+  pk_currtype varchar(20),
+  establishdate date,
+  ecotypesincevfive varchar(20),
+  -- ========== 联系方式 ==========
+  corpaddress varchar(200),
+  zipcode char(6),
+  tel1 varchar(50),
+  tel2 varchar(50),
+  tel3 varchar(50),
+  fax1 varchar(50),
+  fax2 varchar(50),
+  email varchar(50),
+  url varchar(60),
+  -- ========== 银行信息 ==========
+  pk_financeorg varchar(20),
+  -- ========== 标志信息 ==========
+  iscustomer char(1),
+  isfreecust char(1),
+  isoutcheck char(1),
+  supprop smallint,
+  -- ========== 状态 ==========
+  supstate smallint,
+  enablestate integer,
+  is_active boolean DEFAULT true,
+  -- ========== 上级供应商 ==========
+  pk_supplier_main varchar(20),
+  -- ========== 备注 ==========
+  memo text,
+  -- ========== 审计字段 ==========
+  erp_creator varchar(20),
+  erp_creationtime timestamp without time zone,
+  erp_modifier varchar(20),
+  erp_modifiedtime timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_erp_supplier UNIQUE (erp_pk_supplier),
+  CONSTRAINT uk_code UNIQUE (supplier_code)
+);
+COMMENT ON TABLE dim_supplier IS &#x27;供应商维度表&#x27;;
+COMMENT ON COLUMN dim_supplier.supplier_uid IS &#x27;供应商统一标识（平台生成）&#x27;;
+COMMENT ON COLUMN dim_supplier.erp_pk_supplier IS &#x27;ERP供应商主键（bd_supplier.pk_supplier）&#x27;;
+COMMENT ON COLUMN dim_supplier.supplier_code IS &#x27;供应商编码（bd_supplier.code）&#x27;;
+COMMENT ON COLUMN dim_supplier.supplier_name IS &#x27;供应商名称（bd_supplier.name）&#x27;;
+COMMENT ON COLUMN dim_supplier.supplier_shortname IS &#x27;供应商简称（bd_supplier.shortname）&#x27;;
+COMMENT ON COLUMN dim_supplier.ename IS &#x27;供应商英文名称&#x27;;
+COMMENT ON COLUMN dim_supplier.mnecode IS &#x27;助记码&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_supplierclass IS &#x27;供应商分类主键&#x27;;
+COMMENT ON COLUMN dim_supplier.class_name IS &#x27;供应商分类名称&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_areacl IS &#x27;地区分类&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_country IS &#x27;国家/地区&#x27;;
+COMMENT ON COLUMN dim_supplier.trade IS &#x27;所属行业&#x27;;
+COMMENT ON COLUMN dim_supplier.buslicensenum IS &#x27;营业执照号码&#x27;;
+COMMENT ON COLUMN dim_supplier.taxpayerid IS &#x27;纳税人登记号&#x27;;
+COMMENT ON COLUMN dim_supplier.vatcode IS &#x27;VAT注册码&#x27;;
+COMMENT ON COLUMN dim_supplier.isvat IS &#x27;是否VAT注册&#x27;;
+COMMENT ON COLUMN dim_supplier.legalbody IS &#x27;法人&#x27;;
+COMMENT ON COLUMN dim_supplier.registerfund IS &#x27;注册资金&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_currtype IS &#x27;注册资金币种&#x27;;
+COMMENT ON COLUMN dim_supplier.establishdate IS &#x27;成立日期&#x27;;
+COMMENT ON COLUMN dim_supplier.ecotypesincevfive IS &#x27;经济类型&#x27;;
+COMMENT ON COLUMN dim_supplier.corpaddress IS &#x27;企业地址&#x27;;
+COMMENT ON COLUMN dim_supplier.zipcode IS &#x27;邮政编码&#x27;;
+COMMENT ON COLUMN dim_supplier.tel1 IS &#x27;电话1&#x27;;
+COMMENT ON COLUMN dim_supplier.tel2 IS &#x27;电话2&#x27;;
+COMMENT ON COLUMN dim_supplier.tel3 IS &#x27;电话3&#x27;;
+COMMENT ON COLUMN dim_supplier.fax1 IS &#x27;传真1&#x27;;
+COMMENT ON COLUMN dim_supplier.fax2 IS &#x27;传真2&#x27;;
+COMMENT ON COLUMN dim_supplier.email IS &#x27;邮箱&#x27;;
+COMMENT ON COLUMN dim_supplier.url IS &#x27;网址&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_financeorg IS &#x27;对应业务单元&#x27;;
+COMMENT ON COLUMN dim_supplier.iscustomer IS &#x27;是否客户&#x27;;
+COMMENT ON COLUMN dim_supplier.isfreecust IS &#x27;是否散户&#x27;;
+COMMENT ON COLUMN dim_supplier.isoutcheck IS &#x27;是否外部检测机构&#x27;;
+COMMENT ON COLUMN dim_supplier.supprop IS &#x27;供应商类型&#x27;;
+COMMENT ON COLUMN dim_supplier.supstate IS &#x27;供应商状态&#x27;;
+COMMENT ON COLUMN dim_supplier.enablestate IS &#x27;启用状态&#x27;;
+COMMENT ON COLUMN dim_supplier.is_active IS &#x27;是否有效&#x27;;
+COMMENT ON COLUMN dim_supplier.pk_supplier_main IS &#x27;上级供应商&#x27;;
+COMMENT ON COLUMN dim_supplier.memo IS &#x27;备注&#x27;;
+COMMENT ON COLUMN dim_supplier.erp_creator IS &#x27;ERP创建人&#x27;;
+COMMENT ON COLUMN dim_supplier.erp_creationtime IS &#x27;ERP创建时间&#x27;;
+COMMENT ON COLUMN dim_supplier.erp_modifier IS &#x27;ERP修改人&#x27;;
+COMMENT ON COLUMN dim_supplier.erp_modifiedtime IS &#x27;ERP修改时间&#x27;;
+COMMENT ON COLUMN dim_supplier.create_time IS &#x27;平台创建时间&#x27;;
+COMMENT ON COLUMN dim_supplier.update_time IS &#x27;平台更新时间&#x27;;
+CREATE INDEX idx_name ON dim_supplier (supplier_name);
+CREATE INDEX idx_class ON dim_supplier (pk_supplierclass);
+CREATE INDEX idx_country ON dim_supplier (pk_country);
+CREATE INDEX idx_active ON dim_supplier (is_active);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>仓库维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 仓库维度表</code></pre>
+<pre><code>-- 来源：ERP bd_stordoc</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_warehouse (
+  warehouse_uid varchar(50) PRIMARY KEY,
+  -- ========== ERP仓库信息 ==========
+  erp_pk_stordoc varchar(20) NOT NULL,
+  warehouse_code varchar(40) NOT NULL,
+  warehouse_name varchar(200),
+  -- ========== 仓库属性 ==========
+  warehouse_type varchar(50),
+  proflag char(1),
+  gubflag char(1),
+  isagentstore char(1),
+  iscommissionout char(1),
+  isdirectstore char(1),
+  iskptaxstore varchar(1),
+  isshopstore char(1),
+  isstoreontheway char(1),
+  isretail char(1),
+  -- ========== 管理属性 ==========
+  csflag char(1),
+  isatpaffected char(1),
+  iscalculatedinvcost char(1),
+  isobligate char(1),
+  mrpflag char(1),
+  -- ========== 组织信息 ==========
+  pk_org varchar(20),
+  org_name varchar(100),
+  profitcentre varchar(20),
+  profit_center_name varchar(100),
+  pk_address varchar(20),
+  -- ========== 管理信息 ==========
+  principalcode varchar(25),
+  principal_name varchar(50),
+  phone varchar(30),
+  storaddr varchar(200),
+  -- ========== 关联信息 ==========
+  operatesupplier varchar(20),
+  -- ========== 状态 ==========
+  enablestate integer,
+  is_active boolean DEFAULT true,
+  -- ========== 备注 ==========
+  memo varchar(200),
+  -- ========== 审计字段 ==========
+  erp_creator varchar(20),
+  erp_creationtime timestamp without time zone,
+  erp_modifier varchar(20),
+  erp_modifiedtime timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_erp_warehouse UNIQUE (erp_pk_stordoc),
+  CONSTRAINT uk_code UNIQUE (warehouse_code)
+);
+COMMENT ON TABLE dim_warehouse IS &#x27;仓库维度表&#x27;;
+COMMENT ON COLUMN dim_warehouse.warehouse_uid IS &#x27;仓库统一标识（平台生成）&#x27;;
+COMMENT ON COLUMN dim_warehouse.erp_pk_stordoc IS &#x27;ERP仓库主键（bd_stordoc.pk_stordoc）&#x27;;
+COMMENT ON COLUMN dim_warehouse.warehouse_code IS &#x27;仓库编码（bd_stordoc.code）&#x27;;
+COMMENT ON COLUMN dim_warehouse.warehouse_name IS &#x27;仓库名称（bd_stordoc.name）&#x27;;
+COMMENT ON COLUMN dim_warehouse.warehouse_type IS &#x27;仓库类型&#x27;;
+COMMENT ON COLUMN dim_warehouse.proflag IS &#x27;是否生产仓库&#x27;;
+COMMENT ON COLUMN dim_warehouse.gubflag IS &#x27;是否废品库&#x27;;
+COMMENT ON COLUMN dim_warehouse.isagentstore IS &#x27;是否代储仓&#x27;;
+COMMENT ON COLUMN dim_warehouse.iscommissionout IS &#x27;是否委外仓&#x27;;
+COMMENT ON COLUMN dim_warehouse.isdirectstore IS &#x27;是否直运仓&#x27;;
+COMMENT ON COLUMN dim_warehouse.iskptaxstore IS &#x27;是否保税仓&#x27;;
+COMMENT ON COLUMN dim_warehouse.isshopstore IS &#x27;是否门店仓库&#x27;;
+COMMENT ON COLUMN dim_warehouse.isstoreontheway IS &#x27;是否在途仓&#x27;;
+COMMENT ON COLUMN dim_warehouse.isretail IS &#x27;是否适用零售&#x27;;
+COMMENT ON COLUMN dim_warehouse.csflag IS &#x27;是否货位管理&#x27;;
+COMMENT ON COLUMN dim_warehouse.isatpaffected IS &#x27;是否影响可用量&#x27;;
+COMMENT ON COLUMN dim_warehouse.iscalculatedinvcost IS &#x27;是否进行存货成本计算&#x27;;
+COMMENT ON COLUMN dim_warehouse.isobligate IS &#x27;是否可预留&#x27;;
+COMMENT ON COLUMN dim_warehouse.mrpflag IS &#x27;是否计划可用&#x27;;
+COMMENT ON COLUMN dim_warehouse.pk_org IS &#x27;所属库存组织&#x27;;
+COMMENT ON COLUMN dim_warehouse.org_name IS &#x27;库存组织名称&#x27;;
+COMMENT ON COLUMN dim_warehouse.profitcentre IS &#x27;所属利润中心&#x27;;
+COMMENT ON COLUMN dim_warehouse.profit_center_name IS &#x27;利润中心名称&#x27;;
+COMMENT ON COLUMN dim_warehouse.pk_address IS &#x27;所属地点&#x27;;
+COMMENT ON COLUMN dim_warehouse.principalcode IS &#x27;负责人&#x27;;
+COMMENT ON COLUMN dim_warehouse.principal_name IS &#x27;负责人姓名&#x27;;
+COMMENT ON COLUMN dim_warehouse.phone IS &#x27;联系电话&#x27;;
+COMMENT ON COLUMN dim_warehouse.storaddr IS &#x27;仓库地址&#x27;;
+COMMENT ON COLUMN dim_warehouse.operatesupplier IS &#x27;加工商&#x27;;
+COMMENT ON COLUMN dim_warehouse.enablestate IS &#x27;启用状态&#x27;;
+COMMENT ON COLUMN dim_warehouse.is_active IS &#x27;是否有效&#x27;;
+COMMENT ON COLUMN dim_warehouse.memo IS &#x27;备注&#x27;;
+COMMENT ON COLUMN dim_warehouse.erp_creator IS &#x27;ERP创建人&#x27;;
+COMMENT ON COLUMN dim_warehouse.erp_creationtime IS &#x27;ERP创建时间&#x27;;
+COMMENT ON COLUMN dim_warehouse.erp_modifier IS &#x27;ERP修改人&#x27;;
+COMMENT ON COLUMN dim_warehouse.erp_modifiedtime IS &#x27;ERP修改时间&#x27;;
+COMMENT ON COLUMN dim_warehouse.create_time IS &#x27;平台创建时间&#x27;;
+COMMENT ON COLUMN dim_warehouse.update_time IS &#x27;平台更新时间&#x27;;
+CREATE INDEX idx_name ON dim_warehouse (warehouse_name);
+CREATE INDEX idx_org ON dim_warehouse (pk_org);
+CREATE INDEX idx_type ON dim_warehouse (warehouse_type);
+CREATE INDEX idx_active ON dim_warehouse (is_active);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>日期维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_date (
+  date_id integer PRIMARY KEY,
+  date_value date NOT NULL,
+  year smallint,
+  year_month varchar(7),
+  quarter smallint,
+  month smallint,
+  week_of_year smallint,
+  day_of_week smallint,
+  is_weekend smallint,
+  is_workday boolean,
+  CONSTRAINT uk_date UNIQUE (date_value)
+);
+COMMENT ON TABLE dim_date IS &#x27;日期维度表&#x27;;
+COMMENT ON COLUMN dim_date.date_id IS &#x27;日期ID（YYYYMMDD）&#x27;;
+COMMENT ON COLUMN dim_date.date_value IS &#x27;日期值&#x27;;
+COMMENT ON COLUMN dim_date.year IS &#x27;年&#x27;;
+COMMENT ON COLUMN dim_date.year_month IS &#x27;年月（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dim_date.quarter IS &#x27;季度&#x27;;
+COMMENT ON COLUMN dim_date.month IS &#x27;月&#x27;;
+COMMENT ON COLUMN dim_date.week_of_year IS &#x27;年中第几周&#x27;;
+COMMENT ON COLUMN dim_date.day_of_week IS &#x27;星期几（1-7）&#x27;;
+COMMENT ON COLUMN dim_date.is_weekend IS &#x27;是否周末&#x27;;
+COMMENT ON COLUMN dim_date.is_workday IS &#x27;是否工作日&#x27;;
+CREATE INDEX idx_year_month ON dim_date (year_month);</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<h3>枚举维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_enum (
+  enum_id integer GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  enum_category varchar(50) NOT NULL,
+  enum_category_name varchar(100),
+  enum_code varchar(50) NOT NULL,
+  enum_value varchar(100) NOT NULL,
+  enum_display varchar(100),
+  color_code varchar(20),
+  severity_level integer,
+  sort_order integer DEFAULT 0,
+  is_active boolean DEFAULT true,
+  CONSTRAINT uk_category_code UNIQUE (enum_category, enum_code)
+);
+COMMENT ON TABLE dim_enum IS &#x27;枚举维度表&#x27;;
+COMMENT ON COLUMN dim_enum.enum_category IS &#x27;枚举分类&#x27;;
+COMMENT ON COLUMN dim_enum.enum_category_name IS &#x27;分类名称&#x27;;
+COMMENT ON COLUMN dim_enum.enum_code IS &#x27;枚举代码&#x27;;
+COMMENT ON COLUMN dim_enum.enum_value IS &#x27;枚举值&#x27;;
+COMMENT ON COLUMN dim_enum.enum_display IS &#x27;显示名称&#x27;;
+COMMENT ON COLUMN dim_enum.color_code IS &#x27;颜色代码&#x27;;
+COMMENT ON COLUMN dim_enum.severity_level IS &#x27;严重程度（1-5）&#x27;;</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<h3>专利维度表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dim_patent (
+  patent_uid varchar(50) PRIMARY KEY,
+  patent_no varchar(100) NOT NULL,
+  patent_name varchar(200),
+  patent_type_id integer,
+  inventor_names varchar(500),
+  dept_id varchar(50),
+  patent_holder varchar(200),
+  agency varchar(200),
+  current_status_id integer,
+  accept_date date,
+  publish_date date,
+  grant_date date,
+  is_active boolean DEFAULT true,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_patent_no UNIQUE (patent_no)
+);
+COMMENT ON TABLE dim_patent IS &#x27;专利维度表&#x27;;
+COMMENT ON COLUMN dim_patent.patent_no IS &#x27;专利号&#x27;;
+COMMENT ON COLUMN dim_patent.patent_name IS &#x27;专利名称&#x27;;
+COMMENT ON COLUMN dim_patent.patent_type_id IS &#x27;专利类型&#x27;;
+COMMENT ON COLUMN dim_patent.inventor_names IS &#x27;发明人&#x27;;
+COMMENT ON COLUMN dim_patent.dept_id IS &#x27;所属部门ID&#x27;;
+COMMENT ON COLUMN dim_patent.patent_holder IS &#x27;专利权人&#x27;;
+COMMENT ON COLUMN dim_patent.agency IS &#x27;代理公司&#x27;;
+COMMENT ON COLUMN dim_patent.current_status_id IS &#x27;当前状态&#x27;;
+COMMENT ON COLUMN dim_patent.accept_date IS &#x27;受理日期&#x27;;
+COMMENT ON COLUMN dim_patent.publish_date IS &#x27;公开日期&#x27;;
+COMMENT ON COLUMN dim_patent.grant_date IS &#x27;授权日期&#x27;;
+CREATE INDEX idx_dept ON dim_patent (dept_id);
+CREATE INDEX idx_status ON dim_patent (current_status_id);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h2>STG 结构化层设计</h2>
+<p>项目域 v4 的 STG 层由 dbt view 承担，当前覆盖进度、质量、技术状态、风险四条主语义链路。STG 与 ODS 行级一一对应，统一输出 <code>source_row_id</code> 作为后续 DWD 事实表的追溯键；质量跟进、风险跟进、技术状态跟进、进度跟进、重要物料等 ODS 表当前仅注册 source，后续纳入语义链路时也应先补 STG，再进入 DWD。</p>
+<table>
+<thead><tr><th>STG 模型</th><th>上游 ODS</th><th>材质化</th><th>粒度</th><th>主要输出</th></tr></thead><tbody>
+<tr><td>stg_pm__project_subject_domain_v2</td><td>ods_project_subject_domain_v2</td><td>view</td><td>ODS 进度行/source_row_id</td><td>项目信息、节点计划/实际日期、完成情况原值、节点类型原值、风险等级原值、延期申请原值、来源元数据</td></tr>
+<tr><td>stg_pm__quality_issue_v2</td><td>ods_quality_issue_v2</td><td>view</td><td>ODS 质量问题行/source_row_id</td><td>项目/科室/责任人、问题描述、问题日期、归零状态原值、原因分类原值、归零计划同步原值、来源元数据</td></tr>
+<tr><td>stg_pm__tech_state_v2</td><td>ods_tech_state_v2</td><td>view</td><td>ODS 技术状态行/source_row_id</td><td>技术状态项、更改类别原值、文件签署/变更单签署/整改/评审原值、计划日期、来源元数据</td></tr>
+<tr><td>stg_pm__risk_info_v2</td><td>ods_risk_info_v2</td><td>view</td><td>ODS 风险行/source_row_id</td><td>风险描述、风险分类原值、风险等级原值、风险状态原值、释放计划同步原值、提交/释放日期、来源元数据</td></tr>
+</tbody></table>
+<h3>STG 到 DWD 的职责边界</h3>
+<table>
+<thead><tr><th>口径</th><th>STG 输出</th><th>DWD 解释</th></tr></thead><tbody>
+<tr><td>枚举字段</td><td><code>completion_status_raw</code>、<code>risk_level_raw</code>、<code>quality_category_raw</code>、<code>change_category_raw</code> 等原值</td><td>通过 alias 维表归一为 canonical code，再关联 canonical dim 输出 label 与 is_* 标志</td></tr>
+<tr><td>时间字段</td><td>安全解析后的日期字段</td><td>派生 <code>plan_month</code>、<code>actual_month</code>、<code>issue_month</code>、<code>submit_month</code>、<code>delay_days</code>、<code>pending_days</code></td></tr>
+<tr><td>布尔/状态</td><td>保留是否类字段原值</td><td>统一由 <code>dim_boolean_alias</code> 或专项 alias 维表解释</td></tr>
+<tr><td>来源血缘</td><td><code>source_row_id</code> 与 <code>source_*</code> 元数据</td><td>DWD 事实主键以 <code>source_row_id</code> 生成，并保留回溯字段</td></tr>
+</tbody></table>
+<h2>DWD 明细事实层设计</h2>
+<p>DWD 层表清单（项目域 v4 + 原 v3 非项目域）</p>
+<table>
+<thead><tr><th>序号/域</th><th>表名</th><th>粒度</th><th>更新策略</th><th>说明</th></tr></thead><tbody>
+<tr><td>项目域 v4</td><td>biz_dwd_project_node_v2</td><td>项目节点</td><td>覆盖更新/重算</td><td>进度节点事实，替代 dwd_progress_detail</td></tr>
+<tr><td>项目域 v4</td><td>biz_dwd_quality_issue_v2</td><td>质量问题</td><td>覆盖更新/重算</td><td>质量问题事实，替代 dwd_quality_detail</td></tr>
+<tr><td>项目域 v4</td><td>biz_dwd_risk_info_v2</td><td>风险</td><td>覆盖更新/重算</td><td>风险事实，替代 dwd_risk_detail</td></tr>
+<tr><td>项目域 v4</td><td>biz_dwd_tech_state_v2</td><td>技术状态</td><td>覆盖更新/重算</td><td>技术状态事实，替代 dwd_tech_change_detail</td></tr>
+<tr><td>项目域 v4</td><td>dim_*_v2 / dim_*_alias</td><td>枚举/别名</td><td>覆盖更新</td><td>项目域 canonical/alias 维表</td></tr>
+<tr><td>5</td><td>dwd_purchase_order</td><td>订单行</td><td>追加</td><td>采购明细（事务，沿用 v3）</td></tr>
+<tr><td>6</td><td>dwd_inventory_snapshot</td><td>物料 + 仓库</td><td>每日覆盖</td><td>库存现存量（沿用 v3）</td></tr>
+<tr><td>7</td><td>dwd_cost_detail</td><td>入库行</td><td>追加</td><td>成本明细（沿用 v3）</td></tr>
+<tr><td>8</td><td>dwd_attendance_daily</td><td>人员 + 日期</td><td>覆盖更新</td><td>考勤日汇总（沿用 v3）</td></tr>
+<tr><td>9</td><td>dwd_patent_detail</td><td>专利</td><td>覆盖更新</td><td>专利明细（沿用 v3）</td></tr>
+<tr><td>10</td><td>dwd_finance_balance</td><td>科目 + 部门 + 月份</td><td>覆盖更新</td><td>财务余额（沿用 v3）</td></tr>
+<tr><td>项目域 v4</td><td>biz_ads_composite_derived_v2</td><td>月份</td><td>覆盖更新/重算</td><td>项目综合健康度，替代 dwd_project_full_info</td></tr>
+</tbody></table>
+<h3>项目域 v4 DWD 维度与事实模型</h3>
+<p>项目域不再使用旧版 <code>dwd_progress_detail</code>、<code>dwd_quality_detail</code>、<code>dwd_risk_detail</code>、<code>dwd_tech_change_detail</code> 四张手写明细表。v4 以 dbt 模型为准，DWD 层由 canonical 维表、alias 维表和 4 张事实表组成；DWD 事实表必须从 <code>stg_pm__*</code> 读取，不直接消费 ODS。</p>
+<h4>Canonical 维表</h4>
+<table>
+<thead><tr><th>模型</th><th>分类</th><th>值域</th></tr></thead><tbody>
+<tr><td>dim_completion_status_v2</td><td>完成情况</td><td>正常待完成、按时完成、超期已完成已变更、超期已完成未变更、不正常待变更、超期未完成未变更、超期未完成已变更</td></tr>
+<tr><td>dim_node_type_v2</td><td>节点类型</td><td>一般节点、重要节点、重大节点、里程碑节点</td></tr>
+<tr><td>dim_risk_level_v2</td><td>风险等级</td><td>高、中、低</td></tr>
+<tr><td>dim_quality_status_v2</td><td>质量归零状态</td><td>未完成归零、已完成技术归零、已完成管理归零、已完成技术和管理归零</td></tr>
+<tr><td>dim_quality_category_v2</td><td>质量原因分类</td><td>设计、工艺、管理、元器件、操作、外协、软件、环境、其他</td></tr>
+<tr><td>dim_change_category_v2</td><td>更改类别</td><td>I、II、III</td></tr>
+<tr><td>dim_signature_status_v2</td><td>文件签署状态</td><td>I/II/III 分类下的文件提出、评审、签署状态</td></tr>
+<tr><td>dim_risk_category_v2</td><td>风险类型</td><td>技术、进度、成本、设计、质量、其他</td></tr>
+</tbody></table>
+<h4>Alias 维表</h4>
+<table>
+<thead><tr><th>模型</th><th>职责</th></tr></thead><tbody>
+<tr><td>dim_node_type_alias</td><td>节点类型原值别名归一</td></tr>
+<tr><td>dim_risk_level_alias</td><td>风险等级原值别名归一</td></tr>
+<tr><td>dim_risk_category_alias</td><td>风险分类原值别名归一，供应链/管理/资源归入进度风险</td></tr>
+<tr><td>dim_risk_status_alias</td><td>风险状态别名；未命中按未释放处理</td></tr>
+<tr><td>dim_quality_category_alias</td><td>质量原因别名归一</td></tr>
+<tr><td>dim_quality_status_alias</td><td>质量归零状态别名归一</td></tr>
+<tr><td>dim_change_category_alias</td><td>罗马数字/阿拉伯数字/汉字归一到 I/II/III</td></tr>
+<tr><td>dim_boolean_alias</td><td>通用是否值归一</td></tr>
+<tr><td>dim_reform_status_alias</td><td>整改状态别名归一</td></tr>
+<tr><td>dim_signature_status_alias</td><td>按上下文归一文件签署状态</td></tr>
+</tbody></table>
+<h4>DWD 事实表</h4>
+<table>
+<thead><tr><th>模型</th><th>粒度</th><th>上游 STG</th><th>核心逻辑</th></tr></thead><tbody>
+<tr><td>biz_dwd_project_node_v2</td><td>项目节点/source_row_id</td><td>stg_pm__project_subject_domain_v2</td><td>完成情况、节点类型、风险等级、延期申请归一化；派生 plan_month、actual_month、delay_days、is_due。</td></tr>
+<tr><td>biz_dwd_quality_issue_v2</td><td>质量问题/source_row_id</td><td>stg_pm__quality_issue_v2</td><td>质量原因、归零状态、归零计划标志归一化；派生 issue_month、has_zero_plan、pending_days。</td></tr>
+<tr><td>biz_dwd_tech_state_v2</td><td>技术状态/source_row_id</td><td>stg_pm__tech_state_v2</td><td>更改类别、签署、评审、整改状态归一化；按 I/II/III 上下文解释文件签署状态。</td></tr>
+<tr><td>biz_dwd_risk_info_v2</td><td>风险/source_row_id</td><td>stg_pm__risk_info_v2</td><td>风险分类、等级、释放计划、释放状态归一化；派生 submit_month、release_month、pending_days。</td></tr>
+</tbody></table>
+<h4>项目域 DWD 模型注册</h4>
+<table>
+<thead><tr><th>模型</th><th>层</th><th>SQL 路径</th><th>材质化</th><th>说明</th></tr></thead><tbody>
+<tr><td>stg_pm__project_subject_domain_v2</td><td>STG</td><td>models/stg/stg_pm__project_subject_domain_v2.sql</td><td>view</td><td>进度 STG 结构化层：类型转换、占位符收敛、字段改名和来源元数据映射</td></tr>
+<tr><td>stg_pm__quality_issue_v2</td><td>STG</td><td>models/stg/stg_pm__quality_issue_v2.sql</td><td>view</td><td>质量 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
+<tr><td>stg_pm__tech_state_v2</td><td>STG</td><td>models/stg/stg_pm__tech_state_v2.sql</td><td>view</td><td>技术状态 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
+<tr><td>stg_pm__risk_info_v2</td><td>STG</td><td>models/stg/stg_pm__risk_info_v2.sql</td><td>view</td><td>风险 STG 结构化层：类型转换、占位符收敛和来源元数据映射</td></tr>
+<tr><td>dim_completion_status_v2</td><td>DWD</td><td>models/dwd/dim_completion_status_v2.sql</td><td>table</td><td>完成情况维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_node_type_v2</td><td>DWD</td><td>models/dwd/dim_node_type_v2.sql</td><td>table</td><td>节点类型维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_risk_level_v2</td><td>DWD</td><td>models/dwd/dim_risk_level_v2.sql</td><td>table</td><td>风险等级维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_quality_status_v2</td><td>DWD</td><td>models/dwd/dim_quality_status_v2.sql</td><td>table</td><td>质量归零状态维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_change_category_v2</td><td>DWD</td><td>models/dwd/dim_change_category_v2.sql</td><td>table</td><td>更改类别维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_signature_status_v2</td><td>DWD</td><td>models/dwd/dim_signature_status_v2.sql</td><td>table</td><td>文件签署状态维度表（稳定ID+中文标签）</td></tr>
+<tr><td>dim_quality_category_v2</td><td>DWD</td><td>models/dwd/dim_quality_category_v2.sql</td><td>table</td><td>质量问题原因分类字典（稳定ID+中文标签）</td></tr>
+<tr><td>dim_risk_category_v2</td><td>DWD</td><td>models/dwd/dim_risk_category_v2.sql</td><td>table</td><td>风险类型字典（稳定ID+中文标签）</td></tr>
+<tr><td>dim_node_type_alias</td><td>DWD</td><td>models/dwd/dim_node_type_alias.sql</td><td>table</td><td>节点类型别名表：一般/一般节点等→canonical code</td></tr>
+<tr><td>dim_risk_level_alias</td><td>DWD</td><td>models/dwd/dim_risk_level_alias.sql</td><td>table</td><td>风险等级别名表：高/高风险等→canonical code</td></tr>
+<tr><td>dim_risk_category_alias</td><td>DWD</td><td>models/dwd/dim_risk_category_alias.sql</td><td>table</td><td>风险分类别名表→canonical code（供应链/管理/资源统一归入进度风险）</td></tr>
+<tr><td>dim_risk_status_alias</td><td>DWD</td><td>models/dwd/dim_risk_status_alias.sql</td><td>table</td><td>风险状态别名表（仅收录已释放，未命中由DWD层coalesce到未释放）</td></tr>
+<tr><td>dim_quality_category_alias</td><td>DWD</td><td>models/dwd/dim_quality_category_alias.sql</td><td>table</td><td>质量问题原因别名表→canonical code</td></tr>
+<tr><td>dim_quality_status_alias</td><td>DWD</td><td>models/dwd/dim_quality_status_alias.sql</td><td>table</td><td>质量归零状态别名表→canonical code</td></tr>
+<tr><td>dim_change_category_alias</td><td>DWD</td><td>models/dwd/dim_change_category_alias.sql</td><td>table</td><td>更改类别别名表：罗马数字/阿拉伯数字/汉字等变体→I/II/III</td></tr>
+<tr><td>dim_boolean_alias</td><td>DWD</td><td>models/dwd/dim_boolean_alias.sql</td><td>table</td><td>通用布尔别名表：Y/YES/TRUE/是等→是；否定值→否</td></tr>
+<tr><td>dim_reform_status_alias</td><td>DWD</td><td>models/dwd/dim_reform_status_alias.sql</td><td>table</td><td>整改状态别名表→canonical code</td></tr>
+<tr><td>dim_signature_status_alias</td><td>DWD</td><td>models/dwd/dim_signature_status_alias.sql</td><td>table</td><td>文件签署状态别名表（上下文相关）→canonical code</td></tr>
+<tr><td>biz_dwd_project_node_v2</td><td>DWD</td><td>models/dwd/biz_dwd_project_node_v2.sql</td><td>table</td><td>进度节点事实表—从 STG 读取，完成情况/节点类型/风险等级标准化并派生日期口径</td></tr>
+<tr><td>biz_dwd_quality_issue_v2</td><td>DWD</td><td>models/dwd/biz_dwd_quality_issue_v2.sql</td><td>table</td><td>质量问题事实表—归零状态+分类+计划标志</td></tr>
+<tr><td>biz_dwd_tech_state_v2</td><td>DWD</td><td>models/dwd/biz_dwd_tech_state_v2.sql</td><td>table</td><td>技术状态事实表—更改类别标准化+签署/整改状态</td></tr>
+<tr><td>biz_dwd_risk_info_v2</td><td>DWD</td><td>models/dwd/biz_dwd_risk_info_v2.sql</td><td>table</td><td>风险事实表—风险台账清洗+等级标准化+释放标志</td></tr>
+</tbody></table>
+<h3>采购明细表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 采购明细表（事务事实表，追加新增）</code></pre>
+<pre><code>-- 来源：ods_erp_po_order + ods_erp_po_order_b</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_purchase_order (
+  detail_uid varchar(50) PRIMARY KEY,
+  -- ========== 单据信息 ==========
+  order_id varchar(20),
+  order_code varchar(40) NOT NULL,
+  order_rowno varchar(20),
+  order_type_id varchar(20),
+  order_type_code varchar(20),
+  -- ========== 维度关联 ==========
+  project_uid varchar(50),
+  wbs_uid varchar(50),
+  material_uid varchar(50),
+  supplier_uid varchar(50),
+  purchase_org_id varchar(20),
+  purchase_dept_id varchar(20),
+  purchaser_id varchar(20),
+  req_dept_id varchar(20),
+  receive_warehouse_uid varchar(50),
+  -- ========== 请购单追溯 ==========
+  praybill_id varchar(20),
+  praybill_code varchar(40),
+  praybill_rowno varchar(20),
+  -- ========== 合同追溯 ==========
+  contract_id varchar(20),
+  contract_code varchar(40),
+  -- ========== 时间信息 ==========
+  order_date date,
+  order_date_id integer,
+  order_month varchar(7),
+  req_date date,
+  plan_arrive_date date,
+  confirm_date date,
+  -- ========== 数量信息 ==========
+  quantity numeric(28,8),
+  assist_quantity numeric(28,8),
+  piece_count numeric(28,8),
+  -- ========== 金额信息 ==========
+  unit_price numeric(28,8),
+  unit_price_no_tax numeric(28,8),
+  amount numeric(28,8),
+  tax_amount numeric(28,8),
+  total_amount numeric(28,8),
+  orig_amount numeric(28,8),
+  orig_tax_amount numeric(28,8),
+  orig_total_amount numeric(28,8),
+  -- ========== 税率信息 ==========
+  tax_rate numeric(28,8),
+  tax_code varchar(20),
+  currency_code varchar(20),
+  -- ========== 累计信息 ==========
+  accum_arrive_qty numeric(28,8),
+  accum_store_qty numeric(28,8),
+  accum_invoice_qty numeric(28,8),
+  accum_invoice_amount numeric(28,8),
+  accum_pay_amount numeric(28,8),
+  -- ========== 关闭状态 ==========
+  is_arrive_close boolean DEFAULT false,
+  is_stock_close boolean DEFAULT false,
+  is_invoice_close boolean DEFAULT false,
+  is_pay_close boolean DEFAULT false,
+  is_final_close boolean DEFAULT false,
+  -- ========== 标志信息 ==========
+  is_largess boolean DEFAULT false,
+  is_direct boolean DEFAULT false,
+  is_frozen boolean DEFAULT false,
+  buy_sell_flag integer,
+  -- ========== 状态信息 ==========
+  order_status integer,
+  supplier_delivery_status integer,
+  -- ========== 描述信息 ==========
+  memo text,
+  frozen_reason varchar(100),
+  -- ========== 来源信息 ==========
+  source_system varchar(20) DEFAULT &#x27;ERP&#x27;,
+  -- ========== 审计字段 ==========
+  erp_creator varchar(20),
+  erp_creationtime timestamp without time zone,
+  erp_modifier varchar(20),
+  erp_modifiedtime timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE dwd_purchase_order IS &#x27;采购明细表（事务事实表）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.detail_uid IS &#x27;明细唯一标识（MD5：订单号+行号）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_id IS &#x27;采购订单表头主键&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_code IS &#x27;订单编号&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_rowno IS &#x27;行号&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_type_id IS &#x27;订单类型&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_type_code IS &#x27;订单类型编码&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.project_uid IS &#x27;项目UID（关联dim_project_master）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.wbs_uid IS &#x27;WBS UID（关联dim_wbs）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.material_uid IS &#x27;物料UID（关联dim_material）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.supplier_uid IS &#x27;供应商UID（关联dim_supplier）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.purchase_org_id IS &#x27;采购组织&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.purchase_dept_id IS &#x27;采购部门&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.purchaser_id IS &#x27;采购员ID&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.req_dept_id IS &#x27;需求部门&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.receive_warehouse_uid IS &#x27;收货仓库UID（关联dim_warehouse）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.praybill_id IS &#x27;请购单表头主键&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.praybill_code IS &#x27;请购单号&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.praybill_rowno IS &#x27;请购单行号&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.contract_id IS &#x27;合同表头主键&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.contract_code IS &#x27;合同号&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_date IS &#x27;订单日期&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_date_id IS &#x27;订单日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_month IS &#x27;订单月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.req_date IS &#x27;需求日期&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.plan_arrive_date IS &#x27;计划到货日期&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.confirm_date IS &#x27;确认日期&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.quantity IS &#x27;订单主数量&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.assist_quantity IS &#x27;订单辅数量&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.piece_count IS &#x27;件数&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.unit_price IS &#x27;主单价&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.unit_price_no_tax IS &#x27;主无税单价&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.amount IS &#x27;本币无税金额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.tax_amount IS &#x27;税额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.total_amount IS &#x27;本币价税合计&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.orig_amount IS &#x27;原币无税金额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.orig_tax_amount IS &#x27;原币税额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.orig_total_amount IS &#x27;原币价税合计&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.tax_rate IS &#x27;税率&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.tax_code IS &#x27;税码&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.currency_code IS &#x27;币种&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.accum_arrive_qty IS &#x27;累计到货数量&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.accum_store_qty IS &#x27;累计入库数量&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.accum_invoice_qty IS &#x27;累计开票数量&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.accum_invoice_amount IS &#x27;累计开票金额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.accum_pay_amount IS &#x27;累计付款金额&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_arrive_close IS &#x27;到货关闭（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_stock_close IS &#x27;入库关闭（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_invoice_close IS &#x27;开票关闭（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_pay_close IS &#x27;付款关闭（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_final_close IS &#x27;最终关闭（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_largess IS &#x27;是否赠品（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_direct IS &#x27;是否直运（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.is_frozen IS &#x27;是否冻结（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.buy_sell_flag IS &#x27;购销类型&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.order_status IS &#x27;订单状态&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.supplier_delivery_status IS &#x27;供应商交货状态&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.memo IS &#x27;备注&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.frozen_reason IS &#x27;冻结原因&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.source_system IS &#x27;来源系统&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.erp_creator IS &#x27;ERP创建人&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.erp_creationtime IS &#x27;ERP创建时间&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.erp_modifier IS &#x27;ERP修改人&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.erp_modifiedtime IS &#x27;ERP修改时间&#x27;;
+COMMENT ON COLUMN dwd_purchase_order.create_time IS &#x27;平台创建时间&#x27;;
+CREATE INDEX idx_order_code ON dwd_purchase_order (order_code);
+CREATE INDEX idx_project ON dwd_purchase_order (project_uid);
+CREATE INDEX idx_material ON dwd_purchase_order (material_uid);
+CREATE INDEX idx_supplier ON dwd_purchase_order (supplier_uid);
+CREATE INDEX idx_order_date ON dwd_purchase_order (order_date_id);
+CREATE INDEX idx_order_month ON dwd_purchase_order (order_month);
+CREATE INDEX idx_praybill ON dwd_purchase_order (praybill_code);
+CREATE INDEX idx_contract ON dwd_purchase_order (contract_code);
+CREATE INDEX idx_status ON dwd_purchase_order (order_status);</code></pre>
+<h3>库存现存量表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 库存现存量表（每日快照，覆盖更新）</code></pre>
+<pre><code>-- 来源：ods_erp_ic_onhanddim + ods_erp_ic_onhandnum</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_inventory_snapshot (
+  snapshot_uid varchar(50) PRIMARY KEY,
+  -- ========== 快照日期 ==========
+  snapshot_date date NOT NULL,
+  snapshot_date_id integer,
+  -- ========== 维度关联 ==========
+  warehouse_uid varchar(50),
+  material_uid varchar(50),
+  project_uid varchar(50),
+  supplier_uid varchar(50),
+  customer_id varchar(20),
+  producer_id varchar(20),
+  -- ========== 库存维度 ==========
+  location_id varchar(20),
+  location_code varchar(50),
+  batch_id varchar(20),
+  batch_code varchar(40),
+  stock_status_id varchar(20),
+  stock_status_name varchar(50),
+  quality_level_id varchar(20),
+  quality_level_name varchar(50),
+  -- ========== 库存组织 ==========
+  stock_org_id varchar(20),
+  stock_org_name varchar(100),
+  -- ========== 批次属性 ==========
+  produced_date date,
+  expire_date date,
+  inbound_date date,
+  vendor_batch_code varchar(50),
+  -- ========== 数量信息 ==========
+  onhand_qty numeric(28,8),
+  onhand_assist_qty numeric(28,8),
+  lock_qty numeric(28,8),
+  lock_assist_qty numeric(28,8),
+  reserve_qty numeric(28,8),
+  reserve_assist_qty numeric(28,8),
+  borrow_in_qty numeric(28,8),
+  borrow_out_qty numeric(28,8),
+  -- ========== 可用量 ==========
+  available_qty numeric(28,8),
+  available_assist_qty numeric(28,8),
+  -- ========== 金额信息 ==========
+  cost_price numeric(28,8),
+  cost_amount numeric(28,8),
+  -- ========== 换算信息 ==========
+  change_rate varchar(60),
+  unit_id varchar(20),
+  assist_unit_id varchar(20),
+  -- ========== 物理属性 ==========
+  gross_weight numeric(28,8),
+  net_weight numeric(28,8),
+  volume numeric(28,8),
+  piece_count numeric(28,8),
+  -- ========== 审计字段 ==========
+  last_update_time timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE dwd_inventory_snapshot IS &#x27;库存现存量表（每日快照）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.snapshot_uid IS &#x27;快照唯一标识（MD5：仓库+物料+批次+货位+项目）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.snapshot_date IS &#x27;快照日期&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.snapshot_date_id IS &#x27;快照日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.warehouse_uid IS &#x27;仓库UID（关联dim_warehouse）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.material_uid IS &#x27;物料UID（关联dim_material）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.project_uid IS &#x27;项目UID（关联dim_project_master）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.supplier_uid IS &#x27;供应商UID（关联dim_supplier）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.customer_id IS &#x27;客户ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.producer_id IS &#x27;生产厂商ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.location_id IS &#x27;货位ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.location_code IS &#x27;货位编码&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.batch_id IS &#x27;批次主键&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.batch_code IS &#x27;批次号&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.stock_status_id IS &#x27;库存状态ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.stock_status_name IS &#x27;库存状态名称&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.quality_level_id IS &#x27;质量等级ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.quality_level_name IS &#x27;质量等级名称&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.stock_org_id IS &#x27;库存组织ID&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.stock_org_name IS &#x27;库存组织名称&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.produced_date IS &#x27;生产日期&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.expire_date IS &#x27;失效日期&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.inbound_date IS &#x27;首次入库日期&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.vendor_batch_code IS &#x27;供应商批次号&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.onhand_qty IS &#x27;结存主数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.onhand_assist_qty IS &#x27;结存辅数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.lock_qty IS &#x27;冻结数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.lock_assist_qty IS &#x27;冻结辅数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.reserve_qty IS &#x27;预留数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.reserve_assist_qty IS &#x27;预留辅数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.borrow_in_qty IS &#x27;借入量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.borrow_out_qty IS &#x27;借出量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.available_qty IS &#x27;可用主数量（结存-冻结-预留）&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.available_assist_qty IS &#x27;可用辅数量&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.cost_price IS &#x27;成本单价&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.cost_amount IS &#x27;成本金额&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.change_rate IS &#x27;换算率&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.unit_id IS &#x27;主单位&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.assist_unit_id IS &#x27;辅单位&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.gross_weight IS &#x27;毛重&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.net_weight IS &#x27;净重&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.volume IS &#x27;体积&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.piece_count IS &#x27;件数&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.last_update_time IS &#x27;ERP最后更新时间&#x27;;
+COMMENT ON COLUMN dwd_inventory_snapshot.create_time IS &#x27;平台创建时间&#x27;;
+CREATE INDEX idx_snapshot_date ON dwd_inventory_snapshot (snapshot_date);
+CREATE INDEX idx_warehouse ON dwd_inventory_snapshot (warehouse_uid);
+CREATE INDEX idx_material ON dwd_inventory_snapshot (material_uid);
+CREATE INDEX idx_project ON dwd_inventory_snapshot (project_uid);
+CREATE INDEX idx_supplier ON dwd_inventory_snapshot (supplier_uid);
+CREATE INDEX idx_batch ON dwd_inventory_snapshot (batch_code);
+CREATE INDEX idx_location ON dwd_inventory_snapshot (location_id);
+CREATE INDEX idx_stock_status ON dwd_inventory_snapshot (stock_status_id);
+CREATE INDEX idx_expire_date ON dwd_inventory_snapshot (expire_date);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>成本明细表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 成本明细表（事务事实表，追加新增）</code></pre>
+<pre><code>-- 来源：ods_erp_ic_purchasein_h + ods_erp_ic_purchasein_b</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_cost_detail (
+  detail_uid varchar(50) PRIMARY KEY,
+  -- ========== 单据信息 ==========
+  receipt_id varchar(20),
+  receipt_code varchar(40) NOT NULL,
+  receipt_rowno varchar(20),
+  receipt_type varchar(20),
+  -- ========== 维度关联 ==========
+  project_uid varchar(50),
+  wbs_uid varchar(50),
+  material_uid varchar(50),
+  supplier_uid varchar(50),
+  warehouse_uid varchar(50),
+  dept_id varchar(50),
+  purchaser_id varchar(50),
+  -- ========== 订单追溯 ==========
+  order_id varchar(20),
+  order_code varchar(40),
+  order_rowno varchar(20),
+  contract_id varchar(20),
+  contract_code varchar(40),
+  -- ========== 时间信息 ==========
+  receipt_date date,
+  receipt_date_id integer,
+  receipt_month varchar(7),
+  inbound_date date,
+  produced_date date,
+  expire_date date,
+  -- ========== 数量信息 ==========
+  quantity numeric(28,8),
+  assist_quantity numeric(28,8),
+  should_quantity numeric(28,8),
+  piece_count numeric(28,8),
+  -- ========== 金额信息（实际成本） ==========
+  cost_price numeric(28,8),
+  cost_amount numeric(28,8),
+  unit_price numeric(28,8),
+  amount numeric(28,8),
+  tax_amount numeric(28,8),
+  total_amount numeric(28,8),
+  orig_amount numeric(28,8),
+  orig_total_amount numeric(28,8),
+  -- ========== 暂估信息 ==========
+  is_estimated boolean DEFAULT false,
+  est_cost_price numeric(28,8),
+  est_cost_amount numeric(28,8),
+  settle_price numeric(28,8),
+  settle_amount numeric(28,8),
+  -- ========== 税率信息 ==========
+  tax_rate numeric(28,8),
+  tax_code varchar(20),
+  currency_code varchar(20),
+  exchange_rate numeric(28,8),
+  -- ========== 批次信息 ==========
+  batch_id varchar(20),
+  batch_code varchar(40),
+  -- ========== 标志信息 ==========
+  is_largess boolean DEFAULT false,
+  is_inbound boolean DEFAULT false,
+  is_checked boolean DEFAULT false,
+  is_settled boolean DEFAULT false,
+  is_to_ap boolean DEFAULT false,
+  is_to_ia boolean DEFAULT false,
+  -- ========== 利润中心 ==========
+  profit_center_id varchar(20),
+  profit_center_name varchar(100),
+  -- ========== 来源信息 ==========
+  source_system varchar(20) DEFAULT &#x27;ERP&#x27;,
+  -- ========== 审计字段 ==========
+  erp_creator varchar(20),
+  erp_creationtime timestamp without time zone,
+  erp_modifier varchar(20),
+  erp_modifiedtime timestamp without time zone,
+  create_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE dwd_cost_detail IS &#x27;成本明细表（事务事实表）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.detail_uid IS &#x27;明细唯一标识（MD5：入库单号+行号）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_id IS &#x27;入库单表头主键&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_code IS &#x27;入库单号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_rowno IS &#x27;行号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_type IS &#x27;入库类型&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.project_uid IS &#x27;项目UID（关联dim_project_master）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.wbs_uid IS &#x27;WBS UID（关联dim_wbs）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.material_uid IS &#x27;物料UID（关联dim_material）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.supplier_uid IS &#x27;供应商UID（关联dim_supplier）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.warehouse_uid IS &#x27;仓库UID（关联dim_warehouse）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.dept_id IS &#x27;部门ID（关联sys_department）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.purchaser_id IS &#x27;采购员ID（关联sys_employee）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.order_id IS &#x27;采购订单表头主键&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.order_code IS &#x27;采购订单号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.order_rowno IS &#x27;订单行号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.contract_id IS &#x27;合同主键&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.contract_code IS &#x27;合同号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_date IS &#x27;入库日期&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_date_id IS &#x27;入库日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.receipt_month IS &#x27;入库月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.inbound_date IS &#x27;首次入库日期&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.produced_date IS &#x27;生产日期&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.expire_date IS &#x27;失效日期&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.quantity IS &#x27;入库主数量&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.assist_quantity IS &#x27;入库辅数量&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.should_quantity IS &#x27;应收主数量&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.piece_count IS &#x27;件数&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.cost_price IS &#x27;成本单价&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.cost_amount IS &#x27;成本金额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.unit_price IS &#x27;采购单价&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.amount IS &#x27;本币无税金额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.tax_amount IS &#x27;税额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.total_amount IS &#x27;本币价税合计&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.orig_amount IS &#x27;原币无税金额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.orig_total_amount IS &#x27;原币价税合计&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_estimated IS &#x27;是否暂估（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.est_cost_price IS &#x27;暂估单价&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.est_cost_amount IS &#x27;暂估金额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.settle_price IS &#x27;结算价格&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.settle_amount IS &#x27;结算金额&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.tax_rate IS &#x27;税率&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.tax_code IS &#x27;税码&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.currency_code IS &#x27;币种&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.exchange_rate IS &#x27;汇率&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.batch_id IS &#x27;批次主键&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.batch_code IS &#x27;批次号&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_largess IS &#x27;是否赠品（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_inbound IS &#x27;是否在途（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_checked IS &#x27;是否待检（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_settled IS &#x27;是否已结算（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_to_ap IS &#x27;是否传应付（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.is_to_ia IS &#x27;是否传成本（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.profit_center_id IS &#x27;利润中心ID&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.profit_center_name IS &#x27;利润中心名称&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.source_system IS &#x27;来源系统&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.erp_creator IS &#x27;ERP创建人&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.erp_creationtime IS &#x27;ERP创建时间&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.erp_modifier IS &#x27;ERP修改人&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.erp_modifiedtime IS &#x27;ERP修改时间&#x27;;
+COMMENT ON COLUMN dwd_cost_detail.create_time IS &#x27;平台创建时间&#x27;;
+CREATE INDEX idx_receipt_code ON dwd_cost_detail (receipt_code);
+CREATE INDEX idx_project ON dwd_cost_detail (project_uid);
+CREATE INDEX idx_material ON dwd_cost_detail (material_uid);
+CREATE INDEX idx_supplier ON dwd_cost_detail (supplier_uid);
+CREATE INDEX idx_warehouse ON dwd_cost_detail (warehouse_uid);
+CREATE INDEX idx_receipt_date ON dwd_cost_detail (receipt_date_id);
+CREATE INDEX idx_receipt_month ON dwd_cost_detail (receipt_month);
+CREATE INDEX idx_order ON dwd_cost_detail (order_code);
+CREATE INDEX idx_contract ON dwd_cost_detail (contract_code);</code></pre>
+<h3>考勤日汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 考勤日汇总表（独立统计，覆盖更新）</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_attendance_daily (
+  detail_uid varchar(50) PRIMARY KEY,
+  -- ========== 维度关联 ==========
+  emp_id varchar(50) NOT NULL,
+  card_no varchar(50),
+  dept_id varchar(50),
+  -- ========== 时间维度 ==========
+  work_date date NOT NULL,
+  work_date_id integer,
+  work_month varchar(7),
+  work_week integer,
+  -- ========== 考勤事实 ==========
+  first_swipe_in timestamp without time zone,
+  last_swipe_out timestamp without time zone,
+  work_minutes integer,
+  work_hours numeric(10,2),
+  swipe_count integer,
+  is_present boolean,
+  late_minutes integer,
+  early_leave_minutes integer,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_emp_date UNIQUE (emp_id, work_date)
+);
+COMMENT ON TABLE dwd_attendance_daily IS &#x27;考勤日汇总表（覆盖更新）&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.detail_uid IS &#x27;MD5(人员+日期)&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.emp_id IS &#x27;人员ID&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.card_no IS &#x27;卡号&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_date IS &#x27;工作日期&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_date_id IS &#x27;日期ID&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_month IS &#x27;工作月份&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_week IS &#x27;工作周数&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.first_swipe_in IS &#x27;首次刷卡进入&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.last_swipe_out IS &#x27;末次刷卡离开&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_minutes IS &#x27;工作时长（分钟）&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.work_hours IS &#x27;工作时长（小时）&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.swipe_count IS &#x27;刷卡次数&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.is_present IS &#x27;是否出勤&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.late_minutes IS &#x27;迟到分钟数&#x27;;
+COMMENT ON COLUMN dwd_attendance_daily.early_leave_minutes IS &#x27;早退分钟数&#x27;;
+CREATE INDEX idx_dept ON dwd_attendance_daily (dept_id);
+CREATE INDEX idx_work_month ON dwd_attendance_daily (work_month);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>专利明细表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 专利明细表（仅存最新状态，覆盖更新）</code></pre>
+<pre><code>-- 来源：ods_rd_patent</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_patent_detail (
+  -- ========== 业务主键 ==========
+  patent_uid varchar(50) PRIMARY KEY,
+  patent_no varchar(100) NOT NULL,
+  -- ========== 维度关联 ==========
+  dept_id varchar(50),
+  -- ========== 枚举关联 ==========
+  patent_type_id integer,
+  current_status_id integer,
+  -- ========== 时间信息 ==========
+  accept_date date,
+  accept_date_id integer,
+  accept_year smallint,
+  accept_month varchar(7),
+  publish_date date,
+  publish_date_id integer,
+  publish_year smallint,
+  grant_date date,
+  grant_date_id integer,
+  grant_year smallint,
+  -- ========== 度量信息 ==========
+  accept_to_publish_days integer,
+  publish_to_grant_days integer,
+  accept_to_grant_days integer,
+  inventor_count integer,
+  -- ========== 描述信息 ==========
+  patent_name varchar(200),
+  inventor_names varchar(500),
+  inventor_ids varchar(500),
+  patent_holder varchar(200),
+  agency varchar(200),
+  -- ========== 来源信息 ==========
+  source_file varchar(200),
+  batch_id varchar(50),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  CONSTRAINT uk_patent_no UNIQUE (patent_no)
+);
+COMMENT ON TABLE dwd_patent_detail IS &#x27;专利明细表（仅存最新状态）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.patent_uid IS &#x27;专利UID（关联dim_patent）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.patent_no IS &#x27;专利号&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.dept_id IS &#x27;所属部门ID（关联sys_department）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.patent_type_id IS &#x27;专利类型（关联dim_enum）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.current_status_id IS &#x27;当前状态（关联dim_enum）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_date IS &#x27;受理日期&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_date_id IS &#x27;受理日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_year IS &#x27;受理年份&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_month IS &#x27;受理月份&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.publish_date IS &#x27;首次公开日期&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.publish_date_id IS &#x27;公开日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.publish_year IS &#x27;公开年份&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.grant_date IS &#x27;授权日期&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.grant_date_id IS &#x27;授权日期ID（关联dim_date）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.grant_year IS &#x27;授权年份&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_to_publish_days IS &#x27;受理到公开天数&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.publish_to_grant_days IS &#x27;公开到授权天数&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.accept_to_grant_days IS &#x27;受理到授权天数&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.inventor_count IS &#x27;发明人数量&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.patent_name IS &#x27;专利名称&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.inventor_names IS &#x27;发明人姓名（原始）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.inventor_ids IS &#x27;发明人ID（关联sys_employee，逗号分隔）&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.patent_holder IS &#x27;专利权人&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.agency IS &#x27;代理公司&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.source_file IS &#x27;来源文件&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.batch_id IS &#x27;导入批次号&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.create_time IS &#x27;首次创建时间&#x27;;
+COMMENT ON COLUMN dwd_patent_detail.update_time IS &#x27;最后更新时间&#x27;;
+CREATE INDEX idx_dept ON dwd_patent_detail (dept_id);
+CREATE INDEX idx_type ON dwd_patent_detail (patent_type_id);
+CREATE INDEX idx_status ON dwd_patent_detail (current_status_id);
+CREATE INDEX idx_accept_date ON dwd_patent_detail (accept_date);
+CREATE INDEX idx_accept_year ON dwd_patent_detail (accept_year);
+CREATE INDEX idx_publish_year ON dwd_patent_detail (publish_year);
+CREATE INDEX idx_grant_year ON dwd_patent_detail (grant_year);
+CREATE INDEX idx_batch ON dwd_patent_detail (batch_id);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<p>财务余额表</p>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 财务余额表（覆盖更新）</code></pre>
+<pre><code>-- 来源：ods_fin_aux_balance + ods_fin_aux_balance_person</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dwd_finance_balance (
+  detail_uid varchar(50) PRIMARY KEY,
+  -- ========== 维度关联 ==========
+  account_code varchar(50) NOT NULL,
+  account_name varchar(100),
+  dept_id varchar(50),
+  dept_name varchar(100),
+  project_uid varchar(50),
+  -- ========== 时间维度 ==========
+  balance_month varchar(7) NOT NULL,
+  balance_year smallint,
+  -- ========== 余额类型 ==========
+  record_type varchar(20) NOT NULL,
+  -- ========== 个人维度信息 ==========
+  emp_id varchar(50),
+  emp_name varchar(50),
+  -- ========== 合同信息 ==========
+  contract_name varchar(200),
+  is_contract_related boolean DEFAULT false,
+  -- ========== 余额信息 ==========
+  balance_amount numeric(28,8),
+  abs_balance_amount numeric(28,8),
+  balance_direction char(1),
+  -- ========== 来源信息 ==========
+  source_file varchar(200),
+  batch_id varchar(50),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE dwd_finance_balance IS &#x27;财务余额表（覆盖更新）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.detail_uid IS &#x27;明细唯一标识（MD5：科目+部门+月份+类型）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.account_code IS &#x27;科目编号&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.account_name IS &#x27;科目名称&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.dept_id IS &#x27;部门ID（关联sys_department）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.dept_name IS &#x27;部门名称&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.project_uid IS &#x27;项目UID（关联dim_project_master，通过合同匹配）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.balance_month IS &#x27;余额月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.balance_year IS &#x27;余额年份&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.record_type IS &#x27;记录类型：DEPT-部门维度/PERSON-个人维度&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.emp_id IS &#x27;人员ID（关联sys_employee，个人维度时使用）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.emp_name IS &#x27;人员姓名&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.contract_name IS &#x27;合同名称&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.is_contract_related IS &#x27;是否合同相关（0-否/1-是）&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.balance_amount IS &#x27;余额（元），正数=借方，负数=贷方&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.abs_balance_amount IS &#x27;余额绝对值&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.balance_direction IS &#x27;余额方向：D-借方/C-贷方&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.source_file IS &#x27;来源文件&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.batch_id IS &#x27;导入批次号&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.create_time IS &#x27;首次创建时间&#x27;;
+COMMENT ON COLUMN dwd_finance_balance.update_time IS &#x27;最后更新时间&#x27;;
+CREATE INDEX idx_account ON dwd_finance_balance (account_code);
+CREATE INDEX idx_dept ON dwd_finance_balance (dept_id);
+CREATE INDEX idx_project ON dwd_finance_balance (project_uid);
+CREATE INDEX idx_balance_month ON dwd_finance_balance (balance_month);
+CREATE INDEX idx_record_type ON dwd_finance_balance (record_type);
+CREATE INDEX idx_emp ON dwd_finance_balance (emp_id);
+CREATE INDEX idx_contract ON dwd_finance_balance (contract_name);
+CREATE INDEX idx_batch ON dwd_finance_balance (batch_id);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>项目域综合服务层（替代旧 dwd_project_full_info）</h3>
+<p>旧版 <code>dwd_project_full_info</code> 作为一张全息宽表混合了承担明细、汇总和应用服务的职责。v4 项目域改为：DWD 保留事实解释，DWS 聚合主题汇总，ADS 输出看板直接消费的 KPI 与二次指标；项目综合健康度由 <code>biz_ads_composite_derived_v2</code> 承担。</p>
+<table>
+<thead><tr><th>ADS 模型</th><th>类型</th><th>说明</th></tr></thead><tbody>
+<tr><td>biz_ads_progress_kpi_v2</td><td>进度原始 KPI</td><td>进度 33 个原始指标，保留分子/分母</td></tr>
+<tr><td>biz_ads_progress_derived_v2</td><td>进度二次指标</td><td>按时完成率、超期率、不正常率、里程碑按时完成率、高风险未完成占比、进度健康度</td></tr>
+<tr><td>biz_ads_quality_kpi_v2</td><td>质量原始 KPI</td><td>质量 15 个原始指标</td></tr>
+<tr><td>biz_ads_quality_derived_v2</td><td>质量二次指标</td><td>归零率、现存问题比率、归零计划提交率、设计类占比、质量健康度</td></tr>
+<tr><td>biz_ads_tech_state_kpi_v2</td><td>技术状态原始 KPI</td><td>技术状态 19 个原始指标</td></tr>
+<tr><td>biz_ads_tech_state_derived_v2</td><td>技术状态二次指标</td><td>变更单签署完成率、整改落实完成率、I 类更改占比、未签署比率、技术状态健康度</td></tr>
+<tr><td>biz_ads_risk_kpi_v2</td><td>风险 KPI</td><td>风险总数、高中低风险、已释放/未释放、释放率</td></tr>
+<tr><td>biz_ads_composite_derived_v2</td><td>综合二次指标</td><td>项目综合健康度、风险预警指数、红黄绿预警级别</td></tr>
+</tbody></table>
+<h2>DWS汇总层季/月/年度汇总表设计</h2>
+<h3>汇总表层级说明</h3>
+<table>
+<thead><tr><th>汇总粒度</th><th>表命名格式</th><th>适用场景</th><th>更新频率</th></tr></thead><tbody>
+<tr><td>月度汇总</td><td>dws_{主题}_monthly</td><td>月度报告、趋势分析</td><td>每月更新</td></tr>
+<tr><td>季度汇总</td><td>dws_{主题}_quarterly</td><td>季度考核、同环比分析</td><td>每季度更新</td></tr>
+<tr><td>年度汇总</td><td>dws_{主题}_yearly</td><td>年度总结、长期趋势</td><td>每年更新</td></tr>
+</tbody></table>
+<p>DWS/ADS 层完整表清单（项目域 v4 + 原 v3 非项目域）</p>
+<table>
+<thead><tr><th>模型</th><th>层</th><th>粒度/类型</th><th>说明</th></tr></thead><tbody>
+<tr><td>biz_dws_progress_monthly_v2</td><td>DWS</td><td>project_no × plan_month</td><td>节点总数、到期数、完成数、未完成数、超期/异常/里程碑/风险节点计数</td></tr>
+<tr><td>biz_dws_quality_monthly_v2</td><td>DWS</td><td>project_no × dept × issue_month</td><td>新增质量问题、未归零、归零完成、未提交计划、原因分类计数</td></tr>
+<tr><td>biz_dws_tech_state_monthly_v2</td><td>DWS</td><td>project_no × dept × submit_month</td><td>更改类别、文件签署、变更单签署、整改落实计数</td></tr>
+<tr><td>biz_dws_risk_monthly_v2</td><td>DWS</td><td>project_no × dept × submit_month</td><td>风险总数、高中低风险、释放/未释放、风险类型计数</td></tr>
+<tr><td>biz_ads_progress_kpi_v2</td><td>ADS</td><td>进度原始 KPI</td><td>进度 33 个原始指标，保留分子/分母</td></tr>
+<tr><td>biz_ads_progress_derived_v2</td><td>ADS</td><td>进度二次指标</td><td>按时完成率、超期率、不正常率、里程碑按时完成率、高风险未完成占比、进度健康度</td></tr>
+<tr><td>biz_ads_quality_kpi_v2</td><td>ADS</td><td>质量原始 KPI</td><td>质量 15 个原始指标</td></tr>
+<tr><td>biz_ads_quality_derived_v2</td><td>ADS</td><td>质量二次指标</td><td>归零率、现存问题比率、归零计划提交率、设计类占比、质量健康度</td></tr>
+<tr><td>biz_ads_tech_state_kpi_v2</td><td>ADS</td><td>技术状态原始 KPI</td><td>技术状态 19 个原始指标</td></tr>
+<tr><td>biz_ads_tech_state_derived_v2</td><td>ADS</td><td>技术状态二次指标</td><td>变更单签署完成率、整改落实完成率、I 类更改占比、未签署比率、技术状态健康度</td></tr>
+<tr><td>biz_ads_risk_kpi_v2</td><td>ADS</td><td>风险 KPI</td><td>风险总数、高中低风险、已释放/未释放、释放率</td></tr>
+<tr><td>biz_ads_composite_derived_v2</td><td>ADS</td><td>综合二次指标</td><td>项目综合健康度、风险预警指数、红黄绿预警级别</td></tr>
+</tbody></table>
+<h3>月度汇总表结构</h3>
+<h3>项目域 v4 月度 DWS/ADS 指标</h3>
+<table>
+<thead><tr><th>DWS 模型</th><th>粒度</th><th>主要指标</th></tr></thead><tbody>
+<tr><td>biz_dws_progress_monthly_v2</td><td>project_no × plan_month</td><td>节点总数、到期数、完成数、未完成数、超期/异常/里程碑/风险节点计数</td></tr>
+<tr><td>biz_dws_quality_monthly_v2</td><td>project_no × dept × issue_month</td><td>新增质量问题、未归零、归零完成、未提交计划、原因分类计数</td></tr>
+<tr><td>biz_dws_tech_state_monthly_v2</td><td>project_no × dept × submit_month</td><td>更改类别、文件签署、变更单签署、整改落实计数</td></tr>
+<tr><td>biz_dws_risk_monthly_v2</td><td>project_no × dept × submit_month</td><td>风险总数、高中低风险、释放/未释放、风险类型计数</td></tr>
+</tbody></table>
+<table>
+<thead><tr><th>ADS 模型</th><th>类型</th><th>指标说明</th></tr></thead><tbody>
+<tr><td>biz_ads_progress_kpi_v2</td><td>进度原始 KPI</td><td>进度 33 个原始指标，保留分子/分母</td></tr>
+<tr><td>biz_ads_progress_derived_v2</td><td>进度二次指标</td><td>按时完成率、超期率、不正常率、里程碑按时完成率、高风险未完成占比、进度健康度</td></tr>
+<tr><td>biz_ads_quality_kpi_v2</td><td>质量原始 KPI</td><td>质量 15 个原始指标</td></tr>
+<tr><td>biz_ads_quality_derived_v2</td><td>质量二次指标</td><td>归零率、现存问题比率、归零计划提交率、设计类占比、质量健康度</td></tr>
+<tr><td>biz_ads_tech_state_kpi_v2</td><td>技术状态原始 KPI</td><td>技术状态 19 个原始指标</td></tr>
+<tr><td>biz_ads_tech_state_derived_v2</td><td>技术状态二次指标</td><td>变更单签署完成率、整改落实完成率、I 类更改占比、未签署比率、技术状态健康度</td></tr>
+<tr><td>biz_ads_risk_kpi_v2</td><td>风险 KPI</td><td>风险总数、高中低风险、已释放/未释放、释放率</td></tr>
+<tr><td>biz_ads_composite_derived_v2</td><td>综合二次指标</td><td>项目综合健康度、风险预警指数、红黄绿预警级别</td></tr>
+</tbody></table>
+<p>v4 项目域的月度指标由 dbt 生成，不再维护旧版 <code>dws_project_monthly</code> 手写宽表。看板应优先读取 ADS 模型；需要项目/部门粒度明细时读取 DWS 模型。</p>
+<pre><code>CREATE TABLE dws_dept_monthly (
+  dept_id varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  dept_type varchar(20),
+  total_emp_count integer,
+  -- ========== 进度指标（作为责任科室） ==========
+  responsible_task_count integer,
+  completed_task_count integer,
+  delayed_task_count integer,
+  task_completion_rate numeric(5,2),
+  task_delay_rate numeric(5,2),
+  -- ========== 协同任务 ==========
+  coordination_task_count integer,
+  -- ========== 监管任务 ==========
+  supervision_task_count integer,
+  -- ========== 跟进措施 ==========
+  followup_total_count integer,
+  followup_closed_count integer,
+  followup_closed_rate numeric(5,2),
+  -- ========== 质量指标 ==========
+  responsible_issue_count integer,
+  new_issue_count integer,
+  closed_issue_count integer,
+  open_issue_count integer,
+  zeroing_rate numeric(5,2),
+  avg_zeroing_days numeric(10,2),
+  -- ========== 风险指标 ==========
+  responsible_risk_count integer,
+  new_risk_count integer,
+  closed_risk_count integer,
+  high_risk_count integer,
+  risk_closed_rate numeric(5,2),
+  -- ========== 考勤指标 ==========
+  avg_attendance_rate numeric(5,2),
+  total_work_hours numeric(12,2),
+  avg_work_hours numeric(10,2),
+  total_late_count integer,
+  total_early_leave integer,
+  -- ========== 专利指标 ==========
+  patent_accept_count integer,
+  patent_grant_count integer,
+  cum_patent_count integer,
+  -- ========== 环比指标 ==========
+  task_completion_mom numeric(5,2),
+  zeroing_rate_mom numeric(5,2),
+  attendance_mom numeric(5,2),
+  -- ========== 综合绩效 ==========
+  performance_score numeric(5,2),
+  performance_rank integer,
+  performance_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_month)
+);
+COMMENT ON TABLE dws_dept_monthly IS &#x27;科室月度综合指标表&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.dept_type IS &#x27;科室类型&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.total_emp_count IS &#x27;科室总人数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.responsible_task_count IS &#x27;负责任务总数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.completed_task_count IS &#x27;完成任务数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.delayed_task_count IS &#x27;延期任务数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.task_completion_rate IS &#x27;任务完成率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.task_delay_rate IS &#x27;任务延期率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.coordination_task_count IS &#x27;协同任务数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.supervision_task_count IS &#x27;监管任务数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.followup_total_count IS &#x27;跟进措施总数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.followup_closed_count IS &#x27;已闭环跟进数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.followup_closed_rate IS &#x27;跟进闭环率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.responsible_issue_count IS &#x27;责任问题总数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.new_issue_count IS &#x27;本月新增问题&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.closed_issue_count IS &#x27;本月归零问题&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.open_issue_count IS &#x27;月末未归零问题&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.zeroing_rate IS &#x27;归零率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.avg_zeroing_days IS &#x27;平均归零天数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.responsible_risk_count IS &#x27;责任风险总数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.new_risk_count IS &#x27;本月新增风险&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.closed_risk_count IS &#x27;本月关闭风险&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.high_risk_count IS &#x27;月末高风险数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.risk_closed_rate IS &#x27;风险闭环率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.avg_attendance_rate IS &#x27;平均出勤率%&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.total_work_hours IS &#x27;总工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.avg_work_hours IS &#x27;人均工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.total_late_count IS &#x27;迟到总人次&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.total_early_leave IS &#x27;早退总人次&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.patent_accept_count IS &#x27;本月受理专利数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.patent_grant_count IS &#x27;本月授权专利数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.cum_patent_count IS &#x27;累计有效专利数&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.task_completion_mom IS &#x27;任务完成率环比&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.zeroing_rate_mom IS &#x27;归零率环比&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.attendance_mom IS &#x27;出勤率环比&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.performance_score IS &#x27;科室绩效评分（0-100）&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.performance_rank IS &#x27;科室绩效排名&#x27;;
+COMMENT ON COLUMN dws_dept_monthly.performance_mom IS &#x27;绩效环比变化&#x27;;
+CREATE INDEX idx_month ON dws_dept_monthly (stat_month);
+CREATE INDEX idx_year ON dws_dept_monthly (stat_year);
+CREATE INDEX idx_score ON dws_dept_monthly (performance_score);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>考勤月度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 考勤月度汇总表</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_attendance_monthly (
+  dept_id varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  -- ========== 出勤统计 ==========
+  total_emp_count integer,
+  actual_emp_count integer,
+  avg_attendance_rate numeric(5,2),
+  full_attendance_count integer,
+  full_attendance_rate numeric(5,2),
+  -- ========== 工时统计 ==========
+  total_work_days integer,
+  total_work_hours numeric(12,2),
+  avg_work_hours numeric(10,2),
+  total_overtime_hours numeric(12,2),
+  avg_overtime_hours numeric(10,2),
+  -- ========== 迟到早退 ==========
+  total_late_count integer,
+  total_early_leave integer,
+  late_rate numeric(5,2),
+  early_leave_rate numeric(5,2),
+  -- ========== 请假统计 ==========
+  leave_person_count integer,
+  leave_days_total numeric(10,2),
+  sick_leave_days numeric(10,2),
+  personal_leave_days numeric(10,2),
+  annual_leave_days numeric(10,2),
+  -- ========== 环比指标 ==========
+  attendance_rate_mom numeric(5,2),
+  work_hours_mom numeric(5,2),
+  late_rate_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_month)
+);
+COMMENT ON TABLE dws_attendance_monthly IS &#x27;考勤月度汇总表&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_emp_count IS &#x27;应出勤人数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.actual_emp_count IS &#x27;实际出勤人数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.avg_attendance_rate IS &#x27;平均出勤率%&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.full_attendance_count IS &#x27;全勤人数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.full_attendance_rate IS &#x27;全勤率%&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_work_days IS &#x27;工作天数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_work_hours IS &#x27;总工作时长&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.avg_work_hours IS &#x27;人均工作时长&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_overtime_hours IS &#x27;加班总时长&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.avg_overtime_hours IS &#x27;人均加班时长&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_late_count IS &#x27;迟到总人次&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.total_early_leave IS &#x27;早退总人次&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.late_rate IS &#x27;迟到率%&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.early_leave_rate IS &#x27;早退率%&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.leave_person_count IS &#x27;请假人数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.leave_days_total IS &#x27;请假总天数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.sick_leave_days IS &#x27;病假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.personal_leave_days IS &#x27;事假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.annual_leave_days IS &#x27;年假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.attendance_rate_mom IS &#x27;出勤率环比变化&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.work_hours_mom IS &#x27;工作时长环比变化%&#x27;;
+COMMENT ON COLUMN dws_attendance_monthly.late_rate_mom IS &#x27;迟到率环比变化&#x27;;
+CREATE INDEX idx_month ON dws_attendance_monthly (stat_month);
+CREATE INDEX idx_year ON dws_attendance_monthly (stat_year);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>库存月度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 库存月度汇总表</code></pre>
+<pre><code>-- 来源：dwd_inventory_snapshot</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_inventory_monthly (
+  warehouse_uid varchar(50) NOT NULL,
+  material_uid varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  warehouse_name varchar(200),
+  material_code varchar(40),
+  material_name varchar(200),
+  material_class varchar(100),
+  -- ========== 期初库存 ==========
+  begin_qty numeric(28,8),
+  begin_amount numeric(28,8),
+  -- ========== 本月入库 ==========
+  month_in_qty numeric(28,8),
+  month_in_amount numeric(28,8),
+  purchase_in_qty numeric(28,8),
+  purchase_in_amount numeric(28,8),
+  other_in_qty numeric(28,8),
+  other_in_amount numeric(28,8),
+  -- ========== 本月出库 ==========
+  month_out_qty numeric(28,8),
+  month_out_amount numeric(28,8),
+  material_out_qty numeric(28,8),
+  material_out_amount numeric(28,8),
+  other_out_qty numeric(28,8),
+  other_out_amount numeric(28,8),
+  -- ========== 期末库存 ==========
+  end_qty numeric(28,8),
+  end_amount numeric(28,8),
+  lock_qty numeric(28,8),
+  available_qty numeric(28,8),
+  -- ========== 库存周转 ==========
+  turnover_qty numeric(28,8),
+  avg_stock_qty numeric(28,8),
+  turnover_rate numeric(10,4),
+  turnover_days numeric(10,2),
+  -- ========== 呆滞分析 ==========
+  slow_moving_qty numeric(28,8),
+  slow_moving_amount numeric(28,8),
+  slow_moving_rate numeric(5,2),
+  -- ========== 环比指标 ==========
+  end_qty_mom numeric(5,2),
+  end_amount_mom numeric(5,2),
+  turnover_rate_mom numeric(10,4),
+  slow_moving_rate_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (warehouse_uid, material_uid, stat_month)
+);
+COMMENT ON TABLE dws_inventory_monthly IS &#x27;库存月度汇总表&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.warehouse_uid IS &#x27;仓库UID&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_uid IS &#x27;物料UID&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.warehouse_name IS &#x27;仓库名称&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_code IS &#x27;物料编码&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_name IS &#x27;物料名称&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_class IS &#x27;物料分类&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.begin_qty IS &#x27;期初数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.begin_amount IS &#x27;期初金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.month_in_qty IS &#x27;本月入库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.month_in_amount IS &#x27;本月入库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.purchase_in_qty IS &#x27;采购入库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.purchase_in_amount IS &#x27;采购入库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.other_in_qty IS &#x27;其他入库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.other_in_amount IS &#x27;其他入库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.month_out_qty IS &#x27;本月出库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.month_out_amount IS &#x27;本月出库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_out_qty IS &#x27;材料出库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.material_out_amount IS &#x27;材料出库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.other_out_qty IS &#x27;其他出库数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.other_out_amount IS &#x27;其他出库金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.end_qty IS &#x27;期末数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.end_amount IS &#x27;期末金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.lock_qty IS &#x27;冻结数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.available_qty IS &#x27;可用数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.turnover_qty IS &#x27;周转数量（出库量）&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.avg_stock_qty IS &#x27;平均库存数量&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.turnover_rate IS &#x27;库存周转率&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.turnover_days IS &#x27;库存周转天数&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.slow_moving_qty IS &#x27;呆滞数量（超过90天未出库）&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.slow_moving_amount IS &#x27;呆滞金额&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.slow_moving_rate IS &#x27;呆滞率%&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.end_qty_mom IS &#x27;期末数量环比变化%&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.end_amount_mom IS &#x27;期末金额环比变化%&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.turnover_rate_mom IS &#x27;周转率环比变化&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.slow_moving_rate_mom IS &#x27;呆滞率环比变化&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_inventory_monthly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_month ON dws_inventory_monthly (stat_month);
+CREATE INDEX idx_warehouse ON dws_inventory_monthly (warehouse_uid);
+CREATE INDEX idx_material ON dws_inventory_monthly (material_uid);
+CREATE INDEX idx_class ON dws_inventory_monthly (material_class);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>采购月度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 采购月度汇总表</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_purchase_monthly (
+  project_uid varchar(50) NOT NULL,
+  supplier_uid varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  project_name varchar(200),
+  supplier_name varchar(200),
+  -- ========== 请购统计 ==========
+  praybill_count integer,
+  praybill_amount numeric(28,8),
+  -- ========== 订单统计 ==========
+  order_count integer,
+  order_amount numeric(28,8),
+  avg_order_amount numeric(28,8),
+  -- ========== 到货统计 ==========
+  arrive_count integer,
+  arrive_amount numeric(28,8),
+  -- ========== 入库统计 ==========
+  receive_count integer,
+  receive_amount numeric(28,8),
+  -- ========== 累计统计 ==========
+  cum_order_amount numeric(28,8),
+  cum_receive_amount numeric(28,8),
+  execution_rate numeric(5,2),
+  -- ========== 交付绩效 ==========
+  on_time_delivery_rate numeric(5,2),
+  avg_delivery_days numeric(10,2),
+  quality_pass_rate numeric(5,2),
+  -- ========== 环比指标 ==========
+  order_amount_mom numeric(5,2),
+  execution_rate_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (project_uid, supplier_uid, stat_month)
+);
+COMMENT ON TABLE dws_purchase_monthly IS &#x27;采购月度汇总表&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.project_uid IS &#x27;项目UID&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.supplier_uid IS &#x27;供应商UID&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.project_name IS &#x27;项目名称&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.supplier_name IS &#x27;供应商名称&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.praybill_count IS &#x27;请购单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.praybill_amount IS &#x27;请购金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.order_count IS &#x27;订单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.order_amount IS &#x27;订单金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.avg_order_amount IS &#x27;平均订单金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.arrive_count IS &#x27;到货单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.arrive_amount IS &#x27;到货金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.receive_count IS &#x27;入库单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.receive_amount IS &#x27;入库金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.cum_order_amount IS &#x27;累计订单金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.cum_receive_amount IS &#x27;累计入库金额&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.execution_rate IS &#x27;采购执行率%&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.on_time_delivery_rate IS &#x27;按时交付率%&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.avg_delivery_days IS &#x27;平均交付周期（天）&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.quality_pass_rate IS &#x27;质检合格率%&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.order_amount_mom IS &#x27;订单金额环比%&#x27;;
+COMMENT ON COLUMN dws_purchase_monthly.execution_rate_mom IS &#x27;执行率环比变化&#x27;;
+CREATE INDEX idx_month ON dws_purchase_monthly (stat_month);
+CREATE INDEX idx_project ON dws_purchase_monthly (project_uid);
+CREATE INDEX idx_supplier ON dws_purchase_monthly (supplier_uid);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>成本月度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 成本月度汇总表</code></pre>
+<pre><code>-- 来源：dwd_cost_detail</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_cost_monthly (
+  project_uid varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  project_name varchar(200),
+  -- ========== 本月成本 ==========
+  month_actual_cost numeric(28,8),
+  month_material_cost numeric(28,8),
+  month_equipment_cost numeric(28,8),
+  month_service_cost numeric(28,8),
+  month_other_cost numeric(28,8),
+  -- ========== 累计成本 ==========
+  cum_actual_cost numeric(28,8),
+  cum_material_cost numeric(28,8),
+  cum_equipment_cost numeric(28,8),
+  cum_service_cost numeric(28,8),
+  -- ========== 预算对比 ==========
+  budget_amount numeric(28,8),
+  budget_consume_rate numeric(5,2),
+  budget_remain numeric(28,8),
+  cost_deviation_rate numeric(5,2),
+  -- ========== 成本结构 ==========
+  material_cost_rate numeric(5,2),
+  equipment_cost_rate numeric(5,2),
+  service_cost_rate numeric(5,2),
+  -- ========== 暂估情况 ==========
+  estimated_amount numeric(28,8),
+  estimated_rate numeric(5,2),
+  settled_amount numeric(28,8),
+  unsettled_amount numeric(28,8),
+  -- ========== 环比指标 ==========
+  cost_mom numeric(5,2),
+  budget_consume_mom numeric(5,2),
+  material_cost_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (project_uid, stat_month)
+);
+COMMENT ON TABLE dws_cost_monthly IS &#x27;成本月度汇总表&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.project_uid IS &#x27;项目UID&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.project_name IS &#x27;项目名称&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.month_actual_cost IS &#x27;本月实际成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.month_material_cost IS &#x27;本月材料成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.month_equipment_cost IS &#x27;本月设备成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.month_service_cost IS &#x27;本月服务成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.month_other_cost IS &#x27;本月其他成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cum_actual_cost IS &#x27;累计实际成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cum_material_cost IS &#x27;累计材料成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cum_equipment_cost IS &#x27;累计设备成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cum_service_cost IS &#x27;累计服务成本&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.budget_amount IS &#x27;预算金额&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.budget_consume_rate IS &#x27;预算消耗率%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.budget_remain IS &#x27;预算剩余&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cost_deviation_rate IS &#x27;成本偏差率%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.material_cost_rate IS &#x27;材料成本占比%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.equipment_cost_rate IS &#x27;设备成本占比%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.service_cost_rate IS &#x27;服务成本占比%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.estimated_amount IS &#x27;暂估金额&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.estimated_rate IS &#x27;暂估率%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.settled_amount IS &#x27;已结算金额&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.unsettled_amount IS &#x27;未结算金额&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.cost_mom IS &#x27;成本环比变化%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.budget_consume_mom IS &#x27;预算消耗率环比变化&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.material_cost_mom IS &#x27;材料成本环比变化%&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_cost_monthly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_month ON dws_cost_monthly (stat_month);
+CREATE INDEX idx_project ON dws_cost_monthly (project_uid);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>财务月度汇总</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 财务月度汇总表</code></pre>
+<pre><code>-- 来源：dwd_finance_balance</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_finance_monthly (
+  account_code varchar(50) NOT NULL,
+  dept_id varchar(50) NOT NULL,
+  stat_month varchar(7) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  account_name varchar(100),
+  dept_name varchar(100),
+  -- ========== 期初余额 ==========
+  begin_balance numeric(28,8),
+  begin_direction char(1),
+  -- ========== 本月发生额 ==========
+  month_debit numeric(28,8),
+  month_credit numeric(28,8),
+  month_net numeric(28,8),
+  -- ========== 期末余额 ==========
+  end_balance numeric(28,8),
+  end_direction char(1),
+  abs_end_balance numeric(28,8),
+  -- ========== 合同相关 ==========
+  contract_balance numeric(28,8),
+  contract_count integer DEFAULT 0,
+  -- ========== 环比指标 ==========
+  end_balance_mom numeric(5,2),
+  month_debit_mom numeric(5,2),
+  month_credit_mom numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (account_code, dept_id, stat_month)
+);
+COMMENT ON TABLE dws_finance_monthly IS &#x27;财务月度汇总表&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.account_code IS &#x27;科目编号&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.dept_id IS &#x27;部门ID&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.stat_month IS &#x27;统计月份（YYYY-MM）&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.account_name IS &#x27;科目名称&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.dept_name IS &#x27;部门名称&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.begin_balance IS &#x27;期初余额&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.begin_direction IS &#x27;期初余额方向（D-借方/C-贷方）&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.month_debit IS &#x27;本月借方发生额&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.month_credit IS &#x27;本月贷方发生额&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.month_net IS &#x27;本月净发生额（借方-贷方）&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.end_balance IS &#x27;期末余额&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.end_direction IS &#x27;期末余额方向（D-借方/C-贷方）&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.abs_end_balance IS &#x27;期末余额绝对值&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.contract_balance IS &#x27;合同相关余额&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.contract_count IS &#x27;涉及合同数量&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.end_balance_mom IS &#x27;期末余额环比变化%&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.month_debit_mom IS &#x27;借方发生额环比变化%&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.month_credit_mom IS &#x27;贷方发生额环比变化%&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_finance_monthly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_month ON dws_finance_monthly (stat_month);
+CREATE INDEX idx_account ON dws_finance_monthly (account_code);
+CREATE INDEX idx_dept ON dws_finance_monthly (dept_id);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>季度汇总表结构</h3>
+<h3>项目季度综合指标表</h3>
+<p>v4 项目域季度指标由月度 ADS 聚合生成，避免重复维护旧版项目季度宽表。以下为 PostgreSQL 视图模板，生产可按物化视图或 dbt table 落地。</p>
+<pre><code>CREATE VIEW biz_ads_project_quarterly_v2 AS
+SELECT
+  period_year,
+  ceil(substring(period_month from 6 for 2)::numeric / 3)::smallint AS period_quarter,
+  format(&#x27;%s-Q%s&#x27;, period_year, ceil(substring(period_month from 6 for 2)::numeric / 3)::int) AS stat_period,
+  avg(pjm_composite_health) AS avg_composite_health,
+  max(pjm_risk_warning_index) AS max_risk_warning_index,
+  sum(CASE WHEN health_warning_level = &#x27;red&#x27; THEN 1 ELSE 0 END) AS red_health_months,
+  sum(CASE WHEN risk_warning_level = &#x27;red&#x27; THEN 1 ELSE 0 END) AS red_risk_months
+FROM biz_ads_composite_derived_v2
+GROUP BY period_year, ceil(substring(period_month from 6 for 2)::numeric / 3)::smallint;</code></pre>
+<h3>科室季度综合指标表</h3>
+<pre><code>-- ==================</code></pre>
+<p>===================================</p>
+<pre><code>-- 科室季度综合指标表</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_dept_quarterly (
+  dept_id varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  stat_period varchar(10) NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  dept_type varchar(20),
+  total_emp_count integer,
+  -- ========== 进度指标 ==========
+  quarter_tasks integer,
+  quarter_completed integer,
+  quarter_delayed integer,
+  quarter_completion_rate numeric(5,2),
+  cum_completion_rate numeric(5,2),
+  -- ========== 进度同比环比 ==========
+  completion_rate_qoq numeric(5,2),
+  completion_rate_yoy numeric(5,2),
+  -- ========== 质量指标 ==========
+  quarter_new_issues integer,
+  quarter_closed_issues integer,
+  quarter_end_open integer,
+  quarter_zeroing_rate numeric(5,2),
+  -- ========== 质量同比环比 ==========
+  zeroing_rate_qoq numeric(5,2),
+  zeroing_rate_yoy numeric(5,2),
+  -- ========== 风险指标 ==========
+  quarter_new_risks integer,
+  quarter_closed_risks integer,
+  quarter_end_high integer,
+  quarter_risk_closed_rate numeric(5,2),
+  -- ========== 考勤指标 ==========
+  quarter_attendance_rate numeric(5,2),
+  quarter_total_hours numeric(12,2),
+  quarter_avg_hours numeric(10,2),
+  quarter_overtime_hours numeric(12,2),
+  -- ========== 考勤同比环比 ==========
+  attendance_rate_qoq numeric(5,2),
+  attendance_rate_yoy numeric(5,2),
+  -- ========== 专利指标 ==========
+  quarter_patent_accept integer,
+  quarter_patent_grant integer,
+  cum_patent_count integer,
+  -- ========== 综合绩效 ==========
+  performance_score numeric(5,2),
+  performance_rank integer,
+  performance_qoq numeric(5,2),
+  performance_yoy numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_year, stat_quarter)
+);
+COMMENT ON TABLE dws_dept_quarterly IS &#x27;科室季度综合指标表&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.stat_quarter IS &#x27;统计季度（1-4）&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.stat_period IS &#x27;统计周期（如2026-Q1）&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.dept_type IS &#x27;科室类型&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.total_emp_count IS &#x27;科室总人数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_tasks IS &#x27;本季度负责任务数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_completed IS &#x27;本季度完成任务数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_delayed IS &#x27;本季度延期任务数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_completion_rate IS &#x27;季度完成率%&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.cum_completion_rate IS &#x27;累计完成率%&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.completion_rate_qoq IS &#x27;完成率环比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.completion_rate_yoy IS &#x27;完成率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_new_issues IS &#x27;本季度新增问题数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_closed_issues IS &#x27;本季度归零问题数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_end_open IS &#x27;季末未归零问题数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_zeroing_rate IS &#x27;季度归零率%&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.zeroing_rate_qoq IS &#x27;归零率环比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.zeroing_rate_yoy IS &#x27;归零率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_new_risks IS &#x27;本季度新增风险数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_closed_risks IS &#x27;本季度关闭风险数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_end_high IS &#x27;季末高风险数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_risk_closed_rate IS &#x27;季度风险闭环率%&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_attendance_rate IS &#x27;季度平均出勤率%&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_total_hours IS &#x27;季度总工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_avg_hours IS &#x27;季度人均工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_overtime_hours IS &#x27;季度加班总时长&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.attendance_rate_qoq IS &#x27;出勤率环比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.attendance_rate_yoy IS &#x27;出勤率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_patent_accept IS &#x27;本季度受理专利数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.quarter_patent_grant IS &#x27;本季度授权专利数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.cum_patent_count IS &#x27;累计有效专利数&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.performance_score IS &#x27;季度绩效评分&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.performance_rank IS &#x27;科室绩效排名&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.performance_qoq IS &#x27;绩效环比变化&#x27;;
+COMMENT ON COLUMN dws_dept_quarterly.performance_yoy IS &#x27;绩效同比变化&#x27;;
+CREATE INDEX idx_period ON dws_dept_quarterly (stat_period);
+CREATE INDEX idx_score ON dws_dept_quarterly (performance_score);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>考勤季度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 考勤季度汇总表</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_attendance_quarterly (
+  dept_id varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  stat_period varchar(10) NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  -- ========== 出勤统计 ==========
+  avg_emp_count numeric(10,2),
+  avg_attendance_rate numeric(5,2),
+  full_attendance_emps integer,
+  full_attendance_rate numeric(5,2),
+  -- ========== 工时统计 ==========
+  total_work_days integer,
+  total_work_hours numeric(12,2),
+  avg_work_hours numeric(10,2),
+  total_overtime_hours numeric(12,2),
+  -- ========== 迟到早退 ==========
+  total_late_count integer,
+  total_early_leave integer,
+  avg_late_rate numeric(5,2),
+  -- ========== 请假统计 ==========
+  total_leave_days numeric(10,2),
+  sick_leave_days numeric(10,2),
+  personal_leave_days numeric(10,2),
+  annual_leave_days numeric(10,2),
+  -- ========== 同比环比 ==========
+  attendance_rate_qoq numeric(5,2),
+  attendance_rate_yoy numeric(5,2),
+  work_hours_qoq numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_year, stat_quarter)
+);
+COMMENT ON TABLE dws_attendance_quarterly IS &#x27;考勤季度汇总表&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.stat_period IS &#x27;统计周期&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.avg_emp_count IS &#x27;季度平均人数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.avg_attendance_rate IS &#x27;季度平均出勤率%&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.full_attendance_emps IS &#x27;季度全勤人数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.full_attendance_rate IS &#x27;全勤率%&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_work_days IS &#x27;季度工作天数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_work_hours IS &#x27;季度总工作时长&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.avg_work_hours IS &#x27;季度人均工作时长&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_overtime_hours IS &#x27;季度加班总时长&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_late_count IS &#x27;季度迟到总人次&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_early_leave IS &#x27;季度早退总人次&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.avg_late_rate IS &#x27;季度平均迟到率%&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.total_leave_days IS &#x27;季度请假总天数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.sick_leave_days IS &#x27;病假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.personal_leave_days IS &#x27;事假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.annual_leave_days IS &#x27;年假天数&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.attendance_rate_qoq IS &#x27;出勤率环比变化&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.attendance_rate_yoy IS &#x27;出勤率同比变化&#x27;;
+COMMENT ON COLUMN dws_attendance_quarterly.work_hours_qoq IS &#x27;工作时长环比变化%&#x27;;
+CREATE INDEX idx_period ON dws_attendance_quarterly (stat_period);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>采购季度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 采购季度汇总表</code></pre>
+<pre><code>-- 来源：dws_purchase_monthly 聚合</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_purchase_quarterly (
+  project_uid varchar(50) NOT NULL,
+  supplier_uid varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  stat_period varchar(10) NOT NULL,
+  -- ========== 基础信息 ==========
+  project_name varchar(200),
+  supplier_name varchar(200),
+  -- ========== 请购统计 ==========
+  quarter_praybill_count integer DEFAULT 0,
+  quarter_praybill_amount numeric(28,8),
+  -- ========== 订单统计 ==========
+  quarter_order_count integer DEFAULT 0,
+  quarter_order_amount numeric(28,8),
+  quarter_order_qty numeric(28,8),
+  -- ========== 入库统计 ==========
+  quarter_receive_count integer DEFAULT 0,
+  quarter_receive_amount numeric(28,8),
+  quarter_receive_qty numeric(28,8),
+  -- ========== 累计统计 ==========
+  cum_order_amount numeric(28,8),
+  cum_receive_amount numeric(28,8),
+  quarter_execution_rate numeric(5,2),
+  cum_execution_rate numeric(5,2),
+  -- ========== 交付绩效 ==========
+  quarter_on_time_rate numeric(5,2),
+  quarter_avg_delivery_days numeric(10,2),
+  -- ========== 同比环比 ==========
+  order_amount_qoq numeric(5,2),
+  order_amount_yoy numeric(5,2),
+  execution_rate_qoq numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (project_uid, supplier_uid, stat_year, stat_quarter)
+);
+COMMENT ON TABLE dws_purchase_quarterly IS &#x27;采购季度汇总表&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.project_uid IS &#x27;项目UID&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.supplier_uid IS &#x27;供应商UID&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.stat_period IS &#x27;统计周期&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.project_name IS &#x27;项目名称&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.supplier_name IS &#x27;供应商名称&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_praybill_count IS &#x27;季度请购单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_praybill_amount IS &#x27;季度请购金额&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_order_count IS &#x27;季度订单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_order_amount IS &#x27;季度订单金额&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_order_qty IS &#x27;季度订单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_receive_count IS &#x27;季度入库单数量&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_receive_amount IS &#x27;季度入库金额&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_receive_qty IS &#x27;季度入库数量&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.cum_order_amount IS &#x27;累计订单金额&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.cum_receive_amount IS &#x27;累计入库金额&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_execution_rate IS &#x27;季度执行率%&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.cum_execution_rate IS &#x27;累计执行率%&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_on_time_rate IS &#x27;季度按时交付率%&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.quarter_avg_delivery_days IS &#x27;季度平均交付周期&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.order_amount_qoq IS &#x27;订单金额环比%&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.order_amount_yoy IS &#x27;订单金额同比%&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.execution_rate_qoq IS &#x27;执行率环比变化&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_purchase_quarterly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_period ON dws_purchase_quarterly (stat_period);
+CREATE INDEX idx_project ON dws_purchase_quarterly (project_uid);
+CREATE INDEX idx_supplier ON dws_purchase_quarterly (supplier_uid);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>成本季度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 成本季度汇总表</code></pre>
+<pre><code>-- 来源：dws_cost_monthly 聚合</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_cost_quarterly (
+  project_uid varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  stat_quarter smallint NOT NULL,
+  stat_period varchar(10) NOT NULL,
+  -- ========== 基础信息 ==========
+  project_name varchar(200),
+  -- ========== 季度成本 ==========
+  quarter_actual_cost numeric(28,8),
+  quarter_material_cost numeric(28,8),
+  quarter_equipment_cost numeric(28,8),
+  quarter_service_cost numeric(28,8),
+  -- ========== 累计成本 ==========
+  cum_actual_cost numeric(28,8),
+  cum_material_cost numeric(28,8),
+  -- ========== 预算对比 ==========
+  budget_amount numeric(28,8),
+  budget_consume_rate numeric(5,2),
+  budget_remain numeric(28,8),
+  cost_deviation_rate numeric(5,2),
+  -- ========== 成本结构 ==========
+  material_cost_rate numeric(5,2),
+  equipment_cost_rate numeric(5,2),
+  -- ========== 同比环比 ==========
+  cost_qoq numeric(5,2),
+  cost_yoy numeric(5,2),
+  budget_consume_qoq numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (project_uid, stat_year, stat_quarter)
+);
+COMMENT ON TABLE dws_cost_quarterly IS &#x27;成本季度汇总表&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.project_uid IS &#x27;项目UID&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.stat_quarter IS &#x27;统计季度&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.stat_period IS &#x27;统计周期&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.project_name IS &#x27;项目名称&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.quarter_actual_cost IS &#x27;季度实际成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.quarter_material_cost IS &#x27;季度材料成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.quarter_equipment_cost IS &#x27;季度设备成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.quarter_service_cost IS &#x27;季度服务成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.cum_actual_cost IS &#x27;累计实际成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.cum_material_cost IS &#x27;累计材料成本&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.budget_amount IS &#x27;预算金额&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.budget_consume_rate IS &#x27;预算消耗率%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.budget_remain IS &#x27;预算剩余&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.cost_deviation_rate IS &#x27;成本偏差率%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.material_cost_rate IS &#x27;材料成本占比%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.equipment_cost_rate IS &#x27;设备成本占比%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.cost_qoq IS &#x27;成本环比变化%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.cost_yoy IS &#x27;成本同比变化%&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.budget_consume_qoq IS &#x27;预算消耗率环比变化&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_cost_quarterly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_period ON dws_cost_quarterly (stat_period);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>年度汇总表结构</h3>
+<h3>项目年度综合指标表</h3>
+<p>v4 项目域年度指标由月度 ADS 聚合生成，年度健康度、风险预警和红黄绿月数从 <code>biz_ads_composite_derived_v2</code> 汇总。</p>
+<pre><code>CREATE VIEW biz_ads_project_yearly_v2 AS
+SELECT
+  period_year,
+  avg(pjm_composite_health) AS avg_composite_health,
+  max(pjm_risk_warning_index) AS max_risk_warning_index,
+  sum(CASE WHEN health_warning_level = &#x27;red&#x27; THEN 1 ELSE 0 END) AS red_health_months,
+  sum(CASE WHEN risk_warning_level = &#x27;red&#x27; THEN 1 ELSE 0 END) AS red_risk_months,
+  count(*) AS month_count
+FROM biz_ads_composite_derived_v2
+GROUP BY period_year;</code></pre>
+<h3>科室年度综合指标表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 科室年度综合指标表</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_dept_yearly (
+  dept_id varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  dept_type varchar(20),
+  avg_emp_count numeric(10,2),
+  year_end_emp_count integer,
+  -- ========== 进度指标 ==========
+  year_tasks integer,
+  year_completed integer,
+  year_delayed integer,
+  year_completion_rate numeric(5,2),
+  -- ========== 进度同比 ==========
+  completion_rate_yoy numeric(5,2),
+  -- ========== 质量指标 ==========
+  year_new_issues integer,
+  year_closed_issues integer,
+  year_end_open integer,
+  year_zeroing_rate numeric(5,2),
+  year_avg_zeroing_days numeric(10,2),
+  -- ========== 质量同比 ==========
+  zeroing_rate_yoy numeric(5,2),
+  -- ========== 风险指标 ==========
+  year_new_risks integer,
+  year_closed_risks integer,
+  year_end_high integer,
+  year_risk_closed_rate numeric(5,2),
+  -- ========== 考勤指标 ==========
+  year_attendance_rate numeric(5,2),
+  year_total_hours numeric(14,2),
+  year_avg_hours numeric(10,2),
+  year_overtime_hours numeric(14,2),
+  -- ========== 考勤同比 ==========
+  attendance_rate_yoy numeric(5,2),
+  -- ========== 专利指标 ==========
+  year_patent_accept integer,
+  year_patent_grant integer,
+  year_end_patent_count integer,
+  -- ========== 专利同比 ==========
+  patent_accept_yoy numeric(5,2),
+  patent_grant_yoy numeric(5,2),
+  -- ========== 成本指标 ==========
+  year_dept_cost numeric(28,8),
+  year_dept_budget numeric(28,8),
+  budget_execution_rate numeric(5,2),
+  -- ========== 综合绩效 ==========
+  year_performance_score numeric(5,2),
+  final_performance_score numeric(5,2),
+  performance_yoy numeric(5,2),
+  year_grade varchar(10),
+  year_rank integer,
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_year)
+);
+COMMENT ON TABLE dws_dept_yearly IS &#x27;科室年度综合指标表&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.dept_id IS &#x27;科室ID&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.dept_name IS &#x27;科室名称&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.dept_type IS &#x27;科室类型&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.avg_emp_count IS &#x27;年度平均人数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_end_emp_count IS &#x27;年末人数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_tasks IS &#x27;年度负责任务数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_completed IS &#x27;年度完成任务数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_delayed IS &#x27;年度延期任务数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_completion_rate IS &#x27;年度完成率%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.completion_rate_yoy IS &#x27;完成率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_new_issues IS &#x27;年度新增问题数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_closed_issues IS &#x27;年度归零问题数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_end_open IS &#x27;年末未归零问题数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_zeroing_rate IS &#x27;年度归零率%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_avg_zeroing_days IS &#x27;年度平均归零天数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.zeroing_rate_yoy IS &#x27;归零率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_new_risks IS &#x27;年度新增风险数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_closed_risks IS &#x27;年度关闭风险数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_end_high IS &#x27;年末高风险数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_risk_closed_rate IS &#x27;年度风险闭环率%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_attendance_rate IS &#x27;年度平均出勤率%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_total_hours IS &#x27;年度总工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_avg_hours IS &#x27;年度人均工作时长&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_overtime_hours IS &#x27;年度加班总时长&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.attendance_rate_yoy IS &#x27;出勤率同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_patent_accept IS &#x27;年度受理专利数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_patent_grant IS &#x27;年度授权专利数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_end_patent_count IS &#x27;年末有效专利数&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.patent_accept_yoy IS &#x27;专利受理同比变化%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.patent_grant_yoy IS &#x27;专利授权同比变化%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_dept_cost IS &#x27;年度科室成本&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_dept_budget IS &#x27;年度科室预算&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.budget_execution_rate IS &#x27;预算执行率%&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_performance_score IS &#x27;年度平均绩效评分&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.final_performance_score IS &#x27;年末绩效评分&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.performance_yoy IS &#x27;绩效同比变化&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_grade IS &#x27;年度评级（A/B/C/D）&#x27;;
+COMMENT ON COLUMN dws_dept_yearly.year_rank IS &#x27;年度科室排名&#x27;;
+CREATE INDEX idx_year ON dws_dept_yearly (stat_year);
+CREATE INDEX idx_grade ON dws_dept_yearly (year_grade);
+CREATE INDEX idx_score ON dws_dept_yearly (year_performance_score);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>专利年度汇总表</h3>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>-- 专利年度汇总表</code></pre>
+<pre><code>-- 来源：dwd_patent_detail</code></pre>
+<pre><code>-- =====================================================</code></pre>
+<pre><code>CREATE TABLE dws_patent_yearly (
+  dept_id varchar(50) NOT NULL,
+  stat_year smallint NOT NULL,
+  patent_type_id integer NOT NULL,
+  -- ========== 基础信息 ==========
+  dept_name varchar(100),
+  patent_type_name varchar(50),
+  -- ========== 当年统计 ==========
+  accept_count integer DEFAULT 0,
+  publish_count integer DEFAULT 0,
+  grant_count integer DEFAULT 0,
+  -- ========== 累计统计 ==========
+  cumulative_accept integer DEFAULT 0,
+  cumulative_grant integer DEFAULT 0,
+  year_end_valid_count integer DEFAULT 0,
+  -- ========== 同比指标 ==========
+  accept_count_yoy numeric(5,2),
+  grant_count_yoy numeric(5,2),
+  valid_count_yoy numeric(5,2),
+  -- ========== 占比指标 ==========
+  accept_rate_in_dept numeric(5,2),
+  grant_rate_in_dept numeric(5,2),
+  -- ========== 审计字段 ==========
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now(),
+  PRIMARY KEY (dept_id, stat_year, patent_type_id)
+);
+COMMENT ON TABLE dws_patent_yearly IS &#x27;专利年度汇总表&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.dept_id IS &#x27;部门ID&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.stat_year IS &#x27;统计年份&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.patent_type_id IS &#x27;专利类型ID（关联dim_enum）&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.dept_name IS &#x27;部门名称&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.patent_type_name IS &#x27;专利类型名称&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.accept_count IS &#x27;当年受理数量&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.publish_count IS &#x27;当年公开数量&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.grant_count IS &#x27;当年授权数量&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.cumulative_accept IS &#x27;累计受理数量&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.cumulative_grant IS &#x27;累计授权数量&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.year_end_valid_count IS &#x27;年末有效专利数&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.accept_count_yoy IS &#x27;受理数量同比变化%&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.grant_count_yoy IS &#x27;授权数量同比变化%&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.valid_count_yoy IS &#x27;有效数量同比变化%&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.accept_rate_in_dept IS &#x27;受理数占部门总数比例%&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.grant_rate_in_dept IS &#x27;授权数占部门总数比例%&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.create_time IS &#x27;创建时间&#x27;;
+COMMENT ON COLUMN dws_patent_yearly.update_time IS &#x27;更新时间&#x27;;
+CREATE INDEX idx_year ON dws_patent_yearly (stat_year);
+CREATE INDEX idx_type ON dws_patent_yearly (patent_type_id);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<h3>汇总表更新策略</h3>
+<table>
+<thead><tr><th>汇总表类型</th><th>更新方式</th><th>更新时机</th><th>数据来源</th></tr></thead><tbody>
+<tr><td>月度汇总</td><td>覆盖更新</td><td>每月初计算上月数据</td><td>DWD 明细表</td></tr>
+<tr><td>季度汇总</td><td>覆盖更新</td><td>每季初计算上季数据</td><td>月度汇总表</td></tr>
+<tr><td>年度汇总</td><td>覆盖更新</td><td>每年初计算上年数据</td><td>季度汇总表</td></tr>
+</tbody></table>
+<h3>汇总表完整清单</h3>
+<table>
+<thead><tr><th>序号</th><th>表名</th><th>粒度</th><th>更新策略</th></tr></thead><tbody>
+<tr><td>项目域 v4 月度</td><td></td><td></td><td></td></tr>
+<tr><td>1</td><td>biz_dws_progress_monthly_v2</td><td>project_no + 月份</td><td>覆盖更新/重算</td></tr>
+<tr><td>2</td><td>biz_dws_quality_monthly_v2</td><td>project_no + dept + 月份</td><td>覆盖更新/重算</td></tr>
+<tr><td>3</td><td>biz_dws_tech_state_monthly_v2</td><td>project_no + dept + 月份</td><td>覆盖更新/重算</td></tr>
+<tr><td>4</td><td>biz_dws_risk_monthly_v2</td><td>project_no + dept + 月份</td><td>覆盖更新/重算</td></tr>
+<tr><td>原 v3 非项目月度汇总</td><td></td><td></td><td></td></tr>
+<tr><td>5</td><td>dws_dept_monthly</td><td>科室 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>6</td><td>dws_attendance_monthly</td><td>科室 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>7</td><td>dws_inventory_monthly</td><td>仓库 + 物料 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>8</td><td>dws_purchase_monthly</td><td>项目 + 供应商 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>9</td><td>dws_cost_monthly</td><td>项目 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>10</td><td>dws_finance_monthly</td><td>科目 + 部门 + 月份</td><td>覆盖更新</td></tr>
+<tr><td>项目域 v4 ADS</td><td></td><td></td><td></td></tr>
+<tr><td>11-18</td><td>biz_ads_*_v2</td><td>月份</td><td>覆盖更新/重算</td></tr>
+<tr><td>原 v3 非项目季度/年度汇总</td><td></td><td></td><td></td></tr>
+<tr><td>19</td><td>dws_dept_quarterly</td><td>科室 + 季度</td><td>覆盖更新</td></tr>
+<tr><td>20</td><td>dws_attendance_quarterly</td><td>科室 + 季度</td><td>覆盖更新</td></tr>
+<tr><td>21</td><td>dws_purchase_quarterly</td><td>项目 + 供应商 + 季度</td><td>覆盖更新</td></tr>
+<tr><td>22</td><td>dws_cost_quarterly</td><td>项目 + 季度</td><td>覆盖更新</td></tr>
+<tr><td>23</td><td>dws_dept_yearly</td><td>科室 + 年份</td><td>覆盖更新</td></tr>
+<tr><td>24</td><td>dws_patent_yearly</td><td>部门 + 年份</td><td>覆盖更新</td></tr>
+</tbody></table>
+<p>DWS层合计：15张表</p>
+<h2>离线与 ERP 数据映射</h2>
+<h3>项目名称映射表(1张)</h3>
+<pre><code>CREATE TABLE map_project_name (
+  map_id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+  project_uid varchar(50) NOT NULL,
+  pmo_project_name varchar(200) NOT NULL,
+  erp_pk_project varchar(20),
+  erp_project_code varchar(40),
+  erp_project_name varchar(200),
+  match_method varchar(20),
+  match_confidence numeric(3,2),
+  is_current boolean DEFAULT true,
+  create_time timestamp without time zone DEFAULT now(),
+  update_time timestamp without time zone DEFAULT now()
+);
+COMMENT ON TABLE map_project_name IS &#x27;项目名称映射表&#x27;;
+COMMENT ON COLUMN map_project_name.match_method IS &#x27;EXACT/FUZZY/MANUAL&#x27;;
+CREATE INDEX idx_project_uid ON map_project_name (project_uid);
+CREATE INDEX idx_confidence ON map_project_name (match_confidence);
+-- update_time 字段在 PostgreSQL 中建议通过 BEFORE UPDATE trigger 统一维护。</code></pre>
+<p>自动匹配规则</p>
+<table>
+<thead><tr><th>规则</th><th>匹配方式</th><th>置信度</th><th>说明</th></tr></thead><tbody>
+<tr><td>规则 1</td><td>精确匹配</td><td>1.0</td><td>PMO 名称 = ERP 名称</td></tr>
+<tr><td>规则 2</td><td>简称匹配</td><td>0.9</td><td>PMO 名称 = ERP 简称</td></tr>
+<tr><td>规则 3</td><td>包含匹配</td><td>0.7</td><td>ERP 名称包含 PMO 名称</td></tr>
+</tbody></table>
+<h2>数据治理方案</h2>
+<h3>数据质量规则</h3>
+<table>
+<thead><tr><th>规则类型</th><th>规则名称</th><th>规则描述</th><th>适用表</th><th>阈值</th></tr></thead><tbody>
+<tr><td>完整性</td><td>项目映射完整率</td><td>PMO 与 ERP 映射比例</td><td>map_project_name</td><td>≥95%</td></tr>
+<tr><td>完整性</td><td>人员匹配率</td><td>离线人员与平台匹配比例</td><td>所有 DWD 表</td><td>≥90%</td></tr>
+<tr><td>完整性</td><td>科室匹配率</td><td>离线科室与平台匹配比例</td><td>所有 DWD 表</td><td>≥95%</td></tr>
+<tr><td>准确性</td><td>枚举值校验</td><td>枚举字段是否在 dim_enum 中</td><td>所有 DWD 表</td><td>100%</td></tr>
+<tr><td>唯一性</td><td>业务主键唯一</td><td>task_id/issue_id 等是否唯一</td><td>DWD 明细表</td><td>100%</td></tr>
+<tr><td>及时性</td><td>月度数据更新</td><td>每月数据是否按时导入</td><td>ODS 离线表</td><td>每月</td></tr>
+</tbody></table>
+<h3>数据更新策略汇总</h3>
+<table>
+<thead><tr><th>数据域</th><th>更新方式</th><th>业务主键</th><th>历史保留</th></tr></thead><tbody>
+<tr><td>进度</td><td>覆盖更新/重算</td><td>node_id / source_row_id</td><td>ODS/STG 保留，DWD/ADS 可重算</td></tr>
+<tr><td>质量</td><td>覆盖更新/重算</td><td>issue_id / source_row_id</td><td>ODS/STG 保留，DWD/ADS 可重算</td></tr>
+<tr><td>风险</td><td>覆盖更新/重算</td><td>risk_id / source_row_id</td><td>ODS/STG 保留，DWD/ADS 可重算</td></tr>
+<tr><td>技术变更</td><td>覆盖更新/重算</td><td>tech_state_id / source_row_id</td><td>ODS/STG 保留，DWD/ADS 可重算</td></tr>
+<tr><td>采购订单</td><td>追加新增</td><td>单据号</td><td>全量保留</td></tr>
+<tr><td>库存现存量</td><td>每日覆盖</td><td>物料 + 仓库</td><td>每日快照</td></tr>
+<tr><td>考勤日汇总</td><td>覆盖更新</td><td>人员 + 日期</td><td>DWD 不保留</td></tr>
+<tr><td>专利</td><td>覆盖更新</td><td>专利号</td><td>DIM/DWD 同步更新</td></tr>
+<tr><td>财务余额</td><td>覆盖更新</td><td>科目 + 部门 + 月份</td><td>DWD 不保留</td></tr>
+</tbody></table>
+<h3>数据生命周期管理</h3>
+<table>
+<thead><tr><th>数据层级</th><th>保留周期</th><th>归档策略</th><th>说明</th></tr></thead><tbody>
+<tr><td>ODS 层</td><td>3 年</td><td>每年归档至冷存储</td><td>保留原始数据</td></tr>
+<tr><td>STG 层</td><td>随 ODS 可重建</td><td>不单独归档</td><td>view 结构化层，保留行级来源血缘</td></tr>
+<tr><td>DWD 明细层</td><td>永久</td><td>不归档</td><td>仅最新状态</td></tr>
+<tr><td>DWS 汇总层</td><td>永久</td><td>不归档</td><td>月度汇总</td></tr>
+<tr><td>DIM 维度层</td><td>永久</td><td>不归档</td><td>主数据</td></tr>
+</tbody></table>
+<h2>总结</h2>
+<h3>核心设计要点</h3>
+<table>
+<thead><tr><th>要点</th><th>说明</th></tr></thead><tbody>
+<tr><td>保留 v3 总体设计</td><td>核心原则、总体架构和数据标准体系沿用 v3，并按 PostgreSQL 语法优化。</td></tr>
+<tr><td>项目域 v4 化</td><td>项目 ODS/STG/DWD/DWS/ADS 以 pjm dbt 模型为准，旧项目手写明细表不再作为口径来源。</td></tr>
+<tr><td>非项目域沿用 v3</td><td>ERP、采购、库存、成本、考勤、专利、财务等非项目章节沿用 v3 设计，仅转换 PostgreSQL DDL 表达。</td></tr>
+<tr><td>ODS 保留历史</td><td>ODS 层保留所有导入记录，STG/DWD/ADS 可按批次重算。</td></tr>
+<tr><td>PostgreSQL 标准化</td><td>注释、索引、自增、布尔、时间字段统一采用 PostgreSQL 语法。</td></tr>
+</tbody></table>
+<h3>完整表清单统计</h3>
+<table>
+<thead><tr><th>层级</th><th>表数量</th><th>更新策略</th></tr></thead><tbody>
+<tr><td>ODS</td><td>45 张（ERP/非项目沿用 v3，项目域 9 张）</td><td>追加 / 覆盖</td></tr>
+<tr><td>STG</td><td>项目域 v4 4 个 view</td><td>随 ODS/DWD 重算</td></tr>
+<tr><td>DIM</td><td>10 张原 v3 维表 + 项目域 dbt canonical/alias 维表</td><td>覆盖更新 / dbt 重算</td></tr>
+<tr><td>DWD</td><td>项目域 v4 dbt 模型 + 原 v3 非项目事实表</td><td>覆盖更新 / 追加 / 重算</td></tr>
+<tr><td>DWS</td><td>项目域 v4 月度 DWS + 原 v3 非项目汇总</td><td>覆盖更新 / 重算</td></tr>
+<tr><td>ADS</td><td>项目域 v4 KPI/Derived 模型</td><td>覆盖更新 / 重算</td></tr>
+<tr><td>映射表</td><td>1 张</td><td>覆盖更新</td></tr>
+</tbody></table></body></html>

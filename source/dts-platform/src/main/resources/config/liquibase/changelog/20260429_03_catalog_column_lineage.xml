@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260429-10-catalog-column-lineage-table" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="catalog_column_lineage"/>
+            </not>
+        </preConditions>
+        <createTable tableName="catalog_column_lineage">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="dataset_lineage_id" type="${uuidType}"/>
+            <column name="upstream_dataset_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="downstream_dataset_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="upstream_column_id" type="${uuidType}"/>
+            <column name="downstream_column_id" type="${uuidType}"/>
+            <column name="upstream_column" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="downstream_column" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="relation_type" type="varchar(32)"/>
+            <column name="lineage_type" type="varchar(32)"/>
+            <column name="expression" type="text"/>
+            <column name="confidence" type="varchar(32)"/>
+            <column name="project_name" type="varchar(128)"/>
+            <column name="lineage_job_id" type="${uuidType}"/>
+            <column name="last_observed_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_column_lineage"
+            columnNames="upstream_dataset_id,downstream_dataset_id,upstream_column,downstream_column,relation_type"
+            constraintName="uk_catalog_column_lineage_pair"/>
+        <createIndex tableName="catalog_column_lineage" indexName="idx_catalog_column_lineage_dataset_lineage">
+            <column name="dataset_lineage_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_column_lineage" indexName="idx_catalog_column_lineage_downstream">
+            <column name="downstream_dataset_id"/>
+            <column name="relation_type"/>
+        </createIndex>
+        <createIndex tableName="catalog_column_lineage" indexName="idx_catalog_column_lineage_columns">
+            <column name="upstream_column"/>
+            <column name="downstream_column"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

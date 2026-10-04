@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260726-06-classification-migration-control" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            create table catalog_classification_migration_run (
+                id uuid primary key,
+                idempotency_key varchar(128) not null unique,
+                mode varchar(32) not null,
+                status varchar(32) not null,
+                batch_size int not null,
+                cursor_position bigint not null default 0,
+                total_items bigint not null default 0,
+                eligible_items bigint not null default 0,
+                blocked_items bigint not null default 0,
+                applied_items bigint not null default 0,
+                mismatch_items bigint not null default 0,
+                report_checksum varchar(64),
+                requested_by varchar(128) not null,
+                started_at timestamp not null,
+                completed_at timestamp,
+                paused_at timestamp,
+                last_error varchar(2048),
+                record_version bigint not null default 0,
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint ck_classification_migration_status check (
+                    status in (
+                        'DRY_RUN_RUNNING','DRY_RUN_COMPLETE','APPLY_RUNNING','PAUSED',
+                        'APPLY_COMPLETE','RECONCILIATION_FAILED','FAILED'
+                    )
+                )
+            );
+
+            create table catalog_classification_migration_item (
+                id uuid primary key,
+                run_id uuid not null references catalog_classification_migration_run(id),
+                sequence_no bigint not null,
+                source_table varchar(128) not null,
+                source_id varchar(128) not null,
+                subject_type varchar(32) not null,
+                subject_key varchar(512) not null,
+                asset_type varchar(32),
+                legacy_level varchar(32),
+                detected_level varchar(32),
+                existing_effective_level varchar(32),
+                computed_effective_level varchar(32),
+                decision varchar(32) not null,
+                decision_reason varchar(1024),
+                item_checksum varchar(64) not null,
+                apply_status varchar(32) not null default 'PENDING',
+                applied_snapshot_id uuid,
+                applied_snapshot_version bigint,
+                applied_at timestamp,
+                error_message varchar(2048),
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp,
+                constraint uk_classification_migration_item_source unique (run_id, source_table, source_id),
+                constraint uk_classification_migration_item_sequence unique (run_id, sequence_no),
+                constraint ck_classification_migration_decision check (
+                    decision in ('CREATE','RAISE','UNCHANGED','BLOCKED_MISSING','BLOCKED_DOWNGRADE','BLOCKED_INVALID')
+                ),
+                constraint ck_classification_migration_apply_status check (
+                    apply_status in ('PENDING','SKIPPED','APPLIED','FAILED')
+                )
+            );
+            create index idx_classification_migration_item_batch
+                on catalog_classification_migration_item(run_id, apply_status, sequence_no);
+            create index idx_classification_migration_item_subject
+                on catalog_classification_migration_item(subject_type, subject_key);
+
+            create table catalog_classification_legacy_write_freeze (
+                source_table varchar(128) primary key,
+                enabled boolean not null default false,
+                reconciliation_run_id uuid references catalog_classification_migration_run(id),
+                frozen_by varchar(128),
+                frozen_at timestamp,
+                reason varchar(1024),
+                created_by varchar(50) not null,
+                created_date timestamp not null,
+                last_modified_by varchar(50),
+                last_modified_date timestamp
+            );
+
+            insert into catalog_classification_legacy_write_freeze (
+                source_table, enabled, created_by, created_date
+            ) values
+                ('catalog_dataset', false, 'system', current_timestamp),
+                ('catalog_table_schema', false, 'system', current_timestamp),
+                ('svc_api', false, 'system', current_timestamp),
+                ('svc_data_product', false, 'system', current_timestamp),
+                ('catalog_data_product', false, 'system', current_timestamp),
+                ('bi_report_link', false, 'system', current_timestamp),
+                ('infra_external_exchange_file', false, 'system', current_timestamp)
+            on conflict (source_table) do nothing;
+
+            create or replace function prevent_legacy_classification_downgrade()
+            returns trigger language plpgsql as $$
+            declare
+                freeze_enabled boolean;
+            begin
+                select enabled into freeze_enabled
+                  from catalog_classification_legacy_write_freeze
+                 where source_table=tg_table_name;
+                if coalesce(freeze_enabled, false) and
+                   catalog_classification_level_rank(new.classification) <
+                   catalog_classification_level_rank(old.classification) then
+                    raise exception 'legacy classification downgrade is frozen for %', tg_table_name
+                        using errcode='23514';
+                end if;
+                if coalesce(freeze_enabled, false) and old.classification is not null and new.classification is null then
+                    raise exception 'legacy classification cannot be cleared for %', tg_table_name
+                        using errcode='23514';
+                end if;
+                return new;
+            end;
+            $$;
+
+            create trigger trg_catalog_dataset_classification_freeze
+                before update of classification on catalog_dataset
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_catalog_table_schema_classification_freeze
+                before update of classification on catalog_table_schema
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_svc_api_classification_freeze
+                before update of classification on svc_api
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_svc_data_product_classification_freeze
+                before update of classification on svc_data_product
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_catalog_data_product_classification_freeze
+                before update of classification on catalog_data_product
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_bi_report_link_classification_freeze
+                before update of classification on bi_report_link
+                for each row execute function prevent_legacy_classification_downgrade();
+            create trigger trg_infra_external_exchange_file_classification_freeze
+                before update of classification on infra_external_exchange_file
+                for each row execute function prevent_legacy_classification_downgrade();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                drop trigger if exists trg_infra_external_exchange_file_classification_freeze on infra_external_exchange_file;
+                drop trigger if exists trg_bi_report_link_classification_freeze on bi_report_link;
+                drop trigger if exists trg_catalog_data_product_classification_freeze on catalog_data_product;
+                drop trigger if exists trg_svc_data_product_classification_freeze on svc_data_product;
+                drop trigger if exists trg_svc_api_classification_freeze on svc_api;
+                drop trigger if exists trg_catalog_table_schema_classification_freeze on catalog_table_schema;
+                drop trigger if exists trg_catalog_dataset_classification_freeze on catalog_dataset;
+                drop function if exists prevent_legacy_classification_downgrade();
+                drop table if exists catalog_classification_legacy_write_freeze;
+                drop table if exists catalog_classification_migration_item;
+                drop table if exists catalog_classification_migration_run;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

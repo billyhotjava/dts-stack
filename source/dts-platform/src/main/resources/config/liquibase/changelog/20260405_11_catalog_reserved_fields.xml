@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.9.xsd">
+
+  <changeSet id="20260405_11_1" author="system">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_dataset" columnName="row_security_policy"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_dataset">
+      <column name="row_security_policy" type="varchar(500)">
+        <constraints nullable="true"/>
+      </column>
+      <column name="sla_refresh_cron" type="varchar(100)">
+        <constraints nullable="true"/>
+      </column>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260405_11_2" author="system">
+    <preConditions onFail="MARK_RAN">
+      <not>
+        <columnExists tableName="catalog_dataset_lineage" columnName="source_column"/>
+      </not>
+    </preConditions>
+    <addColumn tableName="catalog_dataset_lineage">
+      <column name="source_column" type="varchar(255)">
+        <constraints nullable="true"/>
+      </column>
+      <column name="target_column" type="varchar(255)">
+        <constraints nullable="true"/>
+      </column>
+    </addColumn>
+  </changeSet>
+
+</databaseChangeLog>

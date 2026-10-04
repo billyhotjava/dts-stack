@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0024-add-global-variables-to-screen" author="dts">
+        <addColumn tableName="analytics_screen">
+            <column name="variables_json" type="text" defaultValue="[]"/>
+        </addColumn>
+
+        <addColumn tableName="analytics_screen_version">
+            <column name="variables_json" type="text" defaultValue="[]"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

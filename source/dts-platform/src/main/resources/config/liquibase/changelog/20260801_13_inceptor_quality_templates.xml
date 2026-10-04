@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801_13_inceptor_quality_templates" author="platform">
+        <comment>Converge exposed built-in quality templates on the default-lake Inceptor/Hive dialect</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            UPDATE gov_quality_template
+               SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''字段不能为空'' AS fail_reason FROM {{table}} WHERE {{column}} IS NULL OR TRIM(CAST({{column}} AS STRING)) = ''''',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'NOT_NULL' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''值不在允许范围内'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS STRING)) != '''' AND {{column}} NOT IN ({{allowed_values:csv}})',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'ENUM_CHECK' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''日期格式不符合要求'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS STRING)) != '''' AND NOT (CAST({{column}} AS STRING) RLIKE ''{{pattern}}'')',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'DATE_FORMAT' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''数值超出范围 [{{min}}, {{max}}]'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT BETWEEN {{min}} AND {{max}}',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'NUMERIC_RANGE' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET param_schema = '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true}]'::jsonb,
+                   sql_template = 'SELECT t.id, ''{{column}}'' AS fail_column, t.{{column}} AS actual_value, ''存在重复值'' AS fail_reason FROM {{table}} t INNER JOIN (SELECT {{column}} FROM {{table}} GROUP BY {{column}} HAVING COUNT(*) > 1) dup ON t.{{column}} = dup.{{column}}',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'UNIQUE_CHECK' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''不匹配正则: {{pattern}}'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS STRING)) != '''' AND NOT (CAST({{column}} AS STRING) RLIKE ''{{pattern}}'')',
+                   dialect = 'INCEPTOR', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code = 'REGEX_MATCH' AND builtin = TRUE;
+
+            UPDATE gov_quality_template
+               SET enabled = FALSE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+             WHERE code IN ('AGGREGATE_THRESHOLD', 'CROSS_COLUMN', 'CROSS_TABLE_REF', 'CUSTOM_SQL') AND builtin = TRUE;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                UPDATE gov_quality_template
+                   SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''字段不能为空'' AS fail_reason FROM {{table}} WHERE {{column}} IS NULL OR TRIM(CAST({{column}} AS text)) = ''''',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'NOT_NULL' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''值不在允许范围内'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND {{column}} NOT IN ({{allowed_values:csv}})',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'ENUM_CHECK' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''日期格式不符合要求'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND CAST({{column}} AS text) !~ ''{{pattern}}''',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'DATE_FORMAT' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''数值超出范围 [{{min}}, {{max}}]'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND (CAST({{column}} AS text) !~ ''^-?[0-9]+(\.[0-9]+)?$'' OR CAST({{column}} AS numeric) NOT BETWEEN {{min}} AND {{max}})',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'NUMERIC_RANGE' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET param_schema = '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"columns","label":"检查列(逗号分隔)","type":"text","required":true}]'::jsonb,
+                       sql_template = 'SELECT t.id, ''{{columns}}'' AS fail_column, {{columns}} AS actual_value, ''存在重复值'' AS fail_reason FROM {{table}} t INNER JOIN (SELECT {{columns}} FROM {{table}} GROUP BY {{columns}} HAVING COUNT(*) > 1) dup ON t.{{columns}} = dup.{{columns}}',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'UNIQUE_CHECK' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET sql_template = 'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''不匹配正则: {{pattern}}'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND CAST({{column}} AS text) !~ ''{{pattern}}''',
+                       dialect = 'POSTGRESQL', enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code = 'REGEX_MATCH' AND builtin = TRUE;
+
+                UPDATE gov_quality_template
+                   SET enabled = TRUE, last_modified_by = 'system', last_modified_date = CURRENT_TIMESTAMP
+                 WHERE code IN ('AGGREGATE_THRESHOLD', 'CROSS_COLUMN', 'CROSS_TABLE_REF', 'CUSTOM_SQL') AND builtin = TRUE;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

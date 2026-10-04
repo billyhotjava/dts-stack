@@ -1,0 +1,277 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260714-01_modeling_vnext" author="codex">
+        <createTable tableName="modeling_business_object">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner" type="varchar(128)"/>
+            <column name="code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="text"/>
+            <column name="object_kind" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="process_id" type="varchar(128)"/>
+            <column name="business_key" type="text"/>
+            <column name="grain_statement" type="text"/>
+            <column name="source_refs" type="text"/>
+            <column name="implementation_mode" type="varchar(32)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_business_object" columnNames="tenant_id, code" constraintName="uk_modeling_business_object_tenant_code"/>
+        <createIndex tableName="modeling_business_object" indexName="idx_modeling_business_object_process">
+            <column name="tenant_id"/>
+            <column name="process_id"/>
+        </createIndex>
+
+        <createTable tableName="modeling_warehouse_plan">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="owner" type="varchar(128)"/>
+            <column name="domain_id" type="${uuidType}"/>
+            <column name="process_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="layer" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="modeling_mode" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_grain" type="text"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_warehouse_plan" columnNames="tenant_id, process_id, layer" constraintName="uk_modeling_warehouse_plan_process_layer"/>
+        <createIndex tableName="modeling_warehouse_plan" indexName="idx_modeling_warehouse_plan_process">
+            <column name="tenant_id"/>
+            <column name="process_id"/>
+        </createIndex>
+
+        <createTable tableName="modeling_model_spec">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="object_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}"/>
+            <column name="process_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="layer" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="implementation_mode" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="grain_statement" type="text"/>
+            <column name="dimensions" type="text"/>
+            <column name="metrics" type="text"/>
+            <column name="materialization" type="varchar(32)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_project_key" type="varchar(128)"/>
+            <column name="dbt_unique_id" type="varchar(256)"/>
+            <column name="legacy_ref" type="varchar(256)"/>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_model_spec" baseColumnNames="object_id" constraintName="fk_modeling_model_spec_object" referencedTableName="modeling_business_object" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="modeling_model_spec" baseColumnNames="plan_id" constraintName="fk_modeling_model_spec_plan" referencedTableName="modeling_warehouse_plan" referencedColumnNames="id"/>
+        <createIndex tableName="modeling_model_spec" indexName="idx_modeling_model_spec_object">
+            <column name="tenant_id"/>
+            <column name="object_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_model_spec" indexName="idx_modeling_model_spec_process">
+            <column name="tenant_id"/>
+            <column name="process_id"/>
+        </createIndex>
+
+        <createTable tableName="modeling_model_spec_revision">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="spec_json" type="text">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="content_checksum" type="varchar(128)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_model_spec_revision" baseColumnNames="model_spec_id" constraintName="fk_modeling_model_spec_revision_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_model_spec_revision" columnNames="model_spec_id, revision" constraintName="uk_modeling_model_spec_revision"/>
+
+        <createTable tableName="modeling_standard_binding">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="field_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="standard_element_id" type="varchar(256)"/>
+            <column name="reference_code" type="varchar(256)"/>
+            <column name="security_level" type="varchar(64)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_standard_binding" baseColumnNames="model_spec_id" constraintName="fk_modeling_standard_binding_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_standard_binding" columnNames="model_spec_id, field_name" constraintName="uk_modeling_standard_binding_field"/>
+
+        <createTable tableName="modeling_dbt_artifact">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}"/>
+            <column name="project_key" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_unique_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="path" type="text"/>
+            <column name="content_checksum" type="varchar(128)"/>
+            <column name="content" type="text"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="revision" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_dbt_artifact" baseColumnNames="model_spec_id" constraintName="fk_modeling_dbt_artifact_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_dbt_artifact" columnNames="project_key, dbt_unique_id" constraintName="uk_modeling_dbt_artifact_project_unique"/>
+
+        <createTable tableName="modeling_pipeline_run">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="idempotency_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_batch_id" type="varchar(256)"/>
+            <column name="addax_task_id" type="varchar(256)"/>
+            <column name="airflow_dag_id" type="varchar(256)"/>
+            <column name="airflow_run_id" type="varchar(256)"/>
+            <column name="dbt_run_id" type="varchar(256)"/>
+            <column name="dbt_selector" type="text"/>
+            <column name="target" type="varchar(128)"/>
+            <column name="started_date" type="timestamp"/>
+            <column name="finished_date" type="timestamp"/>
+            <column name="message" type="text"/>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_pipeline_run" baseColumnNames="model_spec_id" constraintName="fk_modeling_pipeline_run_spec" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_pipeline_run" columnNames="model_spec_id, idempotency_key" constraintName="uk_modeling_pipeline_run_idempotency"/>
+        <createIndex tableName="modeling_pipeline_run" indexName="idx_modeling_pipeline_run_tenant_status">
+            <column name="tenant_id"/>
+            <column name="status"/>
+        </createIndex>
+
+        <createTable tableName="modeling_lineage_edge">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="to_model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="edge_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="modeling_lineage_edge" baseColumnNames="from_model_spec_id" constraintName="fk_modeling_lineage_edge_from" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addForeignKeyConstraint baseTableName="modeling_lineage_edge" baseColumnNames="to_model_spec_id" constraintName="fk_modeling_lineage_edge_to" referencedTableName="modeling_model_spec" referencedColumnNames="id"/>
+        <addUniqueConstraint tableName="modeling_lineage_edge" columnNames="from_model_spec_id, to_model_spec_id, edge_type" constraintName="uk_modeling_lineage_edge"/>
+
+        <rollback>
+            <dropTable tableName="modeling_lineage_edge" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_pipeline_run" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_dbt_artifact" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_standard_binding" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_model_spec_revision" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_model_spec" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_warehouse_plan" cascadeConstraints="true"/>
+            <dropTable tableName="modeling_business_object" cascadeConstraints="true"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

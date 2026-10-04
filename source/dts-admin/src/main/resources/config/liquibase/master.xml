@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <property name="now" value="current_timestamp" dbms="postgresql"/>
+    <property name="floatType" value="float4" dbms="postgresql"/>
+    <property name="clobType" value="clob" dbms="postgresql"/>
+    <property name="blobType" value="blob" dbms="postgresql"/>
+    <property name="uuidType" value="uuid" dbms="postgresql"/>
+    <property name="datetimeType" value="datetime" dbms="postgresql"/>
+    <property name="timeType" value="time(6)" dbms="postgresql"/>
+
+    <include file="config/liquibase/changelog/00000000000000_initial_schema.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20250928-01_admin_orgs_change_requests.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20250930-01_user_approvals_and_snapshots.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251005-01_portal_menu_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251020-01_portal_menu_security_level.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251021-01_audit_resource_dictionary.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-01_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251021-02_audit_operation_mapping_enhance.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251108-01_portal_menu_deleted_fix.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251112-01_portal_menu_deleted_repair.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251112-02_portal_menu_metadata_text.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251115-01_change_request_enhancements.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251120-01_data_level_options.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251120-03_data_level_options_confidential.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251002-01_portal_menu_visibility.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251012-01_portal_menu_bind_all_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251002-02_admin_custom_role_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251210-01_portal_menu_visibility_role_user_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251201-01_org_keycloak_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-02_audit_operation_mapping_seed.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_governance.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-02_refactor_hardcoded_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-03_refactor_admin_roles_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-04_refactor_login_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-05_add_platform_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251103-01_audit_operation_mapping_source_system_fix.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251104-01_update_modeling_standard_download_operation.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-04_audit_operation_mapping_patch.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251220-05_audit_operation_mapping_patch2.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-01_drop_user_data_levels.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-02_remove_portal_viewer_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-03_refine_catalog_explore_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251230-06_admin_keycloak_user_mdm_enabled.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-01_audit_operation_mapping_platform_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-02_portal_menu_workbench_first.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260105-03_remove_visualization_workbench_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-01_audit_operation_mapping_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-02_organization_node_restore.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251015-03_remove_visualization_foundation_menus.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251224-01_portal_menu_reports.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251224-02_portal_menu_visualization_reports_seed.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251229-01_remove_portal_ops_security_menus.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251230-04_remove_portal_role_admin.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251230-05_portal_menu_visualization_analytics_seed.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-02_infra_data_source.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-03_infra_data_source_audit_columns.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20251016-04_infra_data_source_secrets.xml" relativeToChangelogFile="false"/>
+	    <include file="config/liquibase/changelog/20260321-01_infra_data_source_default.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260323-01_default_data_lake_fallback.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260329-01_seed_default_biadmin_datalake.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-06_add_infra_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-07_add_audit_log_detail_rule.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-08_delete_all_secure_views.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251015-09_clean_secure_view_row_filters.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251017-01_remove_security_view_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251017-04_audit_operation_mapping_source_system.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251017-02_extend_audit_operation_mapping.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251018-06_audit_operation_mapping_backfill.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251018-07_add_dataset_grant_audit_rule.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251024_01_admin_sessions_table.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260112-01_audit_dataset_preview_template.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260113-01_remove_portal_data_dev_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260115-01_audit_resource_dictionary_user_api_alias.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260115-02_remove_portal_subject_domains_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260115-03_remove_catalog_subject_domains_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-01_portal_menu_disable_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260117-02_portal_menu_workbench_home.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260117-03_portal_menu_workbench_home_order.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260222-02_remove_infra_datasource_audit_rules.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260117-04_remove_deprecated_portal_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-02_audit_operation_mapping_change_request_types.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260305-01_audit_operation_mapping_source_system_backfill.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260305-02_organization_root_flag.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260310-01_audit_operation_group_slug_fix.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260319-01_audit_entry_schema.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260320-01_remove_portal_visualization_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260320-02_remove_portal_visualization_menu_hard_delete.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20261030-01_roles_local_storage.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251116-01_personnel_master_tables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20251117-01_org_mdm_fields.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260116-01_workflow_config_tables.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-03_ops_config_enhancements.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-04_ops_config_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260129-01_ops_config_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260127-06_force_all_editable.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260210-01_employee_menu_scope_cleanup.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260212-01_admin_user_search_perf.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260222-03_ops_config_runtime_metadata.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260316_01_user_search_perf_indexes.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260418-01_person_import_record_keycloak_id.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260419-01_person_import_record_keycloak_id_unique.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260623-01_person_import_record_keycloak_id_non_unique.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260430-01_audit_entry_extra_indexes.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260430-02_audit_url_pattern_rename.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260430-03_audit_entry_verb_reclassify.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260519-01_portal_menu_seed_no_default_roles.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260523-01_audit_action_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260725-01_catalog_tag_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260525-01_portal_menu_data_screen_root.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260617-01_remove_workbench_data_management_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260630-01_remove_metric_modeling_subjects_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260630-02_golden_line_portal_menu_reparent.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260630-03_remove_metric_modeling_runs_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260709-01_dataworks_portal_menu_reparent.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260716-01_advanced_modeling_menu_label.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260712-01_modeling_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260712-02_business_process_menu_route.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260717-01_generic_modeling_workbench_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260719-01_sprint67_modeling_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260720-01_sprint67_measurement_unit_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260730-01_sprint79_modeling_workspace_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-01_sprint79_modeling_menu_restore.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-02_sprint80_prototype_modeling_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03_sprint80_modeling_menu_review.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03a_data_integration_access_menu_audit_width_prelude.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03b_data_integration_access_menu_snapshot_width_prelude.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-03c_data_integration_resource_root_bootstrap.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-04_data_integration_access_menu_convergence.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-01_data_integration_access_menu_convergence_hardening.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-02_connection_profiles_and_access_defaults_visibility.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-03_quality_governance_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260801-04_quality_failing_row_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260731-05_audit_ingest_idempotency.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260808_01_data_asset_menu_title.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260809_01_retire_asset_ledger_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260809-02_data_architecture_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260810-01_data_architecture_navigation_expand.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260810-02_retire_legacy_modeling_layer_groups.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260810-03_converge_warehouse_planning_menu.xml" relativeToChangelogFile="false"/>
+    <!-- Forward prerequisite for fresh databases; keep the historical 20260810-04 changeSet immutable. -->
+    <include file="config/liquibase/changelog/20260901_01_portal_workbench_root_bootstrap.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260810-04_portal_primary_menu_order.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260811-01_retire_legacy_modeling_strategy_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260817-01_sprint93_modeling_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260819-01_sprint94_analysis_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260820-01_sprint96_data_portal_menu.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260822_01_quality_workflow_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260829_01_retire_task_orchestration_menu.xml" relativeToChangelogFile="false"/>
+    <!-- Forward prerequisite for fresh databases; keep the historical 20260830-01 changeSet immutable. -->
+    <include file="config/liquibase/changelog/20260901_02_consumption_bi_hierarchy_bootstrap.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260830-01_separate_screen_management_and_data_portal.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260830-02_data_portal_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260903_01_model_spec_lifecycle_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <!-- jhipster-needle-liquibase-add-changelog - JHipster will add liquibase changelogs here -->
+    <!-- jhipster-needle-liquibase-add-constraints-changelog - JHipster will add liquibase constraints changelogs here -->
+    <!-- jhipster-needle-liquibase-add-incremental-changelog - JHipster will add incremental liquibase changelogs here -->
+    <include file="config/liquibase/changelog/20260910_01_indicator_analysis_audit_catalog.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260912_01_modeling_permission_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260914-01_person_import_history_constraints.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260916_01_screen_management_root.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260916_02_admin_keycloak_user_dept.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_01_portal_menu_implementation_order_bootstrap.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260916_03_portal_menu_implementation_order.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260918_01_admin_keycloak_user_person_code.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260920_01_admin_keycloak_user_person_code_unique.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260921_01_business_process_update_audit.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_02_admin_keycloak_user_source_lifecycle.xml" relativeToChangelogFile="false"/>
+    <include file="config/liquibase/changelog/20260922_03_admin_role_stable_key.xml" relativeToChangelogFile="false"/>
+</databaseChangeLog>

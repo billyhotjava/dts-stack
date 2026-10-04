@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-07-plan-operational-run" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_plan_execution_binding"/>
+            <tableExists tableName="modeling_pipeline_run"/>
+            <not>
+                <tableExists tableName="modeling_operational_run_dispatch"/>
+            </not>
+        </preConditions>
+        <comment>
+            Sprint-76 F7: keep modeling_pipeline_run as the only business run ledger, bind
+            OPERATIONAL_RUN rows to the published plan scope, and add a durable Airflow outbox.
+        </comment>
+
+        <addColumn tableName="modeling_plan_execution_binding">
+            <column name="effective_schedule" type="varchar(128)"/>
+            <column name="effective_timezone" type="varchar(64)"/>
+            <column name="airflow_paused" type="boolean"/>
+            <column name="last_airflow_observed_at" type="${datetimeType}"/>
+            <column name="next_run_at" type="${datetimeType}"/>
+        </addColumn>
+
+        <addColumn tableName="modeling_pipeline_run">
+            <column name="execution_binding_id" type="${uuidType}"/>
+            <column name="binding_version" type="int"/>
+            <column name="trigger_type" type="varchar(16)"/>
+            <column name="logical_date" type="${datetimeType}"/>
+            <column name="scope_checksum" type="varchar(64)"/>
+            <column name="operational_active_claim_key" type="varchar(64)"/>
+        </addColumn>
+
+        <addColumn tableName="modeling_physical_relation_observation">
+            <column name="run_purpose" type="varchar(32)" defaultValue="RELEASE_BUILD">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_binding_id" type="${uuidType}"/>
+            <column name="binding_version" type="int"/>
+        </addColumn>
+        <dropNotNullConstraint
+            tableName="modeling_physical_relation_observation"
+            columnName="release_candidate_id"
+            columnDataType="${uuidType}"/>
+        <dropNotNullConstraint
+            tableName="modeling_physical_relation_observation"
+            columnName="release_candidate_version"
+            columnDataType="int"/>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_pipeline_run"
+            baseColumnNames="execution_binding_id"
+            constraintName="fk_pipeline_run_execution_binding"
+            referencedTableName="modeling_plan_execution_binding"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_physical_relation_observation"
+            baseColumnNames="execution_binding_id"
+            constraintName="fk_relation_observation_execution_binding"
+            referencedTableName="modeling_plan_execution_binding"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <createTable tableName="modeling_operational_run_dispatch">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" primaryKeyName="pk_modeling_operational_run_dispatch" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="binding_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="binding_version" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_type" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="logical_date" type="${datetimeType}"/>
+            <column name="execution_target_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="airflow_dag_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="airflow_run_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scope_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="project_bundle_checksum" type="varchar(64)"/>
+            <column name="runtime_token_digest" type="varchar(71)"/>
+            <column name="runtime_token_expires_at" type="${datetimeType}"/>
+            <column name="profile_lease_id" type="${uuidType}"/>
+            <column name="runtime_consumed_at" type="${datetimeType}"/>
+            <column name="status" type="varchar(24)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dispatch_attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="claimed_at" type="${datetimeType}"/>
+            <column name="next_attempt_at" type="${datetimeType}"/>
+            <column name="last_error_code" type="varchar(128)"/>
+            <column name="created_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_operational_run_dispatch"
+            baseColumnNames="binding_id"
+            constraintName="fk_operational_dispatch_binding"
+            referencedTableName="modeling_plan_execution_binding"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_operational_run_dispatch"
+            baseColumnNames="profile_lease_id"
+            constraintName="fk_operational_dispatch_profile_lease"
+            referencedTableName="modeling_dbt_runtime_profile_lease"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_plan_execution_binding
+                DROP CONSTRAINT ck_model_plan_execution_binding_payload;
+            UPDATE modeling_plan_execution_binding
+               SET deployment_status = CASE
+                       WHEN deployed_checksum = desired_deployment_checksum
+                       THEN 'ACTIVE'
+                       ELSE 'STALE'
+                   END
+             WHERE deployment_status = 'DEPLOYED';
+            ALTER TABLE modeling_plan_execution_binding
+                ADD CONSTRAINT ck_model_plan_execution_binding_payload
+                CHECK (
+                    version > 0
+                    AND (
+                        (
+                            schedule_mode = 'MANUAL_ONLY'
+                            AND cron_expression IS NULL
+                            AND timezone IS NULL
+                        )
+                        OR (
+                            schedule_mode = 'CRON_ENABLED'
+                            AND nullif(btrim(cron_expression), '') IS NOT NULL
+                            AND nullif(btrim(timezone), '') IS NOT NULL
+                        )
+                    )
+                    AND desired_scope_checksum ~ '^[0-9a-f]{64}$'
+                    AND desired_deployment_checksum ~ '^[0-9a-f]{64}$'
+                    AND deployment_status IN (
+                        'DEPLOYING', 'ACTIVE', 'STALE', 'DISABLED',
+                        'FAILED', 'UNKNOWN'
+                    )
+                    AND (
+                        deployed_checksum IS NULL
+                        OR deployed_checksum ~ '^[0-9a-f]{64}$'
+                    )
+                );
+
+            ALTER TABLE modeling_pipeline_run
+                DROP CONSTRAINT ck_modeling_pipeline_run_candidate_build;
+            ALTER TABLE modeling_pipeline_run
+                ADD CONSTRAINT ck_modeling_pipeline_run_candidate_build
+                CHECK (
+                    (
+                        release_candidate_id IS NULL
+                        AND release_candidate_entry_id IS NULL
+                        AND release_candidate_version IS NULL
+                        AND pipeline_run_group_id IS NULL
+                        AND implementation_revision IS NULL
+                        AND implementation_checksum IS NULL
+                        AND environment IS NULL
+                        AND run_purpose IS NULL
+                        AND attempt IS NULL
+                        AND artifact_bundle_checksum IS NULL
+                        AND (
+                            scoped_bundle_checksum IS NULL
+                            OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                        AND dbt_invocation_id IS NULL
+                        AND execution_binding_id IS NULL
+                        AND binding_version IS NULL
+                        AND trigger_type IS NULL
+                        AND logical_date IS NULL
+                        AND scope_checksum IS NULL
+                        AND operational_active_claim_key IS NULL
+                    )
+                    OR (
+                        release_candidate_id IS NOT NULL
+                        AND release_candidate_entry_id IS NOT NULL
+                        AND release_candidate_version > 0
+                        AND pipeline_run_group_id IS NOT NULL
+                        AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND btrim(environment) <> ''
+                        AND environment = btrim(environment)
+                        AND run_purpose = 'RELEASE_BUILD'
+                        AND attempt > 0
+                        AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND (
+                            scoped_bundle_checksum IS NULL
+                            OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                        AND dbt_invocation_id IS NOT NULL
+                        AND btrim(airflow_dag_id) <> ''
+                        AND btrim(airflow_run_id) <> ''
+                        AND btrim(dbt_selector) <> ''
+                        AND btrim(target) <> ''
+                        AND execution_binding_id IS NULL
+                        AND binding_version IS NULL
+                        AND trigger_type IS NULL
+                        AND logical_date IS NULL
+                        AND scope_checksum IS NULL
+                        AND operational_active_claim_key IS NULL
+                    )
+                    OR (
+                        release_candidate_id IS NULL
+                        AND release_candidate_entry_id IS NULL
+                        AND release_candidate_version IS NULL
+                        AND pipeline_run_group_id IS NOT NULL
+                        AND implementation_revision > 0
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND btrim(environment) <> ''
+                        AND environment = btrim(environment)
+                        AND run_purpose = 'OPERATIONAL_RUN'
+                        AND attempt > 0
+                        AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND (
+                            scoped_bundle_checksum IS NULL
+                            OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                        AND dbt_invocation_id IS NOT NULL
+                        AND btrim(airflow_dag_id) <> ''
+                        AND btrim(airflow_run_id) <> ''
+                        AND btrim(dbt_selector) <> ''
+                        AND btrim(target) <> ''
+                        AND execution_binding_id IS NOT NULL
+                        AND binding_version > 0
+                        AND trigger_type IN ('MANUAL', 'CRON')
+                        AND (
+                            (trigger_type = 'MANUAL' AND logical_date IS NULL)
+                            OR (trigger_type = 'CRON' AND logical_date IS NOT NULL)
+                        )
+                        AND scope_checksum ~ '^[0-9a-f]{64}$'
+                        AND (
+                            operational_active_claim_key IS NULL
+                            OR operational_active_claim_key ~ '^[0-9a-f]{64}$'
+                        )
+                    )
+                );
+
+            CREATE UNIQUE INDEX uk_pipeline_run_operational_active_claim
+                ON modeling_pipeline_run (operational_active_claim_key)
+                WHERE operational_active_claim_key IS NOT NULL;
+
+            CREATE UNIQUE INDEX uk_pipeline_run_binding_dag_model
+                ON modeling_pipeline_run (
+                    tenant_id, execution_binding_id, airflow_run_id, model_spec_id
+                )
+                WHERE run_purpose = 'OPERATIONAL_RUN';
+
+            CREATE INDEX idx_pipeline_run_binding_history
+                ON modeling_pipeline_run (
+                    tenant_id, execution_binding_id, created_date DESC
+                )
+                WHERE run_purpose = 'OPERATIONAL_RUN';
+
+            ALTER TABLE modeling_physical_relation_observation
+                DROP CONSTRAINT ck_physical_relation_observation;
+            ALTER TABLE modeling_physical_relation_observation
+                ADD CONSTRAINT ck_physical_relation_observation
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND (
+                        (
+                            run_purpose = 'RELEASE_BUILD'
+                            AND release_candidate_id IS NOT NULL
+                            AND release_candidate_version > 0
+                            AND execution_binding_id IS NULL
+                            AND binding_version IS NULL
+                        )
+                        OR (
+                            run_purpose = 'OPERATIONAL_RUN'
+                            AND release_candidate_id IS NULL
+                            AND release_candidate_version IS NULL
+                            AND execution_binding_id IS NOT NULL
+                            AND binding_version > 0
+                        )
+                    )
+                    AND model_revision > 0
+                    AND implementation_revision > 0
+                    AND observation_attempt > 0
+                    AND model_checksum ~ '^[0-9a-f]{64}$'
+                    AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                    AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                    AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
+                    AND adapter = 'postgres'
+                    AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                    AND expected_type IN (
+                        'TABLE', 'VIEW', 'MATERIALIZED_VIEW'
+                    )
+                    AND column_count >= 0
+                    AND (
+                        (
+                            relation_exists
+                            AND actual_type IN (
+                                'TABLE', 'VIEW', 'MATERIALIZED_VIEW'
+                            )
+                            AND columns_checksum ~ '^[0-9a-f]{64}$'
+                            AND actual_columns IS NOT NULL
+                            AND metadata_checksum ~ '^[0-9a-f]{64}$'
+                            AND column_count > 0
+                        )
+                        OR (
+                            NOT relation_exists
+                            AND actual_type IS NULL
+                            AND columns_checksum IS NULL
+                            AND actual_columns IS NULL
+                            AND metadata_checksum IS NULL
+                            AND column_count = 0
+                        )
+                    )
+                    AND (
+                        (
+                            verified
+                            AND relation_exists
+                            AND error_code IS NULL
+                        )
+                        OR (
+                            NOT verified
+                            AND nullif(btrim(error_code), '') IS NOT NULL
+                        )
+                    )
+                );
+
+            ALTER TABLE modeling_operational_run_dispatch
+                ADD CONSTRAINT ck_modeling_operational_run_dispatch
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND binding_version > 0
+                    AND trigger_type IN ('MANUAL', 'CRON')
+                    AND (
+                        (trigger_type = 'MANUAL' AND logical_date IS NULL)
+                        OR (trigger_type = 'CRON' AND logical_date IS NOT NULL)
+                    )
+                    AND btrim(execution_target_key) <> ''
+                    AND btrim(target_name) <> ''
+                    AND btrim(airflow_dag_id) <> ''
+                    AND btrim(airflow_run_id) <> ''
+                    AND scope_checksum ~ '^[0-9a-f]{64}$'
+                    AND (
+                        project_bundle_checksum IS NULL
+                        OR project_bundle_checksum ~ '^[0-9a-f]{64}$'
+                    )
+                    AND (
+                        (
+                            runtime_token_digest IS NULL
+                            AND runtime_token_expires_at IS NULL
+                        )
+                        OR (
+                            runtime_token_digest ~ '^sha256:[0-9a-f]{64}$'
+                            AND runtime_token_expires_at IS NOT NULL
+                        )
+                    )
+                    AND status IN (
+                        'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN',
+                        'COMPLETED', 'FAILED', 'BLOCKED'
+                    )
+                    AND dispatch_attempts >= 0
+                    AND (
+                        (profile_lease_id IS NULL AND runtime_consumed_at IS NULL)
+                        OR (profile_lease_id IS NOT NULL AND runtime_consumed_at IS NOT NULL)
+                    )
+                );
+
+            CREATE UNIQUE INDEX uk_operational_dispatch_binding_dag_run
+                ON modeling_operational_run_dispatch (
+                    tenant_id, binding_id, airflow_run_id
+                );
+
+            CREATE UNIQUE INDEX uk_operational_dispatch_runtime_token
+                ON modeling_operational_run_dispatch (runtime_token_digest)
+                WHERE runtime_token_digest IS NOT NULL;
+
+            CREATE INDEX idx_operational_dispatch_ready
+                ON modeling_operational_run_dispatch (
+                    status, next_attempt_at, created_at, id
+                )
+                WHERE status IN (
+                    'PENDING', 'CLAIMED', 'SUBMITTED', 'UNKNOWN'
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_pipeline_run
+                         WHERE run_purpose = 'OPERATIONAL_RUN'
+                    ) OR EXISTS (
+                        SELECT 1 FROM modeling_operational_run_dispatch
+                    ) OR EXISTS (
+                        SELECT 1
+                          FROM modeling_plan_execution_binding
+                         WHERE schedule_mode <> 'MANUAL_ONLY'
+                            OR deployment_status IN (
+                                'STALE', 'DISABLED', 'UNKNOWN'
+                            )
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_OPERATIONAL_RUN_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql>
+                ALTER TABLE modeling_physical_relation_observation
+                    DROP CONSTRAINT ck_physical_relation_observation;
+                ALTER TABLE modeling_pipeline_run
+                    DROP CONSTRAINT ck_modeling_pipeline_run_candidate_build;
+            </sql>
+            <dropTable tableName="modeling_operational_run_dispatch"/>
+            <sql>
+                DROP INDEX IF EXISTS idx_pipeline_run_binding_history;
+                DROP INDEX IF EXISTS uk_pipeline_run_binding_dag_model;
+                DROP INDEX IF EXISTS uk_pipeline_run_operational_active_claim;
+            </sql>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_pipeline_run"
+                constraintName="fk_pipeline_run_execution_binding"/>
+            <dropForeignKeyConstraint
+                baseTableName="modeling_physical_relation_observation"
+                constraintName="fk_relation_observation_execution_binding"/>
+            <dropColumn tableName="modeling_physical_relation_observation" columnName="binding_version"/>
+            <dropColumn tableName="modeling_physical_relation_observation" columnName="execution_binding_id"/>
+            <dropColumn tableName="modeling_physical_relation_observation" columnName="run_purpose"/>
+            <addNotNullConstraint
+                tableName="modeling_physical_relation_observation"
+                columnName="release_candidate_id"
+                columnDataType="${uuidType}"/>
+            <addNotNullConstraint
+                tableName="modeling_physical_relation_observation"
+                columnName="release_candidate_version"
+                columnDataType="int"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="operational_active_claim_key"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="scope_checksum"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="logical_date"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="trigger_type"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="binding_version"/>
+            <dropColumn tableName="modeling_pipeline_run" columnName="execution_binding_id"/>
+            <dropColumn tableName="modeling_plan_execution_binding" columnName="next_run_at"/>
+            <dropColumn tableName="modeling_plan_execution_binding" columnName="last_airflow_observed_at"/>
+            <dropColumn tableName="modeling_plan_execution_binding" columnName="airflow_paused"/>
+            <dropColumn tableName="modeling_plan_execution_binding" columnName="effective_timezone"/>
+            <dropColumn tableName="modeling_plan_execution_binding" columnName="effective_schedule"/>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_pipeline_run
+                    ADD CONSTRAINT ck_modeling_pipeline_run_candidate_build
+                    CHECK (
+                        (
+                            release_candidate_id IS NULL
+                            AND release_candidate_entry_id IS NULL
+                            AND release_candidate_version IS NULL
+                            AND pipeline_run_group_id IS NULL
+                            AND implementation_revision IS NULL
+                            AND implementation_checksum IS NULL
+                            AND environment IS NULL
+                            AND run_purpose IS NULL
+                            AND attempt IS NULL
+                            AND artifact_bundle_checksum IS NULL
+                            AND scoped_bundle_checksum IS NULL
+                            AND dbt_invocation_id IS NULL
+                        )
+                        OR (
+                            release_candidate_id IS NOT NULL
+                            AND release_candidate_entry_id IS NOT NULL
+                            AND release_candidate_version > 0
+                            AND pipeline_run_group_id IS NOT NULL
+                            AND implementation_revision > 0
+                            AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                            AND btrim(environment) <> ''
+                            AND environment = btrim(environment)
+                            AND run_purpose IN ('RELEASE_BUILD', 'OPERATIONAL_RUN')
+                            AND attempt > 0
+                            AND artifact_bundle_checksum ~ '^[0-9a-f]{64}$'
+                            AND (
+                                scoped_bundle_checksum IS NULL
+                                OR scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                            )
+                            AND dbt_invocation_id IS NOT NULL
+                            AND btrim(airflow_dag_id) <> ''
+                            AND btrim(airflow_run_id) <> ''
+                            AND btrim(dbt_selector) <> ''
+                            AND btrim(target) <> ''
+                        )
+                    );
+
+                ALTER TABLE modeling_physical_relation_observation
+                    ADD CONSTRAINT ck_physical_relation_observation
+                    CHECK (
+                        btrim(tenant_id) <> ''
+                        AND release_candidate_version > 0
+                        AND model_revision > 0
+                        AND implementation_revision > 0
+                        AND observation_attempt > 0
+                        AND model_checksum ~ '^[0-9a-f]{64}$'
+                        AND implementation_checksum ~ '^[0-9a-f]{64}$'
+                        AND scoped_bundle_checksum ~ '^[0-9a-f]{64}$'
+                        AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                        AND expected_columns_checksum ~ '^[0-9a-f]{64}$'
+                        AND adapter = 'postgres'
+                        AND schema_name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                        AND identifier ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$'
+                        AND expected_type IN (
+                            'TABLE', 'VIEW', 'MATERIALIZED_VIEW'
+                        )
+                        AND column_count >= 0
+                        AND (
+                            (
+                                relation_exists
+                                AND actual_type IN (
+                                    'TABLE', 'VIEW', 'MATERIALIZED_VIEW'
+                                )
+                                AND columns_checksum ~ '^[0-9a-f]{64}$'
+                                AND actual_columns IS NOT NULL
+                                AND metadata_checksum ~ '^[0-9a-f]{64}$'
+                                AND column_count > 0
+                            )
+                            OR (
+                                NOT relation_exists
+                                AND actual_type IS NULL
+                                AND columns_checksum IS NULL
+                                AND actual_columns IS NULL
+                                AND metadata_checksum IS NULL
+                                AND column_count = 0
+                            )
+                        )
+                        AND (
+                            (
+                                verified
+                                AND relation_exists
+                                AND error_code IS NULL
+                            )
+                            OR (
+                                NOT verified
+                                AND nullif(btrim(error_code), '') IS NOT NULL
+                            )
+                        )
+                    );
+
+                ALTER TABLE modeling_plan_execution_binding
+                    DROP CONSTRAINT ck_model_plan_execution_binding_payload;
+                UPDATE modeling_plan_execution_binding
+                   SET deployment_status = 'DEPLOYED'
+                 WHERE deployment_status = 'ACTIVE';
+                ALTER TABLE modeling_plan_execution_binding
+                    ADD CONSTRAINT ck_model_plan_execution_binding_payload
+                    CHECK (
+                        version > 0
+                        AND schedule_mode = 'MANUAL_ONLY'
+                        AND cron_expression IS NULL
+                        AND timezone IS NULL
+                        AND desired_scope_checksum ~ '^[0-9a-f]{64}$'
+                        AND desired_deployment_checksum ~ '^[0-9a-f]{64}$'
+                        AND deployment_status IN ('DEPLOYING', 'DEPLOYED', 'FAILED')
+                        AND (
+                            deployed_checksum IS NULL
+                            OR deployed_checksum ~ '^[0-9a-f]{64}$'
+                        )
+                    );
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

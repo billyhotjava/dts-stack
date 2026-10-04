@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=bin/lib/dts-upgrade-common.sh
+source "${SCRIPT_DIR}/lib/dts-upgrade-common.sh"
+
+DEFAULT_TARGET_DIR="${DTS_UPGRADE_DEFAULT_TARGET:-/data/dts-stack}"
+
+usage() {
+  cat <<EOF
+Usage:
+  dts-upgrade-rollback [--target <dir, default ${DEFAULT_TARGET_DIR}>] --backup-dir <backup-dir> [--restore-db]
+
+This command restores a DTS deployment from an upgrade backup directory.
+Use --restore-db to restore PostgreSQL cold backup directories in addition
+to configuration files.
+
+Target contract:
+  - Default --target is ${DEFAULT_TARGET_DIR} (operator may override).
+  - The target directory is NOT renamed/moved during rollback.
+EOF
+}
+
+TARGET_DIR=""
+BACKUP_DIR=""
+RESTORE_DB=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target)
+      TARGET_DIR="${2:-}"
+      shift 2
+      ;;
+    --backup-dir)
+      BACKUP_DIR="${2:-}"
+      shift 2
+      ;;
+    --restore-db)
+      RESTORE_DB=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      upgrade_die "unknown option: $1"
+      ;;
+  esac
+done
+
+if [[ -z "${TARGET_DIR}" ]]; then
+  if [[ -d "${DEFAULT_TARGET_DIR}" ]]; then
+    TARGET_DIR="${DEFAULT_TARGET_DIR}"
+    upgrade_info "no --target provided; using default ${TARGET_DIR}"
+  else
+    upgrade_die "--target is required (default ${DEFAULT_TARGET_DIR} does not exist)"
+  fi
+fi
+[[ -n "${BACKUP_DIR}" ]] || upgrade_die "--backup-dir is required"
+
+upgrade_require_dir "${TARGET_DIR}" "target"
+upgrade_require_dir "${BACKUP_DIR}" "backup"
+ROLLBACK_MANIFEST="${BACKUP_DIR}/rollback-manifest.json"
+upgrade_require_file "${ROLLBACK_MANIFEST}" "rollback manifest"
+
+ROLLBACK_TIMESTAMP="$(upgrade_timestamp)"
+upgrade_init_action_logs "${TARGET_DIR}" "${ROLLBACK_TIMESTAMP}" "rollback"
+upgrade_set_state "PRECHECK"
+upgrade_append_summary "- restore db: $([[ "${RESTORE_DB}" -eq 1 ]] && echo yes || echo no)"
+
+upgrade_set_state "CURRENT_MODE_DETECT"
+upgrade_detect_mode "${TARGET_DIR}" "${TARGET_DIR}"
+upgrade_set_state "STOP_CONTAINERS"
+upgrade_stop_target_stack "${TARGET_DIR}"
+
+upgrade_set_state "RESTORE_FILES"
+upgrade_restore_backed_up_files "${TARGET_DIR}" "${BACKUP_DIR}" "${ROLLBACK_MANIFEST}"
+
+if [[ "${RESTORE_DB}" -eq 1 ]]; then
+  upgrade_set_state "RESTORE_DB"
+  upgrade_restore_backed_up_data_dirs "${TARGET_DIR}" "${BACKUP_DIR}" "${ROLLBACK_MANIFEST}"
+fi
+
+upgrade_remove_lock "${TARGET_DIR}"
+
+upgrade_set_state "TARGET_MODE_DETECT"
+upgrade_detect_mode "${TARGET_DIR}" "${TARGET_DIR}"
+upgrade_set_state "START_CONTAINERS"
+upgrade_start_target_stack "${TARGET_DIR}"
+upgrade_set_state "POSTCHECK"
+upgrade_postcheck "${TARGET_DIR}"
+upgrade_append_summary "- final status: success"
+
+upgrade_info "rollback completed"
+upgrade_info "log file: ${UPGRADE_LOG_FILE}"
+upgrade_info "summary file: ${UPGRADE_SUMMARY_FILE}"

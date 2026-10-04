@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Sprint-17.1 retry — bi_report_link.source idempotent backfill.
+
+        Why this exists:
+        The original changeset `20260425_02_bi_report_link_source.xml` uses
+        `<addColumn>` guarded by a `<preConditions onFail="MARK_RAN">`. In
+        certain environments the precondition evaluation gets recorded as
+        EXECUTED in `databasechangelog` *without* actually applying the
+        ALTER (Liquibase edge case observed in production). Once that row
+        is in databasechangelog, the upstream changeset is permanently
+        skipped on every subsequent boot — UAT then sees
+        "column bi_report_link.source does not exist" until somebody
+        manually patches the schema.
+
+        This retry uses raw SQL with `ADD COLUMN IF NOT EXISTS` /
+        `CREATE INDEX IF NOT EXISTS` (Postgres 9.6+). It is:
+          - idempotent: rerunning is a no-op, never errors
+          - precondition-free: no MARK_RAN trap
+          - new changeset id: not blocked by stale databasechangelog entries
+
+        Effect: container restart now self-heals the schema regardless of
+        whether the original changeset succeeded, was skipped, or never ran.
+    -->
+
+    <changeSet id="20260426-1000-bi-report-link-source-retry" author="billy" runOnChange="false">
+        <sql dbms="postgresql" splitStatements="true" stripComments="true"><![CDATA[
+            ALTER TABLE bi_report_link
+                ADD COLUMN IF NOT EXISTS source VARCHAR(32) NOT NULL DEFAULT 'MANUAL';
+            CREATE INDEX IF NOT EXISTS idx_bi_report_link_source
+                ON bi_report_link (source);
+        ]]></sql>
+        <rollback>
+            <sql dbms="postgresql"><![CDATA[
+                DROP INDEX IF EXISTS idx_bi_report_link_source;
+                ALTER TABLE bi_report_link DROP COLUMN IF EXISTS source;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

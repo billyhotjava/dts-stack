@@ -1,0 +1,1610 @@
+import { useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useNavigate, useParams } from "react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Button, Table } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { adminApi } from "@/admin/api/adminApi";
+import { sanitizeChangePayload } from "@/admin/utils/change-sanitizer";
+import type {
+	AdminCustomRole,
+	AdminRoleDetail,
+	AdminUser,
+	ChangeRequest,
+	PortalMenuCollection,
+	PortalMenuItem,
+} from "@/admin/types";
+import { AdminSessionContext } from "@/admin/lib/session-context";
+import { Badge } from "@/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/ui/select";
+import { Text } from "@/ui/typography";
+import { toast } from "sonner";
+import { KeycloakApprovalService } from "@/api/services/approvalService";
+import { KeycloakUserService } from "@/api/services/keycloakService";
+import { useUserInfo } from "@/store/userStore";
+import {
+	ChangeDiffViewer,
+	buildChangeSnapshotFromDiff,
+} from "@/admin/components/change-diff-viewer";
+import { MenuChangeViewer } from "@/admin/components/menu-change-viewer";
+import {
+	buildChangeDisplayContext,
+	buildContextForChangeRequest,
+	summarizeChangeDisplayContext,
+} from "@/admin/utils/change-detail-context";
+import { snapshotHasContent } from "@/admin/utils/menu-change-parser";
+import { formatChangeValue, labelForChangeField, type ChangeRequestFormatContext } from "@/admin/lib/change-request-format";
+
+type TaskCategory = "user" | "role" | "menu";
+
+const CATEGORY_LABELS: Record<TaskCategory, string> = {
+	user: "用户管理",
+	role: "角色管理",
+	menu: "菜单管理",
+};
+
+const USER_RESOURCE_TYPES = new Set(["USER"]);
+const ROLE_RESOURCE_TYPES = new Set(["ROLE", "CUSTOM_ROLE", "ROLE_ASSIGNMENT"]);
+const MENU_RESOURCE_TYPES = new Set(["PORTAL_MENU", "MENU"]);
+
+const ACTION_LABELS: Record<string, string> = {
+	CREATE: "新增",
+	UPDATE: "更新",
+	DELETE: "删除",
+	ENABLE: "启用",
+	DISABLE: "禁用",
+	GRANT_ROLE: "授权角色",
+	ASSIGN_ROLE: "授权角色",
+	ADD_ROLE: "授权角色",
+	REVOKE_ROLE: "撤销角色",
+	REMOVE_ROLE: "撤销角色",
+	ENABLE_MENU: "启用菜单",
+	DISABLE_MENU: "禁用菜单",
+	MENU_ENABLE: "启用菜单",
+	MENU_DISABLE: "禁用菜单",
+	BATCH_CREATE: "批量新增",
+	BATCH_UPDATE: "批量更新",
+	BATCH_DELETE: "批量删除",
+	BATCH_ENABLE: "批量启用",
+	BATCH_DISABLE: "批量禁用",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+	PENDING: "待审批",
+	PROCESSING: "处理中",
+	ON_HOLD: "待定",
+	APPROVED: "已通过",
+	APPLIED: "已应用",
+	REJECTED: "已驳回",
+	FAILED: "失败",
+	DRAFT: "草稿",
+};
+
+const STATUS_BADGE: Record<string, "outline" | "secondary" | "destructive"> = {
+	PENDING: "outline",
+	PROCESSING: "outline",
+	ON_HOLD: "outline",
+	APPROVED: "secondary",
+	APPLIED: "secondary",
+	REJECTED: "destructive",
+	FAILED: "destructive",
+	DRAFT: "outline",
+};
+
+const OPERATOR_LABELS: Record<string, string> = {
+	authadmin: "授权管理员",
+};
+
+type DecisionStatus = "PENDING" | "PROCESSING" | "ON_HOLD" | "APPROVED" | "APPLIED" | "REJECTED" | "FAILED";
+
+interface DecisionRecord {
+	status: DecisionStatus;
+	decidedAt: string | null;
+	decidedBy: string | null;
+}
+
+type AugmentedChangeRequest = ChangeRequest & {
+	effectiveStatus: DecisionStatus;
+	effectiveDecidedAt: string | null;
+	effectiveDecidedBy: string | null;
+	override?: DecisionRecord;
+};
+
+const CATEGORY_ORDER: TaskCategory[] = ["user", "role", "menu"];
+
+function resolveCategory(request: ChangeRequest): TaskCategory | null {
+	const categoryHint = request.category ? request.category.trim().toUpperCase() : null;
+	if (categoryHint === "USER_MANAGEMENT") {
+		return "user";
+	}
+	if (categoryHint === "ROLE_MANAGEMENT") {
+		return "role";
+	}
+	if (categoryHint === "MENU_MANAGEMENT") {
+		return "menu";
+	}
+
+	const resourceType = request.resourceType;
+	if (!resourceType) {
+		return null;
+	}
+	const normalized = resourceType.trim().toUpperCase();
+	if (USER_RESOURCE_TYPES.has(normalized)) {
+		return "user";
+	}
+	if (ROLE_RESOURCE_TYPES.has(normalized)) {
+		return "role";
+	}
+	if (MENU_RESOURCE_TYPES.has(normalized)) {
+		return "menu";
+	}
+	// 其余类型不再纳入审批列表
+	return null;
+}
+
+function parseJson(value?: string | null): unknown {
+	if (!value) return null;
+	try {
+		return JSON.parse(value);
+	} catch (error) {
+		console.warn("Failed to parse change request payload", error, value);
+		return null;
+	}
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+	if (!value) {
+		return null;
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) return null;
+		try {
+			const parsed = JSON.parse(trimmed);
+			if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+				return parsed as Record<string, unknown>;
+			}
+		} catch {
+			return null;
+		}
+	}
+	if (typeof value === "object" && !Array.isArray(value)) {
+		return value as Record<string, unknown>;
+	}
+	return null;
+}
+
+function getStringField(source: Record<string, unknown> | null, key: string): string | null {
+	if (!source) return null;
+	const raw = source[key];
+	return typeof raw === "string" && raw.trim().length > 0 ? raw : null;
+}
+
+function resolveOperatorDisplayName(username: string | null | undefined, map: Record<string, string>): string {
+	const key = (username || "").trim();
+	if (!key) return "-";
+	return map[key] || map[key.toLowerCase()] || key;
+}
+
+type DiffFormatContext = ChangeRequestFormatContext & {
+	roleDisplay?: Record<string, string>;
+	menuDisplay?: Record<string, string>;
+};
+
+function lookupDisplay(map: Record<string, string> | undefined, raw: string | null | undefined): string | null {
+	if (!map || !raw) return null;
+	const trimmed = String(raw).trim();
+	if (!trimmed) return null;
+	return (
+		map[trimmed] ||
+		map[trimmed.toLowerCase()] ||
+		map[trimmed.toUpperCase()] ||
+		null
+	);
+}
+
+function resolveTarget(request: ChangeRequest, ctx?: DiffFormatContext): string {
+	const payload = asRecord(parseJson(request.payloadJson));
+	const diff = asRecord(parseJson(request.diffJson));
+	const after = diff && asRecord(diff.after);
+	const before = diff && asRecord(diff.before);
+	const resourceType = (request.resourceType || "").toUpperCase();
+	const isRole = resourceType === "ROLE" || resourceType === "CUSTOM_ROLE";
+	const isMenu = resourceType === "PORTAL_MENU" || resourceType === "MENU";
+
+	const fromRecords = (key: string): string | null =>
+		getStringField(payload, key) ||
+		getStringField(after, key) ||
+		getStringField(before, key);
+
+	if (isRole) {
+		const map = ctx?.roleDisplay;
+		const candidates = [
+			request.resourceId,
+			fromRecords("displayName"),
+			fromRecords("name"),
+			fromRecords("code"),
+			fromRecords("roleId"),
+			request.sourcePrimaryKey != null ? String(request.sourcePrimaryKey) : null,
+		];
+		for (const cand of candidates) {
+			const mapped = lookupDisplay(map, cand);
+			if (mapped) return mapped;
+		}
+		const fallbackName = fromRecords("displayName") || fromRecords("name");
+		if (fallbackName) return fallbackName;
+		const rid = request.resourceId ? String(request.resourceId).trim() : "";
+		return rid || "-";
+	}
+
+	if (isMenu) {
+		const map = ctx?.menuDisplay;
+		const candidates = [
+			request.resourceId,
+			fromRecords("displayName"),
+			fromRecords("name"),
+			fromRecords("path"),
+			request.sourcePrimaryKey != null ? String(request.sourcePrimaryKey) : null,
+		];
+		for (const cand of candidates) {
+			const mapped = lookupDisplay(map, cand);
+			if (mapped) return mapped;
+		}
+		const fallbackName = fromRecords("displayName") || fromRecords("name");
+		if (fallbackName) return fallbackName;
+		const rid = request.resourceId ? String(request.resourceId).trim() : "";
+		return rid || "-";
+	}
+
+	const candidates = [
+		request.resourceId,
+		getStringField(payload, "username"),
+		getStringField(payload, "name"),
+		getStringField(after, "username"),
+		getStringField(after, "name"),
+	];
+	const target = candidates.find((item) => typeof item === "string" && item.trim().length > 0);
+	const raw = target ? String(target) : "-";
+	if (ctx?.userDisplay) {
+		const mapped = ctx.userDisplay[raw] || ctx.userDisplay[raw.toLowerCase?.() || raw];
+		if (mapped) return mapped;
+	}
+	return raw;
+}
+
+function summarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
+	const context = buildContextForChangeRequest(request);
+	const actionKey = request.action?.toUpperCase?.();
+	const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? request.action;
+	const summary = summarizeChangeDisplayContext(context, {
+		actionLabel,
+		request,
+	});
+	if (summary && summary !== "—") {
+		return summary;
+	}
+	return legacySummarizeDetails(request, ctx);
+}
+
+function legacySummarizeDetails(request: ChangeRequest, ctx?: DiffFormatContext): string {
+	const payload = asRecord(parseJson(request.payloadJson));
+	const diff = asRecord(parseJson(request.diffJson));
+	// Prefer diff summary for batch updates
+	if (diff && Array.isArray((diff as any).items) && ((diff as any).items as any[]).length > 0) {
+		const items = ((diff as any).items as any[]).slice(0, 3);
+		const parts: string[] = [];
+		for (const it of items) {
+			const id = it?.id ?? "?";
+			const before = asRecord(it?.before) || {};
+			const after = asRecord(it?.after) || {};
+			const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+			const changed = keys.filter((k) => JSON.stringify((before as any)[k]) !== JSON.stringify((after as any)[k]));
+			if (changed.length === 0) continue;
+			const detail = changed
+				.slice(0, 2)
+				.map((k) => formatChangeEntry(request, k, (before as any)[k], (after as any)[k], ctx))
+				.join("，");
+			parts.push(`菜单${id}: ${detail}`);
+		}
+		const extra = ((diff as any).items as any[]).length - items.length;
+		return parts.length ? parts.join("；") + (extra > 0 ? `（等${extra}项）` : "") : "—";
+	}
+	if (payload) {
+		const entries = Object.entries(payload).filter(([, value]) => value != null);
+		if (entries.length === 0) return "—";
+		return entries
+			.slice(0, 3)
+			.map(([key, value]) => formatSingleEntry(request, key, value, ctx))
+			.join("；");
+	}
+	if (diff) {
+		const before = asRecord(diff.before) || {};
+		const after = asRecord(diff.after) || {};
+		const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)]));
+		const changed = keys.filter((key) => JSON.stringify((before as any)[key]) !== JSON.stringify((after as any)[key]));
+		if (changed.length === 0) {
+			return JSON.stringify(diff);
+		}
+		return changed
+			.slice(0, 3)
+			.map((key) => formatChangeEntry(request, key, (before as any)[key], (after as any)[key], ctx))
+			.join("；");
+	}
+	return "—";
+}
+
+// 与 summarizeDiffSide 类似，但返回 JSX，并在“变更后”用红色高亮变动值
+function isPortalMenuRequest(request: ChangeRequest): boolean {
+	const resource = (request.resourceType || request.category || "").toString().toUpperCase();
+	return resource === "PORTAL_MENU" || resource === "MENU" || resource === "MENU_MANAGEMENT";
+}
+
+function formatMenuStatus(value: unknown): string {
+	if (value === true || value === "true") return "禁用";
+	if (value === false || value === "false" || value == null) return "启用";
+	return fmtValue(value);
+}
+
+function fmtValue(v: unknown): string {
+	if (v == null) return "—";
+	if (Array.isArray(v)) return `[${v.map((x) => (typeof x === "string" ? x : JSON.stringify(x))).join(", ")}]`;
+	if (typeof v === "string") return v.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
+	try {
+		return JSON.stringify(v);
+	} catch (error) {
+		console.warn("Failed to stringify value", error, v);
+		return String(v);
+	}
+}
+
+function formatChangeEntry(
+	request: ChangeRequest,
+	key: string,
+	before: unknown,
+	after: unknown,
+	ctx?: DiffFormatContext,
+): string {
+	if (isPortalMenuRequest(request) && key === "deleted") {
+		const label = "状态";
+		const beforeDefined = before !== undefined;
+		const beforeLabel = beforeDefined ? formatMenuStatus(before) : null;
+		const afterLabel = formatMenuStatus(after);
+		return beforeDefined ? `${label}: ${beforeLabel} → ${afterLabel}` : `${label}: ${afterLabel}`;
+	}
+	const label = labelForChangeField(key);
+	const beforeLabel = before !== undefined ? formatChangeValue(key, before, ctx) : null;
+	const afterLabel = formatChangeValue(key, after, ctx);
+	return beforeLabel != null ? `${label}: ${beforeLabel} → ${afterLabel}` : `${label}: ${afterLabel}`;
+}
+
+function formatSingleEntry(request: ChangeRequest, key: string, value: unknown, ctx?: DiffFormatContext): string {
+	if (isPortalMenuRequest(request) && key === "deleted") {
+		return `状态: ${formatMenuStatus(value)}`;
+	}
+	const label = labelForChangeField(key);
+	return `${label}: ${formatChangeValue(key, value, ctx)}`;
+}
+
+function getActionText(request: ChangeRequest): string {
+	const actionKey = request.action?.toUpperCase?.();
+	const category = resolveCategory(request);
+	const categoryLabel = category ? CATEGORY_LABELS[category] : request.resourceType;
+	const actionLabel = actionKey
+		? actionKey === "UPDATE"
+			? "修改"
+			: actionKey === "GRANT_ROLE"
+				? "授权"
+				: actionKey === "REVOKE_ROLE"
+					? "回收"
+					: ACTION_LABELS[actionKey] ?? request.action
+		: request.action;
+	return `${actionLabel || "操作"}${categoryLabel ? ` · ${categoryLabel}` : ""}`;
+}
+
+function getStatusLabel(status: string): string {
+	return STATUS_LABELS[status?.toUpperCase()] ?? status;
+}
+
+function getStatusBadgeVariant(status: string): "outline" | "secondary" | "destructive" {
+	return STATUS_BADGE[status?.toUpperCase()] ?? "outline";
+}
+
+function formatDateTime(value?: string | null): string {
+	if (!value) return "-";
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) {
+		return value;
+	}
+	return date.toLocaleString("zh-CN", { hour12: false });
+}
+
+function formatJson(value: Record<string, unknown> | null, resourceType?: string | null) {
+	if (!value) return "—";
+	try {
+		const text = JSON.stringify(sanitizeChangePayload(value, resourceType), null, 2);
+		return text.replaceAll("7f3868a1-9c8c-4122-b7e4-7f921a40c019", "***");
+	} catch (error) {
+		console.warn("Failed to stringify JSON content", error, value);
+		return "—";
+	}
+}
+
+function compactLayer(source: Record<string, unknown>): Record<string, unknown> | null {
+	const result: Record<string, unknown> = {};
+	Object.entries(source).forEach(([key, value]) => {
+		if (value === null || value === undefined) {
+			return;
+		}
+		if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (!trimmed) {
+				return;
+			}
+			result[key] = trimmed;
+			return;
+		}
+		result[key] = value;
+	});
+	return Object.keys(result).length > 0 ? result : null;
+}
+
+function normalizeStatus(status?: string | null): DecisionStatus {
+	const normalized = status?.toUpperCase();
+	if (normalized === "APPROVED" || normalized === "REJECTED" || normalized === "APPLIED") {
+		return normalized;
+	}
+	if (normalized === "ON_HOLD") {
+		return "ON_HOLD";
+	}
+	return "PENDING";
+}
+export default function ApprovalCenterView() {
+	const queryClient = useQueryClient();
+	const navigate = useNavigate();
+	const { requestId } = useParams<{ requestId?: string }>();
+	const sessionContext = useContext(AdminSessionContext);
+	const userInfo = useUserInfo();
+	const session = sessionContext ?? {
+		role: "AUTHADMIN" as const,
+		username: userInfo?.username || userInfo?.fullName || userInfo?.email,
+		email: userInfo?.email,
+	};
+	const normalizedRole = String(session.role ?? "").toUpperCase();
+	const isSysAdmin = normalizedRole === "SYSADMIN";
+	const routeTaskId = useMemo(() => {
+		if (!requestId) return null;
+		const parsed = Number(requestId);
+		return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+	}, [requestId]);
+	const {
+		data: changeRequestsData,
+		isLoading: isChangeRequestsLoading,
+		isError,
+	} = useQuery<ChangeRequest[]>({
+		queryKey: ["admin", "change-requests"],
+		queryFn: () => adminApi.getChangeRequests(),
+		refetchInterval: 15_000,
+	});
+	const changeRequests = Array.isArray(changeRequestsData) ? changeRequestsData : [];
+	const shouldFetchFallback = !isChangeRequestsLoading && Array.isArray(changeRequestsData) && changeRequestsData.length === 0;
+	const { data: adminUsersPage } = useQuery<AdminUser[]>({
+		queryKey: ["admin", "users", "all"],
+		queryFn: () => adminApi.getAllAdminUsers(),
+		enabled: isSysAdmin,
+	});
+	const adminUsers = useMemo<AdminUser[]>(() => {
+		if (!adminUsersPage) return [];
+		if (Array.isArray(adminUsersPage)) return adminUsersPage;
+		return [];
+	}, [adminUsersPage]);
+
+	const { data: rolesData } = useQuery<AdminRoleDetail[]>({
+		queryKey: ["admin", "roles"],
+		queryFn: () => adminApi.getAdminRoles(),
+		staleTime: 5 * 60 * 1000,
+	});
+	const { data: customRolesData } = useQuery<AdminCustomRole[]>({
+		queryKey: ["admin", "custom-roles"],
+		queryFn: () => adminApi.getCustomRoles(),
+		staleTime: 5 * 60 * 1000,
+	});
+	const { data: portalMenusData } = useQuery<PortalMenuCollection>({
+		queryKey: ["admin", "portal-menus"],
+		queryFn: () => adminApi.getPortalMenus(),
+		staleTime: 5 * 60 * 1000,
+	});
+
+	const roleDisplayMap = useMemo<Record<string, string>>(() => {
+		const map: Record<string, string> = {};
+		const register = (key: string | null | undefined, value: string) => {
+			if (!key) return;
+			const trimmed = String(key).trim();
+			if (!trimmed || !value) return;
+			map[trimmed] = value;
+			map[trimmed.toLowerCase()] = value;
+			map[trimmed.toUpperCase()] = value;
+		};
+		for (const role of rolesData ?? []) {
+			const display = (role.displayName || role.name || "").toString().trim();
+			if (!display) continue;
+			register(role.id != null ? String(role.id) : null, display);
+			register(role.name, display);
+			register(role.code, display);
+			register(role.roleId, display);
+			register(role.legacyName, display);
+			if (role.customRoleId != null) {
+				register(String(role.customRoleId), display);
+			}
+		}
+		for (const role of customRolesData ?? []) {
+			const display = (role.displayName || role.name || "").toString().trim();
+			if (!display) continue;
+			register(role.id != null ? String(role.id) : null, display);
+			register(role.name, display);
+		}
+		return map;
+	}, [rolesData, customRolesData]);
+
+	const menuDisplayMap = useMemo<Record<string, string>>(() => {
+		const map: Record<string, string> = {};
+		const register = (key: string | null | undefined, value: string) => {
+			if (!key) return;
+			const trimmed = String(key).trim();
+			if (!trimmed || !value) return;
+			map[trimmed] = value;
+			map[trimmed.toLowerCase()] = value;
+		};
+		const flat: PortalMenuItem[] = [];
+		const visit = (items?: PortalMenuItem[]) => {
+			if (!items) return;
+			for (const item of items) {
+				flat.push(item);
+				if (item.children) visit(item.children);
+			}
+		};
+		visit(portalMenusData?.allMenus);
+		visit(portalMenusData?.menus);
+		for (const menu of flat) {
+			const display = (menu.displayName || menu.name || "").toString().trim();
+			if (!display) continue;
+			register(menu.id != null ? String(menu.id) : null, display);
+			register(menu.name, display);
+			register(menu.path, display);
+		}
+		return map;
+	}, [portalMenusData]);
+
+
+	// 兼容性兜底：若后端仅返回“审批请求”而未返回“变更请求”，
+	// 则从 /approval-requests 拉取并映射为 ChangeRequest 以便列表展示
+	const { data: mappedFromApprovals = [] } = useQuery<ChangeRequest[]>({
+		queryKey: ["admin", "kc-approvals-mapped"],
+		enabled: shouldFetchFallback,
+		queryFn: async () => {
+			try {
+				const list = await KeycloakApprovalService.getApprovalRequests({ silent: true });
+				const out: ChangeRequest[] = [];
+				// 按需拉取详情，以提取 payload 中的 changeRequestId
+				for (const item of list || []) {
+					try {
+						const detail = await KeycloakApprovalService.getApprovalRequestById(item.id, { silent: true });
+						if (!detail?.items?.length) continue;
+						for (const it of detail.items) {
+							if (!it?.payload) continue;
+							let crid: number | null = null;
+							let payload: any = null;
+							try {
+								payload = JSON.parse(it.payload);
+								crid = Number(payload?.changeRequestId ?? NaN);
+							} catch {}
+							if (!crid || Number.isNaN(crid)) continue;
+							// 已存在的变更请求以后端结果为准
+							if (Array.isArray(changeRequests) && changeRequests.some((x) => x.id === crid)) continue;
+							const resource = String(it.targetKind || "").toUpperCase();
+							const action = String(payload?.action || detail.type || "").toUpperCase();
+							out.push({
+								id: crid,
+								resourceType: resource || inferResourceTypeFromAction(action),
+								resourceId: it.targetId,
+								action,
+								payloadJson: it.payload,
+								diffJson: undefined,
+								status: (detail.status || "PENDING").toUpperCase(),
+								requestedBy: detail.requester || "",
+								requestedAt: detail.createdAt,
+								decidedBy: detail.approver || undefined,
+								decidedAt: detail.decidedAt || undefined,
+								reason: detail.reason || undefined,
+								category: detail.category || undefined,
+								lastError: detail.errorMessage || undefined,
+							});
+						}
+					} catch {
+						// ignore single item failure and continue
+					}
+				}
+				return out;
+			} catch {
+				return [] as ChangeRequest[];
+			}
+		},
+	});
+
+	const combinedChangeRequests = useMemo<ChangeRequest[]>(() => {
+		if (!Array.isArray(mappedFromApprovals) || mappedFromApprovals.length === 0) return changeRequests;
+		const map = new Map<number, ChangeRequest>();
+		for (const cr of changeRequests || []) map.set(cr.id, cr);
+		for (const cr of mappedFromApprovals) if (!map.has(cr.id)) map.set(cr.id, cr);
+		return Array.from(map.values());
+	}, [changeRequests, mappedFromApprovals]);
+
+	const [decisions, setDecisions] = useState<Record<number, DecisionRecord>>({});
+	const [categoryFilter, setCategoryFilter] = useState<TaskCategory>(CATEGORY_ORDER[0]);
+	const [categoryInitialized, setCategoryInitialized] = useState(false);
+	const [activeTaskId, setActiveTaskId] = useState<number | null>(null);
+	const handleOpenTask = useCallback(
+		(changeRequestId: number) => {
+			setActiveTaskId(changeRequestId);
+			adminApi
+				.getChangeRequestDetail(changeRequestId)
+				.then((detail) => {
+					if (detail && typeof detail === "object") {
+						queryClient.setQueryData<ChangeRequest[]>(["admin", "change-requests"], (previous) => {
+							if (!Array.isArray(previous)) {
+								return previous;
+							}
+							return previous.map((item) => (item.id === detail.id ? { ...item, ...detail } : item));
+						});
+					}
+				})
+				.catch(() => {});
+		},
+		[queryClient],
+	);
+	const [decisionLoading, setDecisionLoading] = useState(false);
+	const [operatorNameMap, setOperatorNameMap] = useState<Record<string, string>>({ ...OPERATOR_LABELS });
+	const [userDisplayMap, setUserDisplayMap] = useState<Record<string, string>>({});
+
+	const targetContext = useMemo<DiffFormatContext>(
+		() => ({
+			userDisplay: userDisplayMap,
+			roleDisplay: roleDisplayMap,
+			menuDisplay: menuDisplayMap,
+		}),
+		[userDisplayMap, roleDisplayMap, menuDisplayMap],
+	);
+
+	// 收集请求中的用户名，并解析为中文姓名（优先后端接口，其次 Keycloak 搜索）
+	useEffect(() => {
+		const usernames = new Set<string>();
+		const add = (u?: string | null) => {
+			const v = (u || "").trim();
+			if (v) usernames.add(v);
+		};
+		for (const cr of combinedChangeRequests || []) {
+			add(cr.requestedBy);
+			add(cr.decidedBy as any);
+			if ((cr.resourceType || "").toUpperCase() === "USER") add(String(cr.resourceId || ""));
+			const payload = asRecord(parseJson(cr.payloadJson));
+			const diff = asRecord(parseJson(cr.diffJson));
+			const after = diff && asRecord(diff.after);
+			const scan = (obj: any) => {
+				if (!obj || typeof obj !== "object") return;
+				for (const [k, v] of Object.entries(obj)) {
+					if (k === "username" && typeof v === "string") add(v);
+					if (v && typeof v === "object") scan(v);
+				}
+			};
+			scan(payload);
+			scan(after);
+		}
+		const all = Array.from(usernames);
+		const need = all.filter((u) => userDisplayMap[u] == null && userDisplayMap[u.toLowerCase?.() || u] == null);
+		if (need.length === 0) return;
+		(async () => {
+			try {
+				const data = await adminApi.resolveUserDisplayNames(need);
+				if (data && typeof data === "object") {
+					setUserDisplayMap((prev) => ({ ...prev, ...data }));
+					return;
+				}
+			} catch {
+				// Fallback: Keycloak 搜索
+			}
+			const updates: Record<string, string> = {};
+			for (const u of need) {
+				try {
+					const list = await KeycloakUserService.searchUsers(u);
+					const match = (list || []).find((x) => (x?.username || "").toLowerCase() === u.toLowerCase());
+					const name = (
+						match?.fullName ||
+						match?.firstName ||
+						match?.lastName ||
+						match?.attributes?.fullName?.[0] ||
+						u
+					).toString();
+					updates[u] = name;
+					updates[u.toLowerCase()] = name;
+				} catch {
+					// ignore single failure
+				}
+			}
+			if (Object.keys(updates).length) setUserDisplayMap((prev) => ({ ...prev, ...updates }));
+		})();
+	}, [combinedChangeRequests, userDisplayMap]);
+
+	useEffect(() => {
+		if (!Array.isArray(adminUsers) || adminUsers.length === 0) return;
+		setOperatorNameMap((prev) => {
+			let changed = false;
+			const next = { ...prev };
+			for (const user of adminUsers) {
+				const username = (user?.username || "").trim();
+				if (!username) continue;
+				const display = (user.fullName || user.displayName || username).trim();
+				if (!display) continue;
+				if (next[username] !== display) {
+					next[username] = display;
+					changed = true;
+				}
+				const lower = username.toLowerCase();
+				if (next[lower] !== display) {
+					next[lower] = display;
+					changed = true;
+				}
+			}
+			return changed ? next : prev;
+		});
+	}, [adminUsers]);
+
+	const augmentedRequests = useMemo<AugmentedChangeRequest[]>(() => {
+		return combinedChangeRequests.map((item) => {
+			const override = decisions[item.id];
+			const effectiveStatus = override?.status ?? normalizeStatus(item.status);
+			return {
+				...item,
+				effectiveStatus,
+				effectiveDecidedAt: override?.decidedAt ?? item.decidedAt ?? null,
+				effectiveDecidedBy: override?.decidedBy ?? item.decidedBy ?? null,
+				override,
+			};
+		});
+	}, [combinedChangeRequests, decisions]);
+
+	useEffect(() => {
+		if (!combinedChangeRequests || combinedChangeRequests.length === 0) {
+			return;
+		}
+		const updates: Record<string, string> = {};
+		for (const item of combinedChangeRequests) {
+			const requestedBy = item.requestedBy?.trim();
+			const requestedName = item.requestedByDisplayName?.toString().trim();
+			if (requestedBy && requestedName) {
+				updates[requestedBy] = requestedName;
+			}
+			const decidedBy = item.decidedBy?.trim();
+			const decidedName = item.decidedByDisplayName?.toString().trim();
+			if (decidedBy && decidedName) {
+				updates[decidedBy] = decidedName;
+			}
+		}
+		const keys = Object.keys(updates);
+		if (keys.length === 0) {
+			return;
+		}
+		setOperatorNameMap((prev) => {
+			let changed = false;
+			const next = { ...prev };
+			for (const username of keys) {
+				const display = updates[username];
+				if (!display) continue;
+				if (next[username] !== display) {
+					next[username] = display;
+					changed = true;
+				}
+				const lower = username.toLowerCase();
+				if (next[lower] !== display) {
+					next[lower] = display;
+					changed = true;
+				}
+			}
+			return changed ? next : prev;
+		});
+	}, [combinedChangeRequests]);
+
+	function inferResourceTypeFromAction(action: string | undefined): string {
+		const a = (action || "").toUpperCase();
+		if (a.includes("ROLE")) return "ROLE";
+		return "USER";
+	}
+
+	const pendingGroups = useMemo(() => {
+		const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
+			user: [],
+			role: [],
+			menu: [],
+		};
+		for (const item of augmentedRequests) {
+			const category = resolveCategory(item);
+			if (!category) continue;
+			if (
+				item.effectiveStatus === "APPROVED" ||
+				item.effectiveStatus === "APPLIED" ||
+				item.effectiveStatus === "REJECTED" ||
+				(item.status && item.status.toUpperCase() === "FAILED")
+			)
+				continue;
+			groups[category].push(item);
+		}
+		const byTimeDesc = (a: AugmentedChangeRequest, b: AugmentedChangeRequest) => {
+			const ta = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+			const tb = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+			if (tb !== ta) return tb - ta;
+			return (b.id || 0) - (a.id || 0);
+		};
+		groups.user.sort(byTimeDesc);
+		groups.role.sort(byTimeDesc);
+		groups.menu.sort(byTimeDesc);
+		return groups;
+	}, [augmentedRequests]);
+
+	const completedGroups = useMemo(() => {
+		const groups: Record<TaskCategory, AugmentedChangeRequest[]> = {
+			user: [],
+			role: [],
+			menu: [],
+		};
+		for (const item of augmentedRequests) {
+			const category = resolveCategory(item);
+			if (!category) continue;
+			if (
+				item.effectiveStatus === "APPROVED" ||
+				item.effectiveStatus === "APPLIED" ||
+				item.effectiveStatus === "REJECTED" ||
+				(item.status && item.status.toUpperCase() === "FAILED")
+			) {
+				groups[category].push(item);
+			}
+		}
+		const byTimeDesc = (a: AugmentedChangeRequest, b: AugmentedChangeRequest) => {
+			const ta = a.requestedAt ? new Date(a.requestedAt).getTime() : 0;
+			const tb = b.requestedAt ? new Date(b.requestedAt).getTime() : 0;
+			if (tb !== ta) return tb - ta;
+			return (b.id || 0) - (a.id || 0);
+		};
+		groups.user.sort(byTimeDesc);
+		groups.role.sort(byTimeDesc);
+		groups.menu.sort(byTimeDesc);
+		return groups;
+	}, [augmentedRequests]);
+
+	useEffect(() => {
+		if (categoryInitialized) return;
+		const firstWithData = CATEGORY_ORDER.find((category) => {
+			return (pendingGroups[category]?.length ?? 0) > 0 || (completedGroups[category]?.length ?? 0) > 0;
+		});
+		if (firstWithData && firstWithData !== categoryFilter) {
+			setCategoryFilter(firstWithData);
+		}
+		setCategoryInitialized(true);
+	}, [categoryInitialized, pendingGroups, completedGroups, categoryFilter]);
+
+	const selectedCategory = categoryFilter;
+	const selectedLabel = CATEGORY_LABELS[selectedCategory];
+	const selectedPending = pendingGroups[selectedCategory] ?? [];
+	const selectedCompleted = completedGroups[selectedCategory] ?? [];
+	const activeTask = useMemo(
+		() => augmentedRequests.find((item) => item.id === activeTaskId) ?? null,
+		[augmentedRequests, activeTaskId],
+	);
+
+	useEffect(() => {
+		if (routeTaskId == null || activeTaskId === routeTaskId) {
+			return;
+		}
+		if (augmentedRequests.some((item) => item.id === routeTaskId)) {
+			setActiveTaskId(routeTaskId);
+		}
+	}, [activeTaskId, augmentedRequests, routeTaskId]);
+
+	// 加载“操作人”的中文姓名（fullName），缓存到 operatorNameMap
+	useEffect(() => {
+		const usernames = new Set<string>();
+		const collect = (value: unknown) => {
+			if (value === null || value === undefined) {
+				return;
+			}
+			const normalized = String(value).trim();
+			if (normalized) {
+				usernames.add(normalized);
+			}
+		};
+		for (const it of combinedChangeRequests || []) {
+			collect(it?.requestedBy);
+			collect((it as any)?.decidedBy);
+		}
+		const need = Array.from(usernames).filter((u) => {
+			if (!u) return false;
+			const lowered = u.toLowerCase();
+			return operatorNameMap[u] === undefined && operatorNameMap[lowered] === undefined;
+		});
+		if (need.length === 0) return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const resolved = await adminApi.resolveUserDisplayNames(need);
+				const updates: Record<string, string> = {};
+				for (const username of need) {
+					const key = username.trim();
+					const lowered = key.toLowerCase();
+					const candidate = resolved?.[key] ?? resolved?.[lowered] ?? key;
+					const display = candidate && String(candidate).trim().length > 0 ? String(candidate).trim() : key;
+					updates[key] = display;
+					updates[lowered] = display;
+				}
+				if (!cancelled && Object.keys(updates).length) {
+					setOperatorNameMap((prev) => ({ ...prev, ...updates }));
+				}
+			} catch {
+				if (cancelled) return;
+				const fallbacks: Record<string, string> = {};
+				for (const username of need) {
+					const key = username.trim();
+					const lowered = key.toLowerCase();
+					fallbacks[key] = key;
+					fallbacks[lowered] = key;
+				}
+				setOperatorNameMap((prev) => ({ ...prev, ...fallbacks }));
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [combinedChangeRequests, operatorNameMap]);
+
+	const pendingColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+		() => [
+			{
+				title: "操作编号",
+				dataIndex: "id",
+				width: 120,
+				render: (id: number) => <span className="font-medium">CR-{id}</span>,
+			},
+			{
+				title: "操作类型",
+				dataIndex: "action",
+				width: 160,
+				render: (_: unknown, record) => getActionText(record),
+			},
+			{
+				title: "变更摘要",
+				dataIndex: "summary",
+				ellipsis: true,
+				render: (_: unknown, record) => <span title={summarizeDetails(record)}>{summarizeDetails(record) || "—"}</span>,
+			},
+			{
+				title: "影响对象",
+				dataIndex: "resourceId",
+				width: 180,
+				render: (_: unknown, record) => resolveTarget(record, targetContext),
+			},
+			{
+				title: "提交人",
+				dataIndex: "requestedBy",
+				width: 140,
+				render: (_: unknown, record) => (
+					<span className="text-xs">{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}</span>
+				),
+			},
+			{
+				title: "提交时间",
+				dataIndex: "requestedAt",
+				width: 180,
+				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.requestedAt)}</span>,
+			},
+			{
+				title: "当前状态",
+				dataIndex: "effectiveStatus",
+				width: 140,
+				render: (_: unknown, record) => (
+					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+						{getStatusLabel(record.effectiveStatus)}
+					</Badge>
+				),
+			},
+			{
+				title: "操作",
+				key: "actions",
+				width: 120,
+				fixed: "right" as const,
+				align: "right" as const,
+				render: (_: unknown, record) => (
+					<Button
+						size="small"
+						type="default"
+						onClick={() => handleOpenTask(record.id)}
+						disabled={decisionLoading && activeTaskId === record.id}
+					>
+						操作
+					</Button>
+				),
+			},
+		],
+		[activeTaskId, decisionLoading, operatorNameMap, targetContext],
+	);
+
+	const completedColumns = useMemo<ColumnsType<AugmentedChangeRequest>>(
+		() => [
+			{
+				title: "操作编号",
+				dataIndex: "id",
+				width: 120,
+				render: (id: number) => <span className="font-medium">CR-{id}</span>,
+			},
+			{
+				title: "操作类型",
+				dataIndex: "action",
+				width: 160,
+				render: (_: unknown, record) => getActionText(record),
+			},
+			{
+				title: "变更摘要",
+				dataIndex: "summary",
+				ellipsis: true,
+				render: (_: unknown, record) => <span title={summarizeDetails(record)}>{summarizeDetails(record) || "—"}</span>,
+			},
+			{
+				title: "影响对象",
+				dataIndex: "resourceId",
+				width: 180,
+				render: (_: unknown, record) => resolveTarget(record, targetContext),
+			},
+			{
+				title: "审批人",
+				dataIndex: "effectiveDecidedBy",
+				width: 140,
+				render: (_: unknown, record) => (
+					<span className="text-xs">{resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}</span>
+				),
+			},
+			{
+				title: "审批时间",
+				dataIndex: "effectiveDecidedAt",
+				width: 180,
+				render: (_: unknown, record) => <span className="text-xs">{formatDateTime(record.effectiveDecidedAt)}</span>,
+			},
+			{
+				title: "处理结果",
+				dataIndex: "effectiveStatus",
+				width: 140,
+				render: (_: unknown, record) => (
+					<Badge variant={getStatusBadgeVariant(record.effectiveStatus)}>
+						{getStatusLabel(record.effectiveStatus)}
+					</Badge>
+				),
+			},
+		],
+		[operatorNameMap, targetContext],
+	);
+
+	const handleDecision = async (status: DecisionStatus) => {
+		if (!activeTask) return;
+		setDecisionLoading(true);
+		const decisionId = activeTask.id;
+		const decidedBy = session.username ?? session.email ?? "authadmin";
+		try {
+			const resourceType = (activeTask.resourceType || "").toUpperCase();
+			const actionType = (activeTask.action || "").toUpperCase();
+			const useKeycloakApproval =
+				resourceType === "USER" || (resourceType === "ROLE" && ["GRANT_ROLE", "REVOKE_ROLE"].includes(actionType));
+
+			if (status === "APPROVED") {
+				if (useKeycloakApproval) {
+					await KeycloakApprovalService.approveByChangeRequest(decisionId, decidedBy, "批准");
+				} else {
+					await adminApi.approveChangeRequest(decisionId, "批准");
+				}
+			} else if (status === "REJECTED") {
+				if (useKeycloakApproval) {
+					await KeycloakApprovalService.rejectByChangeRequest(decisionId, decidedBy, "拒绝");
+				} else {
+					await adminApi.rejectChangeRequest(decisionId, "拒绝");
+				}
+			} else {
+				// 待定：仅前端标注，方便继续处理
+			}
+
+			setDecisions((prev) => ({
+				...prev,
+				[decisionId]: {
+					status,
+					decidedAt:
+						status === "APPROVED" || status === "REJECTED" || status === "APPLIED" ? new Date().toISOString() : null,
+					decidedBy,
+				},
+			}));
+			if (decidedBy) {
+				const fullName = userInfo?.fullName || userInfo?.username;
+				if (fullName && fullName.trim().length > 0) {
+					setOperatorNameMap((prev) => {
+						const display = fullName.trim();
+						const existing = prev[decidedBy] || prev[decidedBy.toLowerCase()];
+						if (existing && existing === display) {
+							return prev;
+						}
+						return {
+							...prev,
+							[decidedBy]: display,
+							[decidedBy.toLowerCase()]: display,
+						};
+					});
+				}
+			}
+			toast.success(
+				status === "APPROVED"
+					? "已批准该变更请求"
+					: status === "REJECTED"
+						? "已拒绝该变更请求"
+						: "已将该请求标记为待定",
+			);
+			// 刷新变更请求列表
+			await queryClient.invalidateQueries({ queryKey: ["admin", "change-requests"] });
+			// 若为菜单/角色相关的本地可见性更新，联动刷新菜单与角色面板缓存
+			try {
+				await queryClient.invalidateQueries({ queryKey: ["admin", "portal-menus"] });
+				await queryClient.invalidateQueries({ queryKey: ["admin", "roles"] });
+			} catch {}
+		} catch (e: any) {
+			toast.error(e?.message || "审批操作失败");
+		} finally {
+			setDecisionLoading(false);
+			setActiveTaskId(null);
+			if (routeTaskId != null) {
+				navigate("/admin/approval", { replace: true });
+			}
+		}
+	};
+
+	const renderExpandedRow = useCallback(
+		(record: AugmentedChangeRequest) => {
+	const payload = asRecord(parseJson(record.payloadJson));
+	const diff = asRecord(parseJson(record.diffJson));
+	const diffLayer = diff ?? null;
+	const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+	const contextLayer = compactLayer({
+		sourcePrimaryKey: record.sourcePrimaryKey,
+		sourceTable: record.sourceTable,
+		resourceType: record.resourceType,
+		resourceId: record.resourceId,
+	});
+	const displayContext = buildChangeDisplayContext({
+		layers: [
+			contextLayer,
+			diffLayer,
+			diffLayer ? asRecord(diffLayer["detail"]) : null,
+			diffLayer ? asRecord(diffLayer["context"]) : null,
+			diffLayer ? asRecord(diffLayer["metadata"]) : null,
+			diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
+					payload,
+				],
+				baseSnapshot,
+				fallbackDiff: diffLayer ?? undefined,
+			});
+			const snapshot = displayContext.snapshot;
+			const summary = displayContext.summary;
+			const menuChanges = displayContext.menuChanges;
+			const actionKey = record.action?.toUpperCase?.();
+			const actionLabel = (actionKey && ACTION_LABELS[actionKey]) ?? record.action;
+			const summaryText = summarizeChangeDisplayContext(displayContext, {
+				actionLabel,
+				request: record,
+			});
+			const showDiffViewer = summary.length > 0 || snapshotHasContent(snapshot);
+			return (
+				<div className="border-t border-muted pt-4 text-sm">
+					<div className="grid gap-4 md:grid-cols-3">
+						<div className="space-y-2">
+							<Text variant="body3" className="text-muted-foreground">
+								基础信息
+							</Text>
+							{renderChangeRequestBasics(record, targetContext, operatorNameMap)}
+						</div>
+		<div className="md:col-span-2 space-y-3">
+			<section className="space-y-2">
+				<Text variant="body3" className="text-muted-foreground">
+					变更摘要
+				</Text>
+				<div className="rounded border border-border/60 bg-muted/20 px-3 py-2 text-xs leading-5">
+					{summaryText || "—"}
+				</div>
+			</section>
+			<section className="space-y-2">
+				<Text variant="body3" className="text-muted-foreground">
+					变更详情
+				</Text>
+				{showDiffViewer ? (
+					<ChangeDiffViewer
+						snapshot={snapshot}
+						summary={summary.length > 0 ? summary : undefined}
+						action={record.action}
+						operationTypeCode={record.action}
+						status={record.effectiveStatus}
+						resourceType={record.resourceType}
+						className="text-xs"
+					/>
+				) : (
+					<Text variant="caption" className="text-muted-foreground">
+						无结构化变更
+					</Text>
+				)}
+			</section>
+			{menuChanges.length > 0 ? (
+				<section className="space-y-2">
+					<Text variant="body3" className="text-muted-foreground">
+						菜单变更
+					</Text>
+					<MenuChangeViewer entries={menuChanges} />
+				</section>
+			) : null}
+		</div>
+					</div>
+					{payload && Object.keys(payload).length > 0 ? (
+						<div className="mt-4 space-y-2">
+							<Text variant="body3" className="text-muted-foreground">
+								提交内容
+							</Text>
+                            <pre className="max-h-56 overflow-auto rounded-md bg-muted/30 px-3 py-2 text-xs whitespace-pre-wrap">
+                                {formatJson(payload, record.resourceType)}
+                            </pre>
+						</div>
+					) : null}
+				</div>
+			);
+	},
+	[operatorNameMap, targetContext],
+);
+
+function renderChangeRequestBasics(
+	record: AugmentedChangeRequest,
+	targetCtx: DiffFormatContext,
+	operatorNameMap: Record<string, string>,
+): ReactNode {
+	return (
+		<div className="space-y-1 text-xs">
+			<div>
+				<span className="text-muted-foreground">操作编号：</span>
+				CR-{record.id}
+			</div>
+			<div>
+				<span className="text-muted-foreground">操作类型：</span>
+				{getActionText(record)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">影响对象：</span>
+				{resolveTarget(record, targetCtx)}
+			</div>
+			{record.sourcePrimaryKey ? (
+				<div>
+					<span className="text-muted-foreground">源表主键：</span>
+					{record.sourcePrimaryKey}
+					{record.sourceTable ? `（${record.sourceTable}）` : ""}
+				</div>
+			) : null}
+			<div>
+				<span className="text-muted-foreground">提交人：</span>
+				{resolveOperatorDisplayName(record.requestedBy, operatorNameMap)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">提交时间：</span>
+				{formatDateTime(record.requestedAt)}
+			</div>
+			<div>
+				<span className="text-muted-foreground">当前状态：</span>
+				{getStatusLabel(record.effectiveStatus)}
+			</div>
+			{record.effectiveDecidedBy ? (
+				<div>
+					<span className="text-muted-foreground">审批人：</span>
+					{resolveOperatorDisplayName(record.effectiveDecidedBy, operatorNameMap)}
+				</div>
+			) : null}
+			{record.effectiveDecidedAt ? (
+				<div>
+					<span className="text-muted-foreground">审批时间：</span>
+					{formatDateTime(record.effectiveDecidedAt)}
+				</div>
+			) : null}
+			{record.reason ? (
+				<div>
+					<span className="text-muted-foreground">备注：</span>
+					{record.reason}
+				</div>
+			) : null}
+		</div>
+	);
+}
+
+const handleCloseDialog = () => {
+	if (!decisionLoading) {
+		setActiveTaskId(null);
+		if (routeTaskId != null) {
+			navigate("/admin/approval", { replace: true });
+		}
+	}
+};
+
+	const activePayload = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.payloadJson)) : null), [activeTask]);
+	const activeDiff = useMemo(() => (activeTask ? asRecord(parseJson(activeTask.diffJson)) : null), [activeTask]);
+	const activeContext = useMemo(() => {
+		const diffLayer = activeDiff ?? null;
+		const baseSnapshot = diffLayer ? buildChangeSnapshotFromDiff(diffLayer) : null;
+		const contextLayer = compactLayer({
+			sourcePrimaryKey: activeTask?.sourcePrimaryKey,
+			sourceTable: activeTask?.sourceTable,
+			resourceType: activeTask?.resourceType,
+			resourceId: activeTask?.resourceId,
+		});
+		return buildChangeDisplayContext({
+			layers: [
+				contextLayer,
+				diffLayer,
+				diffLayer ? asRecord(diffLayer["detail"]) : null,
+				diffLayer ? asRecord(diffLayer["context"]) : null,
+				diffLayer ? asRecord(diffLayer["metadata"]) : null,
+				diffLayer ? asRecord(diffLayer["extraAttributes"]) : null,
+				activePayload,
+			],
+			baseSnapshot,
+			fallbackDiff: diffLayer ?? undefined,
+		});
+	}, [activeDiff, activePayload, activeTask?.resourceId, activeTask?.resourceType, activeTask?.sourcePrimaryKey, activeTask?.sourceTable]);
+	const activeSnapshot = activeContext.snapshot;
+	const activeSummary = activeContext.summary;
+	const activeMenuChanges = activeContext.menuChanges;
+	const showActiveDiffViewer = activeSummary.length > 0 || snapshotHasContent(activeSnapshot);
+
+	return (
+		<>
+			<div className="space-y-6">
+				<Card>
+					<CardHeader className="space-y-2">
+						<div className="flex flex-wrap items-center gap-3">
+							<CardTitle>待审批任务</CardTitle>
+							<Select value={selectedCategory} onValueChange={(value) => setCategoryFilter(value as TaskCategory)}>
+								<SelectTrigger className="w-44">
+									<SelectValue placeholder="请选择审批类型" />
+								</SelectTrigger>
+								<SelectContent>
+									{CATEGORY_ORDER.map((category) => (
+										<SelectItem key={category} value={category}>
+											{CATEGORY_LABELS[category]}
+										</SelectItem>
+									))}
+								</SelectContent>
+							</Select>
+						</div>
+						<Text variant="body3" className="text-muted-foreground">
+							展示最新待处理的变更请求，切换筛选以查看不同类型。
+						</Text>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{isChangeRequestsLoading ? (
+							<Text variant="body3" className="text-muted-foreground">
+								数据加载中…
+							</Text>
+						) : isError ? (
+							<Text variant="body3" className="text-destructive">
+								加载审批列表失败，请稍后重试。
+							</Text>
+						) : (
+							<>
+								<div className="flex items-center justify-between">
+									<Text variant="body2" className="font-semibold">
+										{selectedLabel}
+									</Text>
+									<Badge variant="secondary">{selectedPending.length}</Badge>
+								</div>
+								{selectedPending.length === 0 ? (
+									<Text variant="body3" className="text-muted-foreground">
+										暂无待审批条目。
+									</Text>
+								) : (
+									<Table
+										rowKey="id"
+										columns={pendingColumns}
+										dataSource={selectedPending}
+										pagination={{
+											pageSize: 10,
+											showSizeChanger: true,
+											pageSizeOptions: [10, 20, 50, 100],
+											showQuickJumper: true,
+											showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+										}}
+										size="small"
+										className="text-sm"
+										rowClassName={() => "text-sm"}
+										scroll={{ x: 1100 }}
+										expandable={{
+											expandedRowRender: renderExpandedRow,
+											expandRowByClick: true,
+											columnWidth: 48,
+										}}
+									/>
+								)}
+							</>
+						)}
+					</CardContent>
+				</Card>
+
+				<Card>
+					<CardHeader className="space-y-2">
+						<CardTitle>已完成审批</CardTitle>
+						<Text variant="body3" className="text-muted-foreground">
+							已处理的审批会记录审批人、时间以及结论。
+						</Text>
+					</CardHeader>
+					<CardContent className="space-y-3">
+						{isChangeRequestsLoading ? (
+							<Text variant="body3" className="text-muted-foreground">
+								数据加载中…
+							</Text>
+						) : isError ? (
+							<Text variant="body3" className="text-destructive">
+								加载审批列表失败，请稍后重试。
+							</Text>
+						) : (
+							<>
+								<div className="flex items-center justify-between">
+									<Text variant="body2" className="font-semibold">
+										{selectedLabel}
+									</Text>
+									<Badge variant="outline">{selectedCompleted.length}</Badge>
+								</div>
+								{selectedCompleted.length === 0 ? (
+									<Text variant="body3" className="text-muted-foreground">
+										暂无历史审批记录。
+									</Text>
+								) : (
+									<Table
+										rowKey="id"
+										columns={completedColumns}
+										dataSource={selectedCompleted}
+										pagination={{
+											pageSize: 10,
+											showSizeChanger: true,
+											pageSizeOptions: [10, 20, 50, 100],
+											showQuickJumper: true,
+											showTotal: (total, range) => `第 ${range[0]}-${range[1]} 条，共 ${total} 条`,
+										}}
+										size="small"
+										className="text-sm"
+										rowClassName={() => "text-sm"}
+										scroll={{ x: 1100 }}
+										expandable={{
+											expandedRowRender: renderExpandedRow,
+											expandRowByClick: true,
+											columnWidth: 48,
+										}}
+									/>
+								)}
+							</>
+						)}
+					</CardContent>
+				</Card>
+			</div>
+
+			<Dialog open={Boolean(activeTask)} onOpenChange={(open) => (!open ? handleCloseDialog() : null)}>
+				<DialogContent className="max-w-3xl">
+					<DialogHeader>
+						<DialogTitle>审批详情</DialogTitle>
+						<DialogDescription>请核对变更内容后选择处理操作。</DialogDescription>
+					</DialogHeader>
+					{activeTask ? (
+						<div className="space-y-5 text-sm max-h-[60vh] overflow-y-auto pr-1">
+							<div className="grid gap-4 sm:grid-cols-2">
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										操作编号
+									</Text>
+									<div className="font-medium">CR-{activeTask.id}</div>
+								</div>
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										当前状态
+									</Text>
+									<Badge variant={getStatusBadgeVariant(activeTask.effectiveStatus)}>
+										{getStatusLabel(activeTask.effectiveStatus)}
+									</Badge>
+								</div>
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										操作内容
+									</Text>
+									<div className="font-medium">{getActionText(activeTask)}</div>
+									<div className="text-xs text-muted-foreground">{summarizeDetails(activeTask)}</div>
+								</div>
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										影响对象
+									</Text>
+									<div className="font-medium">{resolveTarget(activeTask, targetContext)}</div>
+								</div>
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										提交人
+									</Text>
+									<div>{resolveOperatorDisplayName(activeTask.requestedBy, operatorNameMap)}</div>
+								</div>
+								<div className="space-y-1">
+									<Text variant="body3" className="text-muted-foreground">
+										提交时间
+									</Text>
+									<div>{formatDateTime(activeTask.requestedAt)}</div>
+								</div>
+							</div>
+
+							{activePayload && Object.keys(activePayload).length > 0 ? (
+								<div className="space-y-2">
+									<Text variant="body3" className="text-muted-foreground">
+										提交内容
+									</Text>
+                                    <pre className="max-h-64 overflow-auto rounded-md bg-muted/40 p-3 text-xs whitespace-pre-wrap break-words">
+                                        {formatJson(activePayload, activeTask?.resourceType)}
+                                    </pre>
+								</div>
+							) : null}
+
+							{showActiveDiffViewer ? (
+								<div className="space-y-2">
+									<Text variant="body3" className="text-muted-foreground">
+										差异信息
+									</Text>
+									<ChangeDiffViewer
+										snapshot={activeSnapshot}
+										summary={activeSummary.length > 0 ? activeSummary : undefined}
+										action={activeTask.action}
+										operationTypeCode={activeTask.action}
+										status={activeTask.effectiveStatus}
+										resourceType={activeTask.resourceType}
+										className="text-xs"
+									/>
+								</div>
+							) : null}
+							{activeMenuChanges.length > 0 ? (
+								<div className="space-y-2">
+									<Text variant="body3" className="text-muted-foreground">
+										菜单变更
+									</Text>
+									<MenuChangeViewer entries={activeMenuChanges} />
+								</div>
+							) : null}
+						</div>
+					) : null}
+					<DialogFooter>
+						<Button
+							htmlType="button"
+							type="default"
+							onClick={() => handleDecision("ON_HOLD")}
+							disabled={decisionLoading || !activeTask}
+						>
+							{decisionLoading ? "处理中..." : "待定"}
+						</Button>
+						<Button
+							htmlType="button"
+							danger
+							type="primary"
+							onClick={() => handleDecision("REJECTED")}
+							disabled={decisionLoading || !activeTask}
+						>
+							{decisionLoading ? "处理中..." : "拒绝"}
+						</Button>
+						<Button htmlType="button" type="primary" onClick={() => handleDecision("APPROVED")} disabled={decisionLoading || !activeTask}>
+							{decisionLoading ? "处理中..." : "批准"}
+						</Button>
+					</DialogFooter>
+				</DialogContent>
+			</Dialog>
+		</>
+	);
+}

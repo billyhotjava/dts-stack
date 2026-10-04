@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0032-create-analytics-explore-session" author="dts">
+        <createTable tableName="analytics_explore_session">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="title" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="question_text" type="text"/>
+            <column name="steps_json" type="text"/>
+            <column name="conclusion_text" type="text"/>
+            <column name="tags_json" type="text"/>
+            <column name="project_key" type="varchar(128)"/>
+            <column name="dept" type="varchar(128)"/>
+            <column name="creator_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="archived" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="analytics_explore_session" indexName="idx_explore_session_creator">
+            <column name="creator_id"/>
+        </createIndex>
+        <createIndex tableName="analytics_explore_session" indexName="idx_explore_session_project">
+            <column name="project_key"/>
+        </createIndex>
+        <createIndex tableName="analytics_explore_session" indexName="idx_explore_session_updated">
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

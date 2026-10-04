@@ -1,0 +1,5 @@
+import MetricCenterPage from "@/pages/metrics/MetricCenterPage";
+
+export default function IndicatorCenterPage() {
+	return <MetricCenterPage />;
+}

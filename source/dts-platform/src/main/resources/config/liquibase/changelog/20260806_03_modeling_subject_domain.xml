@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260806-03-modeling-subject-domain" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_data_mart"/>
+            <not>
+                <tableExists tableName="modeling_subject_domain"/>
+            </not>
+        </preConditions>
+        <comment>
+            Tenant-scoped subject-domain planning ledger aligned with DataWorks: a subject domain
+            refines a data mart (application-side chain 业务分类 → 数据集市 → 主题域). CAS + strict
+            audit, mirroring the data-mart ledger without a revision-history table in v1.
+        </comment>
+
+        <createTable tableName="modeling_subject_domain">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="purpose" type="varchar(1000)"/>
+            <column name="mart_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="revision" type="int"><constraints nullable="false"/></column>
+            <column name="current_checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="idempotency_request_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamptz"><constraints nullable="false"/></column>
+        </createTable>
+        <addUniqueConstraint tableName="modeling_subject_domain" columnNames="tenant_id, id" constraintName="uk_modeling_subject_domain_tenant_id"/>
+        <addUniqueConstraint tableName="modeling_subject_domain" columnNames="tenant_id, code" constraintName="uk_modeling_subject_domain_code"/>
+        <addUniqueConstraint tableName="modeling_subject_domain" columnNames="tenant_id, idempotency_key" constraintName="uk_modeling_subject_domain_idem_key"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_subject_domain"
+            baseColumnNames="tenant_id, mart_id"
+            constraintName="fk_modeling_subject_domain_mart"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+
+        <sql>
+            alter table modeling_subject_domain
+                add constraint ck_modeling_subject_domain_code_format
+                check (code ~ '^[A-Z][A-Z0-9_]{1,63}$');
+            alter table modeling_subject_domain
+                add constraint ck_modeling_subject_domain_status
+                check (status in ('DRAFT', 'CURRENT', 'RETIRED'));
+            alter table modeling_subject_domain
+                add constraint ck_modeling_subject_domain_revision
+                check (revision >= 1);
+        </sql>
+
+        <createIndex indexName="idx_modeling_subject_domain_mart_status" tableName="modeling_subject_domain">
+            <column name="tenant_id"/>
+            <column name="mart_id"/>
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_modeling_subject_domain_status" tableName="modeling_subject_domain">
+            <column name="tenant_id"/>
+            <column name="status"/>
+        </createIndex>
+
+        <rollback>
+            <sql>DROP TABLE modeling_subject_domain;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

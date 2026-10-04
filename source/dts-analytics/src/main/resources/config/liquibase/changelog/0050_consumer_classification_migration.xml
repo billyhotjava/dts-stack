@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="0050-consumer-classification-migration" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            create table analytics_classification_migration_run (
+                id uuid primary key,
+                idempotency_key varchar(128) not null unique,
+                status varchar(32) not null,
+                batch_size int not null,
+                cursor_position bigint not null default 0,
+                total_items bigint not null default 0,
+                applied_items bigint not null default 0,
+                failed_items bigint not null default 0,
+                requested_by varchar(128) not null,
+                started_at timestamp not null,
+                completed_at timestamp,
+                paused_at timestamp,
+                last_error varchar(2048)
+            );
+
+            create table analytics_classification_migration_item (
+                id uuid primary key,
+                run_id uuid not null references analytics_classification_migration_run(id),
+                sequence_no bigint not null,
+                entity_type varchar(32) not null,
+                entity_id bigint not null,
+                legacy_level varchar(32),
+                decision varchar(32) not null,
+                status varchar(32) not null default 'PENDING',
+                snapshot_id varchar(64),
+                snapshot_version bigint,
+                effective_level varchar(32),
+                error_message varchar(2048),
+                applied_at timestamp,
+                constraint uk_analytics_classification_migration_item unique (run_id, entity_type, entity_id),
+                constraint uk_analytics_classification_migration_sequence unique (run_id, sequence_no)
+            );
+            create index idx_analytics_classification_migration_batch
+                on analytics_classification_migration_item(run_id, status, sequence_no);
+        ]]></sql>
+        <rollback>
+            <dropTable tableName="analytics_classification_migration_item"/>
+            <dropTable tableName="analytics_classification_migration_run"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

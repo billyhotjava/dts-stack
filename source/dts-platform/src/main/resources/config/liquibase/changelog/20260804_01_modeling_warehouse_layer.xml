@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260804-01-modeling-warehouse-layer" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <not>
+                <tableExists tableName="modeling_warehouse_layer"/>
+            </not>
+        </preConditions>
+        <comment>
+            Global custom-only warehouse layer registry with logical deletion and permanent code
+            uniqueness, plus ModelSpec warehouse layer selection backfilled from the canonical
+            execution layer. Built-in codes remain code-owned; no foreign key is created because
+            built-in codes are valid selections.
+        </comment>
+
+        <createTable tableName="modeling_warehouse_layer">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="system_layer_code" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(1000)"/>
+            <column name="naming_prefix" type="varchar(64)"/>
+            <column name="status" type="varchar(16)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="integer" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <sql>
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_code_format
+                check (code ~ '^[A-Z][A-Z0-9_]{1,63}$');
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_prefix_format
+                check (naming_prefix is null or naming_prefix ~ '^[a-z][a-z0-9_]{0,63}$');
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_system_type
+                check (system_layer_code in ('ODS_RAW', 'ODS_STANDARDIZED', 'STG', 'DWD', 'DWS', 'ADS'));
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_status
+                check (status in ('ACTIVE', 'DELETED'));
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_version
+                check (version >= 1);
+        </sql>
+
+        <createIndex
+            indexName="idx_modeling_warehouse_layer_status_system"
+            tableName="modeling_warehouse_layer">
+            <column name="status"/>
+            <column name="system_layer_code"/>
+        </createIndex>
+
+        <addColumn tableName="modeling_model_spec">
+            <column name="warehouse_layer_code" type="varchar(64)"/>
+        </addColumn>
+
+        <createIndex
+            indexName="idx_modeling_model_spec_layer_status"
+            tableName="modeling_model_spec">
+            <column name="warehouse_layer_code"/>
+            <column name="status"/>
+        </createIndex>
+
+        <sql>
+            update modeling_model_spec set warehouse_layer_code = layer where warehouse_layer_code is null
+        </sql>
+
+        <addNotNullConstraint
+            tableName="modeling_model_spec"
+            columnName="warehouse_layer_code"
+            columnDataType="varchar(64)"/>
+
+        <rollback>
+            <sql>DROP TABLE modeling_warehouse_layer;</sql>
+            <sql>ALTER TABLE modeling_model_spec DROP COLUMN warehouse_layer_code;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+ xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+ xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+ <changeSet id="20260908-02-model-candidate-model-scope" author="codex" dbms="postgresql">
+  <preConditions onFail="HALT" onError="HALT">
+   <indexExists indexName="uk_model_release_candidate_active_plan"/>
+   <indexExists indexName="uk_model_release_candidate_entry_active_claim"/>
+  </preConditions>
+  <comment>Allow disjoint model candidates in one plan. Retain model/environment claims and serialized scope admission; preserve all candidate history.</comment>
+  <dropIndex tableName="modeling_model_release_candidate" indexName="uk_model_release_candidate_active_plan"/>
+  <rollback>
+   <sql splitStatements="false"><![CDATA[
+    DO $$ BEGIN
+     IF EXISTS (
+      SELECT 1 FROM modeling_model_release_candidate
+       WHERE origin <> 'SCHEMA_ONLY_INTENT'
+         AND status NOT IN ('REJECTED','ROLLED_BACK','STALE','CANCELLED','PUBLISHED')
+       GROUP BY tenant_id, plan_id HAVING count(*) > 1
+     ) THEN
+      RAISE EXCEPTION 'ROLLBACK_BLOCKED_MULTIPLE_ACTIVE_MODEL_CANDIDATES';
+     END IF;
+    END $$;
+    CREATE UNIQUE INDEX uk_model_release_candidate_active_plan
+     ON modeling_model_release_candidate (tenant_id, plan_id)
+     WHERE origin <> 'SCHEMA_ONLY_INTENT'
+       AND status NOT IN ('REJECTED','ROLLED_BACK','STALE','CANCELLED','PUBLISHED');
+   ]]></sql>
+  </rollback>
+ </changeSet>
+</databaseChangeLog>

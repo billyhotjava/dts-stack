@@ -1,0 +1,1743 @@
+// @ts-nocheck — migrated from analytics-webapp, pending unused-import cleanup
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type MouseEvent as ReactMouseEvent } from 'react';
+import type { ScreenComponent } from '../types';
+import { useScreenRuntime } from '../ScreenRuntimeContext';
+import { useComponentData } from '../renderers/DataLayer';
+import { getThemeTokens } from '../screenThemes';
+import { isSafeSrcUrl } from '../sanitize';
+import { PluginRenderBoundary } from '../plugins/PluginRenderBoundary';
+import { ensureBuiltinPluginAdapter } from '../plugins/builtinPluginAdapters';
+import { getRendererPlugin } from '../plugins/registry';
+import { readComponentPluginMeta, resolveRuntimePluginId } from '../plugins/runtime';
+import { useScreenPluginRuntime } from '../plugins/useScreenPluginRuntime';
+import type { RendererPlugin } from '../plugins/types';
+import type { ReactEChartsComponent, ComponentRendererProps } from '../renderers/types';
+import { renderMarkdownToHtml } from '../renderers/shared/markdownUtils';
+import { ANNOTATABLE_TYPES, injectChartAnnotations } from '../renderers/shared/chartAnnotations';
+import { useDesignerDataBridge } from '../hooks/useDesignerDataBridge';
+import {
+    resolveTextColor, estimateVisualTextWidth, truncateTextByVisualWidth,
+    resolveFilterOptions, resolveTabOptions,
+    resolveFilterOptionsFromData,
+    normalizeFilterDebounceMs, normalizeCarouselItems, resolveCarouselItemsFromData,
+    resolveFilterDefaultValue, resolveDateRangeDefaultValues,
+} from '../renderers/shared/chartUtils';
+import {
+    clampNumber as toNumber,
+    pickFiniteNumber as pickNum,
+    readPositivePaddingOverride,
+    resolveAxisStyleConfig,
+    resolveLegendStyleConfig,
+    resolveSeriesColors,
+} from '../renderers/shared/chartStyleConfig';
+import { resolveChartTitleLayout } from '../renderers/shared/chartTitleLayout';
+import {
+    buildTableRowActionParams,
+    resolvePreferredDrillValue,
+} from '../renderers/shared/actionUtils';
+import { useComponentInteractions, useResolvableJumpStatus, hasNonJumpInteractivity } from '../renderers/InteractionLayer';
+import {
+    compareTableValues, resolveTableConditionalStyle,
+    normalizeColumnAlign, formatTableCell, clampColumnWidth, normalizeColumnFormatter,
+    ThemedScrollTable, resolveBoundTableData,
+} from '../renderers/shared/tableUtils';
+import { renderFilter } from '../renderers/FilterRenderer';
+import { renderECharts } from '../renderers/EChartsRenderer';
+import { renderBasic } from '../renderers/BasicRenderer';
+import { MetricNoteBadge, type MetricNote } from '../renderers/shared/MetricNote';
+import { renderDataV } from '../renderers/DataVRenderer';
+import { renderTable } from '../renderers/TableRenderer';
+import { resolveScreenFontFamily } from '../screenTypography';
+import {
+    useEChartsLoader, isWebGLSupported,
+    ECHART_COMPONENT_TYPES, ECHART_3D_TYPES,
+} from '../hooks/useEChartsLoader';
+
+import { DelayReasonMatrix } from '../../project-cockpit/components/DelayReasonMatrix';
+
+// Utility functions, table components, and types extracted to renderers/shared/:
+// - chartUtils.ts, tableUtils.tsx, markdownUtils.ts, geoJsonCache.ts
+// - InteractionLayer.tsx (interaction hook + screen-reference URL resolution)
+
+export const ComponentRenderer = memo(function ComponentRenderer({ component, mode = 'preview', theme, customTheme, fontFamily, onConfigMeta, onDataFeedback }: ComponentRendererProps) {
+    const { type, config, width, height, dataSource, drillDown } = component;
+
+    const runtime = useScreenRuntime();
+    const pluginRuntimeVersion = useScreenPluginRuntime();
+    const [pluginRecoveryVersion, setPluginRecoveryVersion] = useState(0);
+    const t = useMemo(() => getThemeTokens(theme, customTheme), [theme, customTheme]);
+    const screenFontFamily = useMemo(() => resolveScreenFontFamily(fontFamily), [fontFamily]);
+    const pluginMeta = useMemo(() => readComponentPluginMeta(config), [config]);
+    const runtimePlugin = useMemo<RendererPlugin | null>(() => {
+        const runtimeId = resolveRuntimePluginId(pluginMeta);
+        if (!runtimeId) return null;
+        return getRendererPlugin(runtimeId) ?? null;
+    }, [pluginMeta, pluginRuntimeVersion, pluginRecoveryVersion]);
+
+    useEffect(() => {
+        if (!pluginMeta || runtimePlugin) {
+            return;
+        }
+        const installed = ensureBuiltinPluginAdapter(pluginMeta.pluginId, pluginMeta.componentId, pluginMeta.version);
+        if (installed) {
+            setPluginRecoveryVersion((prev) => prev + 1);
+        }
+    }, [pluginMeta, runtimePlugin]);
+
+    // Build ECharts base options from theme tokens.
+    // Read c.backgroundColor directly from component.config so the chart respects
+    // user-configured background (schema: ECHARTS_COMMON_FIELDS.backgroundColor).
+    const componentConfigBg = (component.config as Record<string, unknown> | undefined)?.backgroundColor;
+    const themeOptions = useMemo(() => ({
+        backgroundColor: (typeof componentConfigBg === 'string' && componentConfigBg.trim().length > 0)
+            ? componentConfigBg
+            : 'transparent',
+        color: t.echarts.colorPalette,
+        textStyle: { color: t.textPrimary, fontFamily: screenFontFamily },
+        legend: { textStyle: { color: t.textPrimary, fontFamily: screenFontFamily } },
+        tooltip: {
+            backgroundColor: t.echarts.tooltipBg,
+            borderColor: t.echarts.tooltipBorder,
+            textStyle: { color: t.textPrimary, fontFamily: screenFontFamily },
+        },
+    }), [t, componentConfigBg, screenFontFamily]);
+
+    const {
+        EChartsComponent, registerMapFn, hasMapFn,
+        mapReadyVersion,
+    } = useEChartsLoader(type, config as Record<string, unknown>);
+    const [mapDrillRegion, setMapDrillRegion] = useState<string | null>(null);
+    const [tableSort, setTableSort] = useState<{ colIndex: number; order: 'asc' | 'desc' } | null>(null);
+    const [tablePage, setTablePage] = useState(1);
+
+    useEffect(() => {
+        setMapDrillRegion(null);
+        setTableSort(null);
+        setTablePage(1);
+    }, [component.id]);
+
+    const {
+        cardData, cardLoading, cardError, effectiveConfig,
+        drillState, drillRuntimeEnabled, drillActive,
+        mergedQueryParameters, visibleByVariableRule, bindingParameters,
+    } = useComponentData(component, mode, runtime);
+
+    const {
+        scheduleFilterVariableUpdate,
+        interactionMappings,
+        interactionJump,
+        componentActions: rawComponentActions,
+        navigateToResolvedUrl,
+        executeComponentActions: rawExecuteComponentActions,
+        echartsClickHandler: rawEchartsClickHandler,
+        filterVariableTimersRef,
+    } = useComponentInteractions(component, mode, runtime, drillState, drillRuntimeEnabled, drillActive, cardLoading);
+
+    // F1-T05: visual disable when component has no usable interactivity
+    const { hasResolvableJump, isResolving: isResolvingJumpStatus } = useResolvableJumpStatus(component, mode);
+    const isFullyDisabled = !isResolvingJumpStatus
+        && !hasResolvableJump
+        && !hasNonJumpInteractivity(component);
+
+    const componentActions = isFullyDisabled ? [] : rawComponentActions;
+    const echartsClickHandler = isFullyDisabled ? undefined : rawEchartsClickHandler;
+    const executeComponentActions = isFullyDisabled
+        ? (() => { /* no-op when disabled */ })
+        : rawExecuteComponentActions;
+
+    // Persist _sourceColumns to saved config so PropertyPanel can read them
+    const onConfigMetaRef = useRef(onConfigMeta);
+    onConfigMetaRef.current = onConfigMeta;
+    const persistConfigMeta = useCallback((meta: Record<string, unknown>) => {
+        onConfigMetaRef.current?.(meta);
+    }, []);
+    const [titleDragPreview, setTitleDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const titleDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+    const [legendDragPreview, setLegendDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const legendDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+    const [chartDragPreview, setChartDragPreview] = useState<{ x: number; y: number } | null>(null);
+    const chartDragHandlersRef = useRef<{ move: (event: MouseEvent) => void; up: (event: MouseEvent) => void } | null>(null);
+
+    const clearTitleDragHandlers = useCallback(() => {
+        const handlers = titleDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        titleDragHandlersRef.current = null;
+    }, []);
+
+    const clearLegendDragHandlers = useCallback(() => {
+        const handlers = legendDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        legendDragHandlersRef.current = null;
+    }, []);
+
+    const clearChartDragHandlers = useCallback(() => {
+        const handlers = chartDragHandlersRef.current;
+        if (!handlers) return;
+        window.removeEventListener('mousemove', handlers.move);
+        window.removeEventListener('mouseup', handlers.up);
+        chartDragHandlersRef.current = null;
+    }, []);
+
+    useEffect(() => () => {
+        clearTitleDragHandlers();
+        clearLegendDragHandlers();
+        clearChartDragHandlers();
+    }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers]);
+
+    useEffect(() => {
+        setTitleDragPreview(null);
+        setLegendDragPreview(null);
+        setChartDragPreview(null);
+        clearTitleDragHandlers();
+        clearLegendDragHandlers();
+        clearChartDragHandlers();
+    }, [clearChartDragHandlers, clearLegendDragHandlers, clearTitleDragHandlers, component.id]);
+
+    useDesignerDataBridge({
+        componentId: component.id, mode,
+        data: cardData, loading: cardLoading, error: cardError,
+        previousColumns: config._sourceColumns as Array<{ name?: string }> | undefined,
+        onConfigMeta: persistConfigMeta, onDataFeedback,
+    });
+
+    // For datetime component, update every second
+    const [currentTime, setCurrentTime] = useState(new Date());
+    useEffect(() => {
+        if (type === 'datetime' || type === 'countdown') {
+            const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+            return () => clearInterval(timer);
+        }
+    }, [type]);
+
+    const [carouselIndex, setCarouselIndex] = useState(0);
+    const [carouselPaused, setCarouselPaused] = useState(false);
+    const carouselItems = useMemo(() => {
+        if (type !== 'carousel') return [];
+        const sourceMode = String(effectiveConfig.itemSourceMode ?? 'auto').trim().toLowerCase();
+        const dataItems = resolveCarouselItemsFromData(cardData, effectiveConfig);
+        const manualItems = normalizeCarouselItems(effectiveConfig.items);
+        if (sourceMode === 'data') {
+            return dataItems;
+        }
+        if (sourceMode === 'manual') {
+            return manualItems;
+        }
+        if (dataItems.length > 0) {
+            return dataItems;
+        }
+        return manualItems;
+    }, [cardData, effectiveConfig.dataItemField, effectiveConfig.dataItemMax, effectiveConfig.itemSourceMode, effectiveConfig.items, type]);
+
+    useEffect(() => {
+        if (type !== 'carousel') return;
+        if (carouselItems.length <= 1) {
+            setCarouselIndex(0);
+            return;
+        }
+        const autoPlay = effectiveConfig.autoPlay !== false;
+        if (!autoPlay) {
+            return;
+        }
+        const pauseOnHover = effectiveConfig.pauseOnHover !== false;
+        if (pauseOnHover && carouselPaused) {
+            return;
+        }
+        const rawSeconds = Number(effectiveConfig.intervalSeconds ?? 4);
+        const safeSeconds = Number.isFinite(rawSeconds)
+            ? Math.max(1, Math.min(120, Math.floor(rawSeconds)))
+            : 4;
+        const timer = setInterval(() => {
+            setCarouselIndex((prev) => (prev + 1) % carouselItems.length);
+        }, safeSeconds * 1000);
+        return () => clearInterval(timer);
+    }, [carouselItems.length, carouselPaused, effectiveConfig.autoPlay, effectiveConfig.intervalSeconds, effectiveConfig.pauseOnHover, type]);
+
+    const filterInputVariableKey = useMemo(() => {
+        if (type !== 'filter-input') return '';
+        return String((effectiveConfig.variableKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const filterInputRuntimeValue = filterInputVariableKey ? (runtime.values[filterInputVariableKey] ?? '') : '';
+    const filterInputDefaultValue = String(effectiveConfig.defaultValue ?? '').trim();
+    const [filterInputDraft, setFilterInputDraft] = useState(filterInputRuntimeValue);
+    useEffect(() => {
+        setFilterInputDraft(filterInputRuntimeValue);
+    }, [filterInputRuntimeValue, filterInputVariableKey]);
+
+    useEffect(() => {
+        if (type !== 'filter-input' || !filterInputVariableKey || filterInputRuntimeValue) return;
+        if (!filterInputDefaultValue) return;
+        runtime.setVariable(filterInputVariableKey, filterInputDefaultValue, `filter-input:init:${component.id}`);
+    }, [component.id, filterInputDefaultValue, filterInputRuntimeValue, filterInputVariableKey, runtime, type]);
+
+    useEffect(() => () => {
+        for (const timer of filterVariableTimersRef.current.values()) {
+            clearTimeout(timer);
+        }
+        filterVariableTimersRef.current.clear();
+    }, []);
+
+    const tabVariableKey = useMemo(() => {
+        if (type !== 'tab-switcher') return '';
+        return String((effectiveConfig.variableKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const tabOptions = useMemo(() => {
+        if (type !== 'tab-switcher') return [];
+        const sourceMode = String(effectiveConfig.optionSourceMode ?? 'manual').trim().toLowerCase();
+        if (sourceMode === 'data') {
+            const dynamicOptions = resolveFilterOptionsFromData(cardData, effectiveConfig);
+            if (dynamicOptions.length > 0) {
+                return dynamicOptions;
+            }
+        }
+        return resolveTabOptions(effectiveConfig.options);
+    }, [cardData, effectiveConfig, type]);
+    const tabDefaultValue = String(effectiveConfig.defaultValue ?? '').trim();
+    const tabRuntimeValue = tabVariableKey ? String(runtime.values[tabVariableKey] ?? '') : '';
+
+    useEffect(() => {
+        if (type !== 'tab-switcher' || !tabVariableKey || tabOptions.length <= 0) return;
+        if (tabRuntimeValue) return;
+        const fallbackValue = tabDefaultValue && tabOptions.some((item) => item.value === tabDefaultValue)
+            ? tabDefaultValue
+            : tabOptions[0]?.value;
+        if (fallbackValue) {
+            runtime.setVariable(tabVariableKey, fallbackValue, `tab-switcher:init:${component.id}`);
+        }
+    }, [component.id, runtime, tabDefaultValue, tabOptions, tabRuntimeValue, tabVariableKey, type]);
+
+    const filterSelectVariableKey = useMemo(() => {
+        if (type !== 'filter-select') return '';
+        return String((effectiveConfig.variableKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const filterSelectOptions = useMemo(() => {
+        if (type !== 'filter-select') return [] as Array<{ label: string; value: string }>;
+        const sourceMode = String(effectiveConfig.optionSourceMode ?? 'manual').trim().toLowerCase();
+        if (sourceMode === 'data') {
+            const dynamicOptions = resolveFilterOptionsFromData(cardData, effectiveConfig);
+            if (dynamicOptions.length > 0) {
+                return dynamicOptions;
+            }
+        }
+        return resolveFilterOptions(effectiveConfig.options);
+    }, [cardData, effectiveConfig, type]);
+    const filterSelectRuntimeValue = filterSelectVariableKey ? String(runtime.values[filterSelectVariableKey] ?? '') : '';
+    const filterSelectDefaultValue = String(effectiveConfig.defaultValue ?? '').trim();
+
+    useEffect(() => {
+        if (type !== 'filter-select' || !filterSelectVariableKey || filterSelectRuntimeValue) return;
+        const fallbackValue = resolveFilterDefaultValue('', filterSelectDefaultValue, filterSelectOptions);
+        if (!fallbackValue) return;
+        runtime.setVariable(filterSelectVariableKey, fallbackValue, `filter-select:init:${component.id}`);
+    }, [
+        component.id,
+        filterSelectDefaultValue,
+        filterSelectOptions,
+        filterSelectRuntimeValue,
+        filterSelectVariableKey,
+        runtime,
+        type,
+    ]);
+
+    const filterDateStartKey = useMemo(() => {
+        if (type !== 'filter-date-range') return '';
+        return String((effectiveConfig.startKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const filterDateEndKey = useMemo(() => {
+        if (type !== 'filter-date-range') return '';
+        return String((effectiveConfig.endKey as string) ?? '').trim();
+    }, [effectiveConfig, type]);
+    const filterDateStartValue = filterDateStartKey ? String(runtime.values[filterDateStartKey] ?? '') : '';
+    const filterDateEndValue = filterDateEndKey ? String(runtime.values[filterDateEndKey] ?? '') : '';
+
+    useEffect(() => {
+        if (type !== 'filter-date-range') return;
+        const defaults = resolveDateRangeDefaultValues(
+            filterDateStartValue,
+            filterDateEndValue,
+            effectiveConfig.defaultStartValue,
+            effectiveConfig.defaultEndValue,
+        );
+        if (filterDateStartKey && !filterDateStartValue && defaults.startValue) {
+            runtime.setVariable(filterDateStartKey, defaults.startValue, `filter-date-range:init:${component.id}:start`);
+        }
+        if (filterDateEndKey && !filterDateEndValue && defaults.endValue) {
+            runtime.setVariable(filterDateEndKey, defaults.endValue, `filter-date-range:init:${component.id}:end`);
+        }
+    }, [
+        component.id,
+        effectiveConfig.defaultEndValue,
+        effectiveConfig.defaultStartValue,
+        filterDateEndKey,
+        filterDateEndValue,
+        filterDateStartKey,
+        filterDateStartValue,
+        runtime,
+        type,
+    ]);
+
+    const content = useMemo(() => {
+        const c = effectiveConfig;
+        if (runtimePlugin) {
+            return (
+                <PluginRenderBoundary title={`插件渲染失败: ${runtimePlugin.name}`}>
+                    {runtimePlugin.render({
+                        component,
+                        mode,
+                        theme,
+                        width,
+                        height,
+                        config: c,
+                        data: cardData,
+                        runtimeValues: runtime.values,
+                        setVariable: (key, value) => runtime.setVariable(key, value, `plugin:${runtimePlugin.id}`),
+                    })}
+                </PluginRenderBoundary>
+            );
+        }
+        const {
+            xAxisCfg, yAxisCfg, axisFontSize, axisLabelColor, yAxisLabelRotate, axisOverrides,
+        } = resolveAxisStyleConfig(c);
+        const {
+            legendDisplayOverride,
+            legendPositionOverride,
+            legendColorOverride,
+            legendFontSize,
+            legendReserveOverrideFromNested,
+            legendItemGapOverrideFromNested,
+        } = resolveLegendStyleConfig(c);
+        const seriesColors = resolveSeriesColors(c);
+        const readPaddingOverride = (key) => readPositivePaddingOverride(c, key);
+        const compactPresetRaw = String(c.compactLayoutPreset ?? 'auto').trim().toLowerCase();
+        const compactPresetEnabled = compactPresetRaw !== 'off';
+        const isCompactCanvas = compactPresetEnabled && (width < 560 || height < 320);
+        const isTinyCanvas = compactPresetEnabled && (width < 420 || height < 260);
+        const titleText = String(c.title ?? '').trim();
+        const hasTitle = titleText.length > 0;
+        const xAxisData = Array.isArray(c.xAxisData) ? (c.xAxisData as unknown[]) : [];
+        const xAxisCategoryCount = xAxisData.length;
+        const longestXAxisLabelLength = xAxisData.reduce<number>(
+            (max, item) => Math.max(max, String(item ?? '').trim().length),
+            0,
+        );
+        // Nested xAxis.labelRotate (AxisConfigEditor) wins over flat xAxisLabelRotate.
+        const xAxisNestedRotate = pickNum(xAxisCfg.labelRotate);
+        const xAxisLabelRotateRaw = Number(c.xAxisLabelRotate);
+        const autoXAxisLabelRotate = isCompactCanvas && (xAxisCategoryCount >= 7 || longestXAxisLabelLength >= 8)
+            ? (isTinyCanvas ? -45 : -30)
+            : 0;
+        const xAxisLabelRotate = xAxisNestedRotate !== undefined
+            ? toNumber(xAxisNestedRotate, 0, -90, 90)
+            : (Number.isFinite(xAxisLabelRotateRaw)
+                ? toNumber(c.xAxisLabelRotate, 0, -90, 90)
+                : autoXAxisLabelRotate);
+        const xAxisLabelMaxLengthRaw = Number(c.xAxisLabelMaxLength);
+        const autoXAxisLabelMaxLength = isCompactCanvas ? (isTinyCanvas ? 8 : 12) : 0;
+        const xAxisLabelMaxLength = Number.isFinite(xAxisLabelMaxLengthRaw)
+            ? Math.round(Math.min(40, Math.max(0, xAxisLabelMaxLengthRaw)))
+            : (longestXAxisLabelLength > autoXAxisLabelMaxLength ? autoXAxisLabelMaxLength : 0);
+        const formatXAxisLabel = (value: unknown) => {
+            const text = String(value ?? '');
+            if (xAxisLabelMaxLength <= 0 || text.length <= xAxisLabelMaxLength) {
+                return text;
+            }
+            const keep = Math.max(1, xAxisLabelMaxLength);
+            return `${text.slice(0, keep)}...`;
+        };
+        const legendNames = (() => {
+            const out: string[] = [];
+            const seen = new Set<string>();
+            const push = (raw: unknown) => {
+                const text = String(raw ?? '').trim();
+                if (!text || seen.has(text)) return;
+                seen.add(text);
+                out.push(text);
+            };
+            if (Array.isArray(c.series)) {
+                for (const item of c.series as Array<Record<string, unknown>>) {
+                    push(item?.name);
+                }
+            }
+            if (Array.isArray(c.data)) {
+                for (const item of c.data as Array<Record<string, unknown>>) {
+                    push(item?.name);
+                }
+            }
+            return out;
+        })();
+        const legendCount = legendNames.length;
+        // Nested legend.show overrides legacy legendDisplay
+        const legendDisplayRaw = String(legendDisplayOverride ?? c.legendDisplay ?? 'auto').trim().toLowerCase();
+        const legendDisplayMode = legendDisplayRaw === 'show' || legendDisplayRaw === 'hide' ? legendDisplayRaw : 'auto';
+        const longestLegendTextWidth = legendNames.reduce(
+            (max, name) => Math.max(max, estimateVisualTextWidth(name, legendFontSize)),
+            0,
+        );
+        const autoHideLegendForDensity = isTinyCanvas
+            && legendCount >= 16
+            && longestLegendTextWidth >= 90;
+        const legendVisibleByAuto = !autoHideLegendForDensity && (legendCount > 1 || !isCompactCanvas);
+        const legendVisible = legendDisplayMode === 'show'
+            ? true
+            : (legendDisplayMode === 'hide' ? false : legendVisibleByAuto);
+        const autoLegendAvoid = c.autoLegendAvoid !== false;
+        // Nested legend.position overrides legacy legendPosition
+        const legendPosRaw = String(legendPositionOverride ?? c.legendPosition ?? 'auto').trim().toLowerCase();
+        const legendPosMode = legendPosRaw === 'top'
+            || legendPosRaw === 'bottom'
+            || legendPosRaw === 'left'
+            || legendPosRaw === 'right'
+            || legendPosRaw === 'auto'
+            ? legendPosRaw
+            : 'auto';
+        let legendPosition: 'top' | 'bottom' | 'left' | 'right' = (() => {
+            if (legendPosMode !== 'auto') {
+                return legendPosMode;
+            }
+            if (isTinyCanvas) {
+                return width >= height ? 'bottom' : 'right';
+            }
+            if (isCompactCanvas) {
+                return legendCount >= 8
+                    ? (width >= height ? 'bottom' : 'right')
+                    : (width >= height ? 'top' : 'right');
+            }
+            return width >= height ? 'top' : 'right';
+        })();
+        if (legendVisible && autoLegendAvoid && isCompactCanvas && (legendPosition === 'left' || legendPosition === 'right')) {
+            legendPosition = width >= height ? 'top' : 'bottom';
+        }
+        if (legendVisible && autoLegendAvoid && isTinyCanvas && legendPosition === 'top' && legendCount >= 8) {
+            legendPosition = 'bottom';
+        }
+        const legendOrientRaw = String(c.legendOrient ?? 'auto').trim().toLowerCase();
+        const legendOrient = legendOrientRaw === 'horizontal' || legendOrientRaw === 'vertical'
+            ? legendOrientRaw
+            : ((legendPosition === 'left' || legendPosition === 'right') ? 'vertical' : 'horizontal');
+        const legendAlignRaw = String(c.legendAlign ?? 'auto').trim().toLowerCase();
+        const legendAlign = legendAlignRaw === 'start' || legendAlignRaw === 'center' || legendAlignRaw === 'end'
+            ? legendAlignRaw
+            : 'auto';
+        // Nested legend.itemGap / legend.reserveSize override legacy flat keys
+        const legendItemGap = legendItemGapOverrideFromNested !== undefined
+            ? toNumber(legendItemGapOverrideFromNested, 12, 0, 80)
+            : toNumber(c.legendItemGap, 12, 0, 80);
+        const legendReserveOverrideRaw = legendReserveOverrideFromNested !== undefined
+            ? legendReserveOverrideFromNested
+            : Number(c.legendReserveSize);
+        const legendReserveOverride = Number.isFinite(legendReserveOverrideRaw) && legendReserveOverrideRaw > 0
+            ? Math.round(Math.min(360, Math.max(20, legendReserveOverrideRaw)))
+            : undefined;
+        const legendOffsetBoundX = Math.max(120, Math.round(width * 0.5));
+        const legendOffsetBoundY = Math.max(120, Math.round(height * 0.5));
+        const legendOffsetXBase = toNumber(c.legendOffsetX, 0, -legendOffsetBoundX, legendOffsetBoundX);
+        const legendOffsetYBase = toNumber(c.legendOffsetY, 0, -legendOffsetBoundY, legendOffsetBoundY);
+        const legendOffsetX = legendDragPreview ? legendDragPreview.x : legendOffsetXBase;
+        const legendOffsetY = legendDragPreview ? legendDragPreview.y : legendOffsetYBase;
+        const legendNameMaxWidthRaw = Number(c.legendNameMaxWidth);
+        const legendNameMaxWidthOverride = Number.isFinite(legendNameMaxWidthRaw) && legendNameMaxWidthRaw > 0
+            ? Math.round(Math.min(320, Math.max(40, legendNameMaxWidthRaw)))
+            : undefined;
+        const chartOffsetBoundX = Math.max(40, Math.round(width * 0.45));
+        const chartOffsetBoundY = Math.max(40, Math.round(height * 0.45));
+        const axisChartOffsetXBase = toNumber(c.chartOffsetX, 0, -chartOffsetBoundX, chartOffsetBoundX);
+        const axisChartOffsetYBase = toNumber(c.chartOffsetY, 0, -chartOffsetBoundY, chartOffsetBoundY);
+        const chartOffsetX = chartDragPreview ? chartDragPreview.x : axisChartOffsetXBase;
+        const chartOffsetY = chartDragPreview ? chartDragPreview.y : axisChartOffsetYBase;
+        const titleOffsetBoundX = Math.max(120, Math.round(width * 0.45));
+        const titleOffsetBoundY = Math.max(80, Math.round(height * 0.35));
+        const titleOffsetXBase = toNumber(c.titleOffsetX, 0, -titleOffsetBoundX, titleOffsetBoundX);
+        const titleOffsetYBase = toNumber(c.titleOffsetY, 0, -titleOffsetBoundY, titleOffsetBoundY);
+        const titleOffsetX = titleDragPreview ? titleDragPreview.x : titleOffsetXBase;
+        const titleOffsetY = titleDragPreview ? titleDragPreview.y : titleOffsetYBase;
+        const titleDefaultPosition = (() => {
+            switch (type) {
+                case 'pie-chart':
+                case 'radar-chart':
+                case 'funnel-chart':
+                case 'wordcloud-chart':
+                case 'globe-chart':
+                case 'bar3d-chart':
+                case 'scatter3d-chart':
+                    return 'center' as const;
+                default:
+                    return 'left' as const;
+            }
+        })();
+        const chartTitleLayout = resolveChartTitleLayout({
+            text: titleText,
+            width,
+            height,
+            fontSize: (c.titleFontSize as number) || 18,
+            color: resolveTextColor(c.titleColor as string | undefined, t.textPrimary),
+            positionRaw: c.titlePosition,
+            offsetX: titleOffsetX,
+            offsetY: titleOffsetY,
+            defaultPosition: titleDefaultPosition,
+        });
+        const legendTextMaxWidth = (() => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            if (legendNameMaxWidthOverride) {
+                return legendNameMaxWidthOverride;
+            }
+            if (legendPosition === 'left' || legendPosition === 'right') {
+                return Math.max(56, Math.min(220, Math.floor(width * 0.32)));
+            }
+            const slots = Math.max(1, Math.min(legendCount, isTinyCanvas ? 2 : (isCompactCanvas ? 3 : 4)));
+            return Math.max(56, Math.min(240, Math.floor((width - 24) / slots) - 28));
+        })();
+        const shouldTruncateLegend = legendVisible
+            && autoLegendAvoid
+            && legendTextMaxWidth > 0
+            && (isCompactCanvas || longestLegendTextWidth > legendTextMaxWidth + 8);
+        const formatLegendText = (name: string) => {
+            if (!shouldTruncateLegend) {
+                return name;
+            }
+            return truncateTextByVisualWidth(String(name ?? ''), legendTextMaxWidth, legendFontSize);
+        };
+        const estimateHorizontalLegendReserve = () => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            const safeWidth = Math.max(180, width - 24);
+            const perItemWidth = Math.max(64, Math.min(280, Math.max(Math.round(legendFontSize * 5.8), longestLegendTextWidth + 26)));
+            const itemsPerRow = Math.max(1, Math.floor(safeWidth / perItemWidth));
+            const rowCount = Math.max(1, Math.ceil(Math.max(legendCount, 1) / itemsPerRow));
+            const rowHeight = Math.max(18, legendFontSize + 8);
+            const reserve = rowCount * rowHeight + 8;
+            return Math.min(Math.max(40, Math.floor(height * 0.45)), Math.max(32, reserve));
+        };
+        const estimateVerticalLegendReserve = () => {
+            if (!legendVisible || legendCount <= 0) return 0;
+            const baseWidth = Math.max(72, Math.min(260, Math.max(Math.round(64 + legendFontSize * 3.5), longestLegendTextWidth + 26)));
+            const overflowExtra = legendCount > 8 ? Math.min(60, (legendCount - 8) * 4) : 0;
+            const reserve = baseWidth + overflowExtra;
+            return Math.min(Math.max(76, Math.floor(width * 0.42)), Math.max(70, reserve));
+        };
+        const axisLegendReserveDefault = legendPosition === 'left' || legendPosition === 'right'
+            ? estimateVerticalLegendReserve()
+            : estimateHorizontalLegendReserve();
+        const visualLegendReserveDefault = legendPosition === 'left' || legendPosition === 'right'
+            ? Math.max(50, axisLegendReserveDefault - 14)
+            : Math.max(28, axisLegendReserveDefault - 10);
+        const axisLegendReserve = legendReserveOverride ?? axisLegendReserveDefault;
+        const visualLegendReserve = legendReserveOverride ?? visualLegendReserveDefault;
+        const legendBaseLayout: Record<string, unknown> = (() => {
+            if (!legendVisible) {
+                return {};
+            }
+            const resolvedAlign = legendAlign === 'auto'
+                ? ((autoLegendAvoid && isCompactCanvas && legendCount > 8) ? 'start' : 'center')
+                : legendAlign;
+            if (legendPosition === 'bottom') {
+                if (resolvedAlign === 'start') return { top: 'auto', bottom: 4, left: 8 };
+                if (resolvedAlign === 'end') return { top: 'auto', bottom: 4, right: 8 };
+                return { top: 'auto', bottom: 4, left: 'center' };
+            }
+            if (legendPosition === 'left') {
+                if (resolvedAlign === 'start') return { left: 4, top: 8 };
+                if (resolvedAlign === 'end') return { left: 4, bottom: 8 };
+                return { left: 4, top: 'middle' };
+            }
+            if (legendPosition === 'right') {
+                if (resolvedAlign === 'start') return { right: 4, top: 8 };
+                if (resolvedAlign === 'end') return { right: 4, bottom: 8 };
+                return { right: 4, top: 'middle' };
+            }
+            if (resolvedAlign === 'start') return { top: 4, left: 8 };
+            if (resolvedAlign === 'end') return { top: 4, right: 8 };
+            return { top: 4, left: 'center' };
+        })();
+        const estimateLegendRenderSize = () => {
+            if (!legendVisible || legendCount <= 0) {
+                return { width: 0, height: 0 };
+            }
+            if (legendOrient === 'vertical') {
+                const lineHeight = Math.max(18, legendFontSize + 8);
+                const estimatedHeight = Math.min(height - 16, Math.max(lineHeight + 8, legendCount * lineHeight));
+                const estimatedWidth = Math.min(
+                    width - 16,
+                    Math.max(72, (legendNameMaxWidthOverride ?? Math.min(260, longestLegendTextWidth)) + 26),
+                );
+                return { width: estimatedWidth, height: estimatedHeight };
+            }
+            const perItemWidth = Math.max(64, Math.min(280, Math.max((legendNameMaxWidthOverride ?? longestLegendTextWidth) + 26, Math.round(legendFontSize * 5.8))));
+            const itemsPerRow = Math.max(1, Math.floor(Math.max(180, width - 24) / perItemWidth));
+            const rows = Math.max(1, Math.ceil(legendCount / itemsPerRow));
+            const estimatedWidth = Math.min(width - 16, Math.max(perItemWidth, itemsPerRow * perItemWidth));
+            const estimatedHeight = Math.min(height - 16, Math.max(24, rows * (legendFontSize + 8) + 8));
+            return { width: estimatedWidth, height: estimatedHeight };
+        };
+        const legendLayout: Record<string, unknown> = (() => {
+            if (!legendVisible || (legendOffsetX === 0 && legendOffsetY === 0)) {
+                return legendBaseLayout;
+            }
+            const next = { ...legendBaseLayout } as Record<string, unknown>;
+            const est = estimateLegendRenderSize();
+            const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+            if (legendOffsetX !== 0) {
+                if (typeof next.left === 'number') {
+                    next.left = Math.round(clamp(next.left + legendOffsetX, 0, Math.max(0, width - est.width)));
+                } else if (typeof next.right === 'number') {
+                    next.right = Math.round(clamp(next.right - legendOffsetX, 0, Math.max(0, width - est.width)));
+                } else if (next.left === 'center') {
+                    next.left = Math.round(clamp(((width - est.width) / 2) + legendOffsetX, 0, Math.max(0, width - est.width)));
+                }
+            }
+            if (legendOffsetY !== 0) {
+                if (typeof next.top === 'number') {
+                    next.top = Math.round(clamp(next.top + legendOffsetY, 0, Math.max(0, height - est.height)));
+                } else if (typeof next.bottom === 'number') {
+                    next.bottom = Math.round(clamp(next.bottom - legendOffsetY, 0, Math.max(0, height - est.height)));
+                } else if (next.top === 'middle') {
+                    next.top = Math.round(clamp(((height - est.height) / 2) + legendOffsetY, 0, Math.max(0, height - est.height)));
+                }
+            }
+            return next;
+        })();
+        const legendDragEnabled = mode === 'designer'
+            && c.legendDragEnabled === true
+            && legendVisible
+            && legendCount > 0;
+        const chartDragEnabled = mode === 'designer'
+            && c.chartDragEnabled === true;
+        const legendBoxRect = (() => {
+            if (!legendVisible) {
+                return { left: 0, top: 0, width: 0, height: 0 };
+            }
+            const est = estimateLegendRenderSize();
+            const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+            let left = 8;
+            if (typeof legendLayout.left === 'number') {
+                left = legendLayout.left;
+            } else if (typeof legendLayout.right === 'number') {
+                left = width - legendLayout.right - est.width;
+            } else if (legendLayout.left === 'center') {
+                left = (width - est.width) / 2;
+            }
+            let top = 8;
+            if (typeof legendLayout.top === 'number') {
+                top = legendLayout.top;
+            } else if (typeof legendLayout.bottom === 'number') {
+                top = height - legendLayout.bottom - est.height;
+            } else if (legendLayout.top === 'middle') {
+                top = (height - est.height) / 2;
+            }
+            return {
+                left: Math.round(clamp(left, 0, Math.max(0, width - est.width))),
+                top: Math.round(clamp(top, 0, Math.max(0, height - est.height))),
+                width: Math.max(0, est.width),
+                height: Math.max(0, est.height),
+            };
+        })();
+        const legendDragHandleStyle = legendDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(legendBoxRect.left + Math.max(8, legendBoxRect.width / 2) - 6))),
+            top: Math.max(2, Math.min(height - 14, Math.round(legendBoxRect.top + 2))),
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[0] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'grab',
+            zIndex: 20,
+            opacity: 0.9,
+            padding: 0,
+        } : null;
+        const legendConfig: Record<string, unknown> = {
+            show: legendVisible,
+            type: c.legendScrollable === false ? 'plain' : 'scroll',
+            orient: legendOrient,
+            itemGap: legendItemGap,
+            ...(shouldTruncateLegend ? { formatter: (name: string) => formatLegendText(name) } : {}),
+            textStyle: { color: legendColorOverride ?? t.textPrimary, fontSize: legendFontSize },
+            pageTextStyle: { color: legendColorOverride ?? t.textSecondary, fontSize: Math.max(10, legendFontSize - 1) },
+            pageIconColor: t.textSecondary,
+            pageIconInactiveColor: t.textMuted,
+            ...legendLayout,
+        };
+        const axisLabelBottomBoost = Math.abs(xAxisLabelRotate) >= 30 ? 16 : 0;
+        const axisLabelEllipsisBoost = xAxisLabelMaxLength > 0 ? 6 : 0;
+        const axisAutoPadding = {
+            left: 56 + (legendPosition === 'left' ? axisLegendReserve : 0),
+            right: 30 + (legendPosition === 'right' ? axisLegendReserve : 0),
+            top: 18 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? axisLegendReserve : 0),
+            bottom: 42 + (legendPosition === 'bottom' ? axisLegendReserve : 0) + axisLabelBottomBoost + axisLabelEllipsisBoost,
+        };
+        const axisBaseLeft = readPaddingOverride('chartPaddingLeft') ?? axisAutoPadding.left;
+        const axisBaseRight = readPaddingOverride('chartPaddingRight') ?? axisAutoPadding.right;
+        const axisBaseTop = readPaddingOverride('chartPaddingTop') ?? axisAutoPadding.top;
+        const axisBaseBottom = readPaddingOverride('chartPaddingBottom') ?? axisAutoPadding.bottom;
+        const axisGrid = {
+            left: Math.max(0, axisBaseLeft + Math.max(0, chartOffsetX)),
+            right: Math.max(0, axisBaseRight + Math.max(0, -chartOffsetX)),
+            top: Math.max(0, axisBaseTop + Math.max(0, chartOffsetY)),
+            bottom: Math.max(0, axisBaseBottom + Math.max(0, -chartOffsetY)),
+            containLabel: true,
+        };
+        const xAxisLabelIntervalRaw = Number(c.xAxisLabelInterval);
+        const autoXAxisLabelInterval = (() => {
+            if (!xAxisCategoryCount || xAxisCategoryCount <= 1) return 0;
+            if (!isCompactCanvas && xAxisCategoryCount <= 12) return 0;
+            const projectedWidth = Math.max(
+                axisFontSize + 6,
+                estimateVisualTextWidth('W'.repeat(Math.max(1, Math.min(16, xAxisLabelMaxLength || longestXAxisLabelLength))), axisFontSize),
+            );
+            const plotSpan = Math.max(120, width - axisGrid.left - axisGrid.right);
+            const perCategorySpan = Math.max(8, plotSpan / xAxisCategoryCount);
+            const rotationFactor = Math.max(0.3, Math.cos(Math.abs(xAxisLabelRotate) * Math.PI / 180));
+            const neededStep = Math.ceil((projectedWidth * rotationFactor) / perCategorySpan);
+            return Math.max(0, Math.min(xAxisCategoryCount - 1, neededStep - 1));
+        })();
+        const xAxisLabelInterval = Number.isFinite(xAxisLabelIntervalRaw) && xAxisLabelIntervalRaw > 0
+            ? Math.max(0, Math.round(xAxisLabelIntervalRaw))
+            : autoXAxisLabelInterval;
+        const visualAutoPadding = {
+            left: 12 + (legendPosition === 'left' ? visualLegendReserve : 0),
+            right: 12 + (legendPosition === 'right' ? visualLegendReserve : 0),
+            top: 12 + (hasTitle ? 28 : 0) + (legendPosition === 'top' ? visualLegendReserve : 0),
+            bottom: 12 + (legendPosition === 'bottom' ? visualLegendReserve : 0),
+        };
+        const visualPadding = {
+            left: readPaddingOverride('chartPaddingLeft') ?? visualAutoPadding.left,
+            right: readPaddingOverride('chartPaddingRight') ?? visualAutoPadding.right,
+            top: readPaddingOverride('chartPaddingTop') ?? visualAutoPadding.top,
+            bottom: readPaddingOverride('chartPaddingBottom') ?? visualAutoPadding.bottom,
+        };
+        const chartScalePercentRaw = Number(c.chartScalePercent);
+        const chartScalePercent = Number.isFinite(chartScalePercentRaw)
+            ? toNumber(c.chartScalePercent, 100, 40, 180)
+            : (isCompactCanvas ? (isTinyCanvas ? 82 : 90) : 100);
+        const chartScale = chartScalePercent / 100;
+        const seriesLabelPositionRaw = String(c.seriesLabelPosition ?? 'auto').trim().toLowerCase();
+        const seriesLabelPosition = seriesLabelPositionRaw === 'inside'
+            || seriesLabelPositionRaw === 'outside'
+            || seriesLabelPositionRaw === 'none'
+            ? seriesLabelPositionRaw
+            : 'auto';
+        const seriesLabelFontSize = toNumber(c.seriesLabelFontSize, 12, 10, 28);
+        const seriesLabelMinAngleRaw = Number(c.seriesLabelMinAngle);
+        const seriesLabelMinAngle = Number.isFinite(seriesLabelMinAngleRaw) && seriesLabelMinAngleRaw > 0
+            ? toNumber(c.seriesLabelMinAngle, 2, 1, 45)
+            : (isTinyCanvas ? 8 : 2);
+        const seriesLabelLineLengthRaw = Number(c.seriesLabelLineLength);
+        const seriesLabelLineLength2Raw = Number(c.seriesLabelLineLength2);
+        const seriesLabelLineLength = Number.isFinite(seriesLabelLineLengthRaw) && seriesLabelLineLengthRaw > 0
+            ? toNumber(c.seriesLabelLineLength, 12, 4, 60)
+            : (isTinyCanvas ? 8 : 15);
+        const seriesLabelLineLength2 = Number.isFinite(seriesLabelLineLength2Raw) && seriesLabelLineLength2Raw > 0
+            ? toNumber(c.seriesLabelLineLength2, 8, 3, 60)
+            : (isTinyCanvas ? 5 : 10);
+        const axisSeries = Array.isArray(c.series)
+            ? (c.series as Array<Record<string, unknown>>)
+            : [];
+        const axisSeriesCount = axisSeries.length;
+        const axisSeriesPointCount = axisSeries.reduce((sum, item) => {
+            const data = item?.data;
+            return sum + (Array.isArray(data) ? data.length : 0);
+        }, 0);
+        const axisSeriesDensity = xAxisCategoryCount * Math.max(axisSeriesCount, 1);
+        const axisSeriesLabelAutoHide = isCompactCanvas
+            ? axisSeriesDensity > (isTinyCanvas ? 18 : 28)
+            : axisSeriesDensity > 40;
+        const axisSeriesLabelStrategyRaw = String(c.axisSeriesLabelStrategy ?? 'auto').trim().toLowerCase();
+        const axisSeriesLabelStrategy = axisSeriesLabelStrategyRaw === 'all'
+            || axisSeriesLabelStrategyRaw === 'first'
+            || axisSeriesLabelStrategyRaw === 'none'
+            ? axisSeriesLabelStrategyRaw
+            : 'auto';
+        const resolvedAxisSeriesLabelStrategy = (() => {
+            if (axisSeriesLabelStrategy !== 'auto') {
+                return axisSeriesLabelStrategy;
+            }
+            if (seriesLabelPosition === 'none' || axisSeriesLabelAutoHide) {
+                return 'none';
+            }
+            if (isTinyCanvas) {
+                return axisSeriesCount > 1 ? 'first' : 'all';
+            }
+            if (axisSeriesCount >= 3 || axisSeriesDensity > 30) {
+                return 'first';
+            }
+            return 'all';
+        })();
+        const axisSeriesLabelShow = resolvedAxisSeriesLabelStrategy !== 'none';
+        const axisSeriesLabelStepRaw = Number(c.axisSeriesLabelStep);
+        const autoAxisSeriesLabelStep = (() => {
+            if (xAxisCategoryCount <= 0) return 1;
+            const baseTarget = isTinyCanvas ? 5 : (isCompactCanvas ? 8 : 12);
+            const target = resolvedAxisSeriesLabelStrategy === 'all'
+                ? baseTarget
+                : Math.max(4, Math.round(baseTarget * 0.8));
+            const step = Math.ceil(xAxisCategoryCount / Math.max(1, target));
+            return Math.max(1, step);
+        })();
+        const axisSeriesLabelStep = Number.isFinite(axisSeriesLabelStepRaw) && axisSeriesLabelStepRaw > 0
+            ? Math.max(1, Math.round(axisSeriesLabelStepRaw))
+            : autoAxisSeriesLabelStep;
+        const axisLineLabelPosition = seriesLabelPosition === 'inside' ? 'inside' : 'top';
+        const axisBarLabelPosition = seriesLabelPosition === 'inside' ? 'insideTop' : 'top';
+        const axisBarLabelColor = axisBarLabelPosition === 'insideTop' ? '#ffffff' : t.textPrimary;
+        const formatMeasureValue = (raw: unknown): string => {
+            const parsed = Number(raw);
+            if (Number.isFinite(parsed)) {
+                if (Number.isInteger(parsed)) {
+                    return parsed.toLocaleString('zh-CN');
+                }
+                return parsed.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+            }
+            return String(raw ?? '');
+        };
+        const resolveAxisPointValue = (raw: unknown): unknown => {
+            if (Array.isArray(raw)) {
+                for (let i = raw.length - 1; i >= 0; i -= 1) {
+                    const item = raw[i];
+                    if (item !== null && item !== undefined && item !== '') {
+                        return item;
+                    }
+                }
+                return '';
+            }
+            if (raw && typeof raw === 'object') {
+                const row = raw as Record<string, unknown>;
+                if ('value' in row) {
+                    return resolveAxisPointValue(row.value);
+                }
+            }
+            return raw;
+        };
+        const axisSeriesLabelFormatter = (raw: unknown) => {
+            const row = raw && typeof raw === 'object'
+                ? (raw as Record<string, unknown>)
+                : null;
+            const dataIndexRaw = Number(row?.dataIndex);
+            if (axisSeriesLabelStep > 1 && Number.isFinite(dataIndexRaw) && dataIndexRaw >= 0) {
+                const dataIndex = Math.round(dataIndexRaw);
+                if (dataIndex % axisSeriesLabelStep !== 0) {
+                    return '';
+                }
+            }
+            const value = resolveAxisPointValue(row?.value ?? raw);
+            return formatMeasureValue(value);
+        };
+        const axisTooltipMaxRowsRaw = Number(c.axisTooltipMaxRows);
+        const axisTooltipMaxRows = Number.isFinite(axisTooltipMaxRowsRaw) && axisTooltipMaxRowsRaw > 0
+            ? Math.min(50, Math.max(1, Math.round(axisTooltipMaxRowsRaw)))
+            : (isTinyCanvas ? 4 : (isCompactCanvas ? 6 : 10));
+        const axisTooltipFormatter = (raw: unknown) => {
+            const rows = Array.isArray(raw)
+                ? raw as Array<Record<string, unknown>>
+                : [raw as Record<string, unknown>];
+            if (rows.length === 0) {
+                return '';
+            }
+            const first = rows[0] ?? {};
+            const axisTitle = String(first.axisValueLabel ?? first.axisValue ?? first.name ?? '').trim();
+            const lines = [axisTitle];
+            const withPriority = rows.map((row, index) => {
+                const value = resolveAxisPointValue(row.value ?? row.data);
+                const numeric = Number(value);
+                return {
+                    row,
+                    index,
+                    value,
+                    weight: Number.isFinite(numeric) ? Math.abs(numeric) : -1,
+                };
+            });
+            const limitedRows = withPriority.length > axisTooltipMaxRows
+                ? [...withPriority]
+                    .sort((a, b) => (b.weight - a.weight) || (a.index - b.index))
+                    .slice(0, axisTooltipMaxRows)
+                    .sort((a, b) => a.index - b.index)
+                : withPriority;
+            for (const item of limitedRows) {
+                const row = item.row;
+                const marker = typeof row.marker === 'string' ? row.marker : '';
+                const seriesName = String(row.seriesName ?? '').trim() || '系列';
+                lines.push(`${marker}${seriesName}: ${formatMeasureValue(item.value)}`);
+            }
+            const hidden = rows.length - limitedRows.length;
+            if (hidden > 0) {
+                lines.push(`... 其余 ${hidden} 项`);
+            }
+            return lines.join('<br/>');
+        };
+        const seriesDataCount = Array.isArray(c.data) ? c.data.length : 0;
+        const forceInsideForTiny = isTinyCanvas && seriesDataCount >= 6 && seriesLabelPosition === 'auto';
+        const pieLabelPosition = forceInsideForTiny
+            ? 'inside'
+            : (seriesLabelPosition === 'auto'
+                ? 'outside'
+                : (seriesLabelPosition === 'outside' ? 'outside' : 'inside'));
+        const funnelLabelPosition = forceInsideForTiny
+            ? 'inside'
+            : (seriesLabelPosition === 'outside' ? 'right' : 'inside');
+        const pieLabelShow = seriesLabelPosition !== 'none' && !(isTinyCanvas && seriesDataCount >= 10);
+        const funnelLabelShow = seriesLabelPosition !== 'none' && !(isTinyCanvas && seriesDataCount >= 9);
+        const chartDataPointCount = (() => {
+            if (axisSeriesCount > 0) {
+                return axisSeriesPointCount;
+            }
+            if (Array.isArray(c.data)) {
+                return c.data.length;
+            }
+            return 0;
+        })();
+        const disableChartAnimation = isTinyCanvas || chartDataPointCount > 2000;
+        const chartMotionOption = disableChartAnimation
+            ? { animation: false, animationDuration: 0, animationDurationUpdate: 0 }
+            : {};
+        const plotWidth = Math.max(40, width - visualPadding.left - visualPadding.right);
+        const plotHeight = Math.max(40, height - visualPadding.top - visualPadding.bottom);
+        const plotCenterX = visualPadding.left + (plotWidth / 2) + chartOffsetX;
+        const plotCenterY = visualPadding.top + (plotHeight / 2) + chartOffsetY;
+        const pieOuterRadius = Math.max(20, Math.min(plotWidth, plotHeight) * 0.36 * chartScale);
+        const pieInnerRadius = Math.max(10, pieOuterRadius * 0.58);
+        const radarRadius = Math.max(20, Math.min(plotWidth, plotHeight) * 0.42 * chartScale);
+        const funnelLeft = Math.max(0, visualPadding.left + chartOffsetX);
+        const funnelRight = Math.max(0, visualPadding.right - chartOffsetX);
+        const funnelTop = Math.max(0, visualPadding.top + chartOffsetY);
+        const funnelBottom = Math.max(0, visualPadding.bottom - chartOffsetY);
+        const chartDragHandleStyle = chartDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(plotCenterX) - 6)),
+            top: Math.max(2, Math.min(height - 14, Math.round(plotCenterY) - 6)),
+            width: 12,
+            height: 12,
+            borderRadius: 3,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[1] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'move',
+            zIndex: 20,
+            opacity: 0.92,
+            padding: 0,
+        } : null;
+        const titleDragEnabled = mode === 'designer'
+            && c.titleDragEnabled === true
+            && hasTitle;
+        const titleDragHandleStyle = titleDragEnabled ? {
+            position: 'absolute' as const,
+            left: Math.max(2, Math.min(width - 14, Math.round(chartTitleLayout.handleRect.left + (chartTitleLayout.handleRect.width / 2)) - 6)),
+            top: Math.max(2, Math.min(height - 14, Math.round(chartTitleLayout.handleRect.top + (chartTitleLayout.handleRect.height / 2)) - 6)),
+            width: 12,
+            height: 12,
+            borderRadius: 999,
+            border: `1px solid ${t.textPrimary}`,
+            background: t.echarts.colorPalette?.[2] || t.accentColor,
+            boxShadow: '0 1px 4px rgba(0,0,0,0.35)',
+            cursor: 'grab',
+            zIndex: 20,
+            opacity: 0.92,
+            padding: 0,
+        } : null;
+        const renderUnavailableState = (title: string, detail?: string) => (
+            <div style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                background: t.placeholder.background,
+                border: t.placeholder.border,
+                borderRadius: 8,
+                color: t.placeholder.color,
+                fontSize: 12,
+                textAlign: 'center',
+                padding: 12,
+            }}>
+                <strong style={{ fontSize: 12, fontWeight: 600 }}>{title}</strong>
+                {detail ? (
+                    <span style={{ fontSize: 11, opacity: 0.82, lineHeight: 1.5 }}>{detail}</span>
+                ) : null}
+            </div>
+        );
+
+        if (ECHART_COMPONENT_TYPES.has(type) && !EChartsComponent) {
+            return renderUnavailableState('图表引擎未就绪', '正在加载 ECharts 运行时，请稍候。');
+        }
+        const EChart = EChartsComponent as ReactEChartsComponent;
+        const renderEChartWithHandles = (
+            option: Record<string, unknown>,
+            onEvents?: Record<string, (params: Record<string, unknown>) => void>,
+        ) => {
+            // Inject markLine / markArea / conditionalColors from config
+            const annotatedOption = injectChartAnnotations(option, c);
+            const chartNode = (
+                <EChart
+                    style={{ width: '100%', height: '100%' }}
+                    option={annotatedOption}
+                    notMerge
+                    lazyUpdate={false}
+                    onEvents={onEvents}
+                />
+            );
+            const showTitleHandle = titleDragEnabled && !!titleDragHandleStyle;
+            const showLegendHandle = legendDragEnabled && !!legendDragHandleStyle;
+            const showChartHandle = chartDragEnabled && !!chartDragHandleStyle;
+            if (!showTitleHandle && !showLegendHandle && !showChartHandle) {
+                return chartNode;
+            }
+            const handleTitleHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearTitleDragHandlers();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = titleOffsetX;
+                const startOffsetY = titleOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(titleOffsetBoundX, Math.max(-titleOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(titleOffsetBoundY, Math.max(-titleOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setTitleDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearTitleDragHandlers();
+                    setTitleDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            titleOffsetX: lastOffsetX,
+                            titleOffsetY: lastOffsetY,
+                            titleDragEnabled: true,
+                        });
+                    }
+                };
+                titleDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
+            const handleLegendHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearTitleDragHandlers();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = legendOffsetX;
+                const startOffsetY = legendOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(legendOffsetBoundX, Math.max(-legendOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(legendOffsetBoundY, Math.max(-legendOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setLegendDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearLegendDragHandlers();
+                    setLegendDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            legendOffsetX: lastOffsetX,
+                            legendOffsetY: lastOffsetY,
+                            legendDragEnabled: true,
+                        });
+                    }
+                };
+                legendDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
+            const handleChartHandleMouseDown = (event: ReactMouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                event.stopPropagation();
+                clearTitleDragHandlers();
+                clearLegendDragHandlers();
+                clearChartDragHandlers();
+                const startClientX = event.clientX;
+                const startClientY = event.clientY;
+                const startOffsetX = chartOffsetX;
+                const startOffsetY = chartOffsetY;
+                let lastOffsetX = startOffsetX;
+                let lastOffsetY = startOffsetY;
+                const clampX = (value: number) => Math.round(Math.min(chartOffsetBoundX, Math.max(-chartOffsetBoundX, value)));
+                const clampY = (value: number) => Math.round(Math.min(chartOffsetBoundY, Math.max(-chartOffsetBoundY, value)));
+                const move = (moveEvent: MouseEvent) => {
+                    const deltaX = moveEvent.clientX - startClientX;
+                    const deltaY = moveEvent.clientY - startClientY;
+                    lastOffsetX = clampX(startOffsetX + deltaX);
+                    lastOffsetY = clampY(startOffsetY + deltaY);
+                    setChartDragPreview({ x: lastOffsetX, y: lastOffsetY });
+                };
+                const up = () => {
+                    clearChartDragHandlers();
+                    setChartDragPreview(null);
+                    if ((lastOffsetX !== startOffsetX || lastOffsetY !== startOffsetY) && onConfigMetaRef.current) {
+                        onConfigMetaRef.current({
+                            chartOffsetX: lastOffsetX,
+                            chartOffsetY: lastOffsetY,
+                            chartDragEnabled: true,
+                        });
+                    }
+                };
+                chartDragHandlersRef.current = { move, up };
+                window.addEventListener('mousemove', move);
+                window.addEventListener('mouseup', up);
+            };
+            return (
+                <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+                    {chartNode}
+                    {showTitleHandle ? (
+                        <button
+                            type="button"
+                            style={titleDragHandleStyle!}
+                            onMouseDown={handleTitleHandleMouseDown}
+                            title="拖拽微调标题位置"
+                        />
+                    ) : null}
+                    {showLegendHandle ? (
+                        <button
+                            type="button"
+                            style={legendDragHandleStyle!}
+                            onMouseDown={handleLegendHandleMouseDown}
+                            title="拖拽微调图例位置"
+                        />
+                    ) : null}
+                    {showChartHandle ? (
+                        <button
+                            type="button"
+                            style={chartDragHandleStyle!}
+                            onMouseDown={handleChartHandleMouseDown}
+                            title="拖拽微调图形位置"
+                        />
+                    ) : null}
+                </div>
+            );
+        };
+
+        switch (type) {
+            // ==================== ECharts 图表 (delegated to EChartsRenderer) ====================
+            case 'line-chart':
+            case 'bar-chart':
+            case 'pie-chart':
+            case 'gauge-chart':
+            case 'gantt-chart':
+            case 'radar-chart':
+            case 'funnel-chart':
+            case 'scatter-chart':
+            case 'combo-chart':
+            case 'treemap-chart':
+            case 'sunburst-chart':
+            case 'wordcloud-chart':
+            case 'waterfall-chart':
+            case 'map-chart':
+            // 新增 ECharts 扩展图表（P2/P3）
+            case 'effectScatter-chart':
+            case 'lines-chart':
+            case 'bar-racing-chart':
+            case 'polar-line-chart':
+            case 'polar-bar-chart':
+            case 'liquidFill-chart':
+            case 'bar3D-chart':
+            case 'scatter3D-chart':
+            case 'line3D-chart':
+            case 'surface-chart':
+            case 'map3D-chart':
+            {
+                const chartNode = renderECharts({
+                    type, c, t, width, height, mode, componentId: component.id, runtime,
+                    fontFamily: screenFontFamily,
+                    EChart, renderEChartWithHandles,
+                    themeOptions, chartMotionOption, chartTitleLayout, legendConfig, axisGrid, seriesColors,
+                    axisOverrides,
+                    axisFontSize, axisLabelColor, seriesLabelFontSize,
+                    xAxisLabelRotate, yAxisLabelRotate, xAxisLabelInterval, formatXAxisLabel,
+                    axisSeriesLabelShow, resolvedAxisSeriesLabelStrategy, axisSeriesLabelFormatter,
+                    axisLineLabelPosition, axisBarLabelPosition, axisBarLabelColor, axisTooltipFormatter,
+                    isCompactCanvas, isTinyCanvas, xAxisCategoryCount,
+                    plotCenterX, plotCenterY, pieInnerRadius, pieOuterRadius, pieLabelShow, pieLabelPosition,
+                    radarRadius,
+                    funnelLeft, funnelRight, funnelTop, funnelBottom, funnelLabelShow, funnelLabelPosition,
+                    seriesLabelLineLength, seriesLabelLineLength2, seriesLabelMinAngle,
+                    echartsClickHandler, componentActions, executeComponentActions,
+                    mapDrillRegion, setMapDrillRegion, mapReadyVersion, hasMapFn,
+                    cardData,
+                });
+                const metricNote = c.metricNote as MetricNote | undefined;
+                if (!metricNote) return chartNode;
+                return (
+                    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+                        {chartNode}
+                        <div
+                            style={{
+                                position: 'absolute',
+                                top: 4,
+                                right: 6,
+                                zIndex: 5,
+                                pointerEvents: 'auto',
+                            }}
+                        >
+                            <MetricNoteBadge note={metricNote} iconColor="rgba(255,255,255,0.7)" iconSize={12} />
+                        </div>
+                    </div>
+                );
+            }
+
+            // ==================== 基础 + 形状 + 媒体组件 ====================
+            case 'number-card':
+            case 'stat-card':
+            case 'title':
+            case 'markdown-text':
+            case 'richtext':
+            case 'datetime':
+            case 'countdown':
+            case 'marquee':
+            case 'carousel':
+            case 'progress-bar':
+            case 'tab-switcher':
+            case 'shape':
+            case 'container':
+            case 'image':
+            case 'video':
+            case 'iframe':
+                return renderBasic(type, {
+                    c, t, component, runtime,
+                    fontFamily: screenFontFamily,
+                    currentTime,
+                    carouselItems, carouselIndex, setCarouselIndex, setCarouselPaused,
+                    tabOptions, tabRuntimeValue, tabDefaultValue, tabVariableKey,
+                });
+
+            // ==================== Filter 组件 (delegated to FilterRenderer) ====================
+            case 'filter-input':
+            case 'filter-select':
+            case 'filter-date-range':
+                return renderFilter(type, {
+                    c, t, theme, component, runtime,
+                    filterInputDraft, setFilterInputDraft,
+                    filterSelectVariableKey, filterSelectOptions,
+                    filterDateStartKey, filterDateEndKey,
+                    scheduleFilterVariableUpdate,
+                });
+
+            // ==================== DataV 组件 (delegated to DataVRenderer) ====================
+            case 'border-box':
+            case 'decoration':
+            case 'scroll-ranking':
+            case 'water-level':
+            case 'digital-flop':
+            case 'percent-pond':
+            case 'flyline-chart':
+                return renderDataV({ type, c, width, height, t, fontFamily: screenFontFamily });
+
+            // ==================== Table-family (delegated to TableRenderer) ====================
+            case 'scroll-board':
+            case 'table':
+                return renderTable({
+                    type,
+                    c,
+                    t,
+                    width,
+                    height,
+                    theme,
+                    fontFamily: screenFontFamily,
+                    mode,
+                    component,
+                    runtime: runtime as any,
+                    cardData,
+                    tableSort,
+                    setTableSort,
+                    tablePage,
+                    setTablePage,
+                    drillState: drillState as any,
+                    drillActive,
+                    drillRuntimeEnabled,
+                    drillLoading: cardLoading,
+                    componentActions: componentActions as any,
+                    executeComponentActions,
+                    renderUnavailableState,
+                    onConfigMeta: persistConfigMeta,
+                });
+
+            // ==================== 3D 可视化 (echarts-gl) ====================
+            case 'globe-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const autoRotate = c.autoRotate !== false;
+                const rotateSpeed = Number(c.rotateSpeed ?? 10);
+                const baseTexture = String(c.baseTexture ?? '');
+                const heightTexture = String(c.heightTexture ?? '');
+                const showAtmosphere = c.showAtmosphere !== false;
+                const globeBgColor = String(c.globeBackground ?? '#000');
+                const scatterData = Array.isArray(c.scatterData)
+                    ? (c.scatterData as Array<{ name: string; value: [number, number, number] }>)
+                    : [];
+                const flowData = Array.isArray(c.flowData)
+                    ? (c.flowData as Array<{ coords: [number, number][] }>)
+                    : [];
+
+                const globeSeries: Array<Record<string, unknown>> = [];
+                if (scatterData.length > 0) {
+                    globeSeries.push({
+                        type: 'scatter3D',
+                        coordinateSystem: 'globe',
+                        data: scatterData.map(d => ({
+                            name: d.name,
+                            value: d.value,
+                        })),
+                        symbolSize: Number(c.pointSize ?? 12),
+                        itemStyle: { color: t.echarts.colorPalette[0] },
+                        label: { show: true, formatter: '{b}', textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 } },
+                    });
+                }
+                if (flowData.length > 0) {
+                    globeSeries.push({
+                        type: 'lines3D',
+                        coordinateSystem: 'globe',
+                        effect: { show: true, trailLength: 0.2, trailWidth: 2, trailOpacity: 0.6 },
+                        lineStyle: { width: 1, color: t.echarts.colorPalette[1], opacity: 0.6 },
+                        data: flowData.map(f => ({ coords: f.coords })),
+                        blendMode: 'lighter',
+                    });
+                }
+
+                return renderEChartWithHandles({
+                    backgroundColor: globeBgColor,
+                    globe: {
+                        baseTexture: baseTexture || undefined,
+                        heightTexture: heightTexture || undefined,
+                        shading: 'color',
+                        viewControl: {
+                            autoRotate,
+                            autoRotateSpeed: rotateSpeed,
+                            distance: Number(c.viewDistance ?? 200),
+                        },
+                        light: {
+                            ambient: { intensity: 0.6 },
+                            main: { intensity: 1.2 },
+                        },
+                        atmosphere: showAtmosphere ? { show: true, glowPower: 6 } : undefined,
+                    },
+                    series: globeSeries,
+                    title: chartTitleLayout.titleOption,
+                }, echartsClickHandler);
+            }
+
+            case 'bar3d-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const xData = Array.isArray(c.xAxisData) ? c.xAxisData as string[] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+                const yData = Array.isArray(c.yAxisData) ? c.yAxisData as string[] : ['A', 'B', 'C'];
+                const bar3dData = Array.isArray(c.data)
+                    ? (c.data as Array<[number, number, number]>)
+                    : xData.flatMap((_, xi) => yData.map((__, yi) => [xi, yi, Math.round(Math.random() * 100)] as [number, number, number]));
+                const bar3dMax = Math.max(1, ...bar3dData.map(d => d[2]));
+                const colorRangeRaw = c.colorRange as [string, string] | undefined;
+                const colorRange = colorRangeRaw ?? ['#313695', '#a50026'];
+                const viewAlpha = Number(c.viewAlpha ?? 40);
+                const viewBeta = Number(c.viewBeta ?? 30);
+
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    title: chartTitleLayout.titleOption,
+                    tooltip: {},
+                    visualMap: {
+                        max: bar3dMax,
+                        inRange: { color: colorRange },
+                        textStyle: { color: t.textPrimary },
+                    },
+                    xAxis3D: { type: 'category', data: xData, axisLabel: { color: t.textPrimary } },
+                    yAxis3D: { type: 'category', data: yData, axisLabel: { color: t.textPrimary } },
+                    zAxis3D: { type: 'value', axisLabel: { color: t.textPrimary } },
+                    grid3D: {
+                        boxWidth: Number(c.boxWidth ?? 100),
+                        boxDepth: Number(c.boxDepth ?? 80),
+                        boxHeight: Number(c.boxHeight ?? 60),
+                        viewControl: { alpha: viewAlpha, beta: viewBeta, autoRotate: c.autoRotate === true },
+                        light: { main: { intensity: 1.2 }, ambient: { intensity: 0.3 } },
+                    },
+                    series: [{
+                        type: 'bar3D',
+                        data: bar3dData.map(d => ({ value: [d[0], d[1], d[2]] })),
+                        shading: 'lambert',
+                        label: {
+                            show: c.showLabel === true,
+                            textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 },
+                            formatter: (p: Record<string, unknown>) => String((p.value as number[])?.[2] ?? ''),
+                        },
+                    }],
+                }, echartsClickHandler);
+            }
+
+            case 'scatter3d-chart': {
+                if (!isWebGLSupported()) {
+                    return (
+                        <div style={{
+                            width: '100%', height: '100%', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            background: t.placeholder.background, border: t.placeholder.border,
+                            borderRadius: 4, color: '#ef4444', fontSize: 13,
+                        }}>
+                            当前浏览器不支持 WebGL，无法渲染 3D 组件
+                        </div>
+                    );
+                }
+                const scatter3dData = Array.isArray(c.data)
+                    ? (c.data as Array<[number, number, number]>)
+                    : Array.from({ length: 30 }, () => [
+                        Math.round(Math.random() * 100),
+                        Math.round(Math.random() * 100),
+                        Math.round(Math.random() * 100),
+                    ] as [number, number, number]);
+                const scatter3dMax = Math.max(1, ...scatter3dData.map(d => d[2]));
+                const sColorRange = (c.colorRange as [string, string]) ?? ['#50a3ba', '#eac736'];
+                const sPointSize = Number(c.pointSize ?? 8);
+
+                return renderEChartWithHandles({
+                    ...themeOptions,
+                    title: chartTitleLayout.titleOption,
+                    tooltip: {},
+                    visualMap: {
+                        max: scatter3dMax,
+                        inRange: { color: sColorRange },
+                        dimension: 2,
+                        textStyle: { color: t.textPrimary },
+                    },
+                    xAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.xAxisName ?? 'X') },
+                    yAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.yAxisName ?? 'Y') },
+                    zAxis3D: { type: 'value', axisLabel: { color: t.textPrimary }, name: String(c.zAxisName ?? 'Z') },
+                    grid3D: {
+                        viewControl: {
+                            alpha: Number(c.viewAlpha ?? 40),
+                            beta: Number(c.viewBeta ?? 30),
+                            autoRotate: c.autoRotate === true,
+                        },
+                        light: { main: { intensity: 1.2 }, ambient: { intensity: 0.3 } },
+                    },
+                    series: [{
+                        type: 'scatter3D',
+                        data: scatter3dData,
+                        symbolSize: sPointSize,
+                        itemStyle: { opacity: 0.8 },
+                        label: {
+                            show: c.showLabel === true,
+                            textStyle: { color: 'var(--text-primary, #e2e8f0)', fontSize: 10 },
+                        },
+                    }],
+                }, echartsClickHandler);
+            }
+
+            default:
+                return renderUnavailableState('组件类型未注册', `当前运行态未找到 ${type} 的渲染器。`);
+        }
+    }, [
+        type,
+        effectiveConfig,
+        width,
+        height,
+        currentTime,
+        echartsClickHandler,
+        t,
+        theme,
+        themeOptions,
+        EChartsComponent,
+        cardData,
+        component,
+        mode,
+        hasMapFn,
+        mapReadyVersion,
+        mapDrillRegion,
+        tableSort,
+        tablePage,
+        filterInputDraft,
+        legendDragPreview,
+        clearLegendDragHandlers,
+        runtime.values,
+        runtime,
+        runtimePlugin,
+        persistConfigMeta,
+    ]);
+
+    const basicClickPayload = {
+        name: component.name,
+        title: typeof effectiveConfig.title === 'string' ? effectiveConfig.title : undefined,
+        text: typeof effectiveConfig.text === 'string' ? effectiveConfig.text : undefined,
+        value: effectiveConfig.value,
+        data: {
+            title: effectiveConfig.title,
+            text: effectiveConfig.text,
+            value: effectiveConfig.value,
+        },
+    };
+    const runBasicInteraction = () => {
+        if (componentActions.length > 0) {
+            executeComponentActions(basicClickPayload);
+            return;
+        }
+        if (!drillActive || !drillState.canDrillDown || cardLoading) return;
+        const accepted = drillState.handleDrill(basicClickPayload);
+        runtime.trackEvent({
+            kind: 'drill-down',
+            key: accepted ? 'drillValue' : 'drillCancelled',
+            value: resolvePreferredDrillValue(basicClickPayload) ?? '',
+            source: `drill:${component.id}`,
+            meta: accepted ? `depth=${drillState.breadcrumbs.length}` : 'missing-mapping-or-duplicate',
+        });
+    };
+    const supportsRuntimeActionWrapper = mode === 'preview'
+        && (componentActions.length > 0 || (drillActive && drillState.canDrillDown))
+        && ['shape', 'title', 'number-card', 'stat-card', 'markdown-text'].includes(type);
+    const wrappedContent = supportsRuntimeActionWrapper ? (
+        <div
+            role="button"
+            tabIndex={0}
+            onClick={runBasicInteraction}
+            onKeyDown={(event) => {
+                if (event.key !== 'Enter' && event.key !== ' ') {
+                    return;
+                }
+                event.preventDefault();
+                runBasicInteraction();
+            }}
+            style={{ width: '100%', height: '100%', cursor: 'pointer' }}
+        >
+            {content}
+        </div>
+    ) : content;
+
+    return (
+        !visibleByVariableRule ? null : (
+        <div style={{ width: '100%', height: '100%', overflow: 'hidden', position: 'relative' }}>
+            {wrappedContent}
+            {/* Drill-down breadcrumb overlay */}
+            {drillRuntimeEnabled && drillState.breadcrumbs.length > 1 && (
+                <div style={{
+                    position: 'absolute', top: 4, left: 4,
+                    display: 'flex', alignItems: 'center', gap: 2,
+                    background: t.breadcrumb.background,
+                    padding: '2px 8px', borderRadius: 4,
+                    fontSize: 11, color: t.breadcrumb.textColor, zIndex: 10,
+                }}>
+                    {drillState.breadcrumbs.map((crumb, i) => {
+                        const isLast = i === drillState.breadcrumbs.length - 1;
+                        return (
+                            <span key={crumb.depth} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                {i > 0 && <span style={{ color: t.textMuted, margin: '0 2px' }}>/</span>}
+                                {isLast ? (
+                                    <span style={{ color: t.textPrimary }}>{crumb.label}</span>
+                                ) : (
+                                    <span
+                                        style={{ color: t.breadcrumb.linkColor, cursor: 'pointer' }}
+                                        onClick={() => {
+                                            runtime.trackEvent({
+                                                kind: 'drill-up',
+                                                key: 'drillDepth',
+                                                value: String(crumb.depth),
+                                                source: `drill:${component.id}`,
+                                            });
+                                            drillState.handleRollUp(crumb.depth);
+                                        }}
+                                    >
+                                        {crumb.label}
+                                    </span>
+                                )}
+                            </span>
+                        );
+                    })}
+                    <button
+                        type="button"
+                        aria-label="重置下钻"
+                        onClick={() => {
+                            runtime.trackEvent({
+                                kind: 'drill-up',
+                                key: 'drillDepth',
+                                value: '0',
+                                source: `drill:${component.id}:reset`,
+                            });
+                            drillState.reset();
+                        }}
+                        style={{
+                            marginLeft: 6,
+                            border: 0,
+                            background: 'transparent',
+                            color: t.breadcrumb.linkColor,
+                            cursor: 'pointer',
+                            fontSize: 11,
+                            padding: 0,
+                        }}
+                    >
+                        重置
+                    </button>
+                </div>
+            )}
+            {/* Card data source loading indicator */}
+            {cardLoading && (
+                <div style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 8, height: 8, borderRadius: '50%',
+                    background: t.accentColor,
+                    animation: 'pulse 1.5s ease-in-out infinite',
+                }} />
+            )}
+            {/* Card data source error indicator */}
+            {cardError && (
+                <div style={{
+                    position: 'absolute', bottom: 4, left: 4,
+                    fontSize: 10, color: '#ef4444',
+                    background: t.errorBg,
+                    padding: '2px 6px', borderRadius: 3,
+                    maxWidth: '80%', overflow: 'hidden',
+                    textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }} title={cardError}>
+                    {cardError}
+                </div>
+            )}
+            {pluginMeta && !runtimePlugin && (
+                <div style={{
+                    position: 'absolute',
+                    bottom: 4,
+                    right: 4,
+                    fontSize: 10,
+                    color: '#fbbf24',
+                    background: 'rgba(30,41,59,0.85)',
+                    padding: '2px 6px',
+                    borderRadius: 3,
+                    maxWidth: '60%',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                }} title="插件未加载，已使用基础组件渲染">
+                    插件未注册，已降级到基础组件
+                </div>
+                )}
+            </div>
+        )
+    );
+});

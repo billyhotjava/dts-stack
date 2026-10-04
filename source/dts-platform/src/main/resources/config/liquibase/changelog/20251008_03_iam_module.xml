@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.16.xsd"
+>
+    <changeSet id="20251008-08-iam-user-classification" author="platform">
+        <createTable tableName="iam_user_classification">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="username" type="varchar(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="display_name" type="varchar(128)"/>
+            <column name="org_path" type="text"/>
+            <column name="roles" type="text"/>
+            <column name="projects" type="text"/>
+            <column name="security_level" type="varchar(32)"/>
+            <column name="synced_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_iam_user_classification_level" tableName="iam_user_classification">
+            <column name="security_level"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-09-iam-classification-sync" author="platform">
+        <createTable tableName="iam_classification_sync_log">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="status" type="varchar(32)"/>
+            <column name="started_at" type="timestamp"/>
+            <column name="finished_at" type="timestamp"/>
+            <column name="delta_count" type="int" defaultValueNumeric="0"/>
+            <column name="failure_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_iam_sync_status" tableName="iam_classification_sync_log">
+            <column name="status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-10-iam-subject-directory" author="platform">
+        <createTable tableName="iam_subject_directory">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="subject_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="varchar(128)"/>
+            <column name="extra_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint tableName="iam_subject_directory" columnNames="subject_type,subject_id" constraintName="uk_iam_subject_directory_subject"/>
+        <createIndex indexName="idx_iam_subject_directory_type" tableName="iam_subject_directory">
+            <column name="subject_type"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251008-11-iam-dataset-policy" author="platform">
+        <createTable tableName="iam_dataset_policy">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dataset_name" type="varchar(160)"/>
+            <column name="subject_type" type="varchar(32)"/>
+            <column name="subject_id" type="varchar(128)"/>
+            <column name="subject_name" type="varchar(128)"/>
+            <column name="scope" type="varchar(16)"/>
+            <column name="field_name" type="varchar(128)"/>
+            <column name="effect" type="varchar(16)"/>
+            <column name="row_expression" type="text"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="source" type="varchar(32)"/>
+            <column name="valid_from" type="timestamp"/>
+            <column name="valid_to" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex indexName="idx_iam_dataset_policy_dataset" tableName="iam_dataset_policy">
+            <column name="dataset_id"/>
+        </createIndex>
+        <createIndex indexName="idx_iam_dataset_policy_subject" tableName="iam_dataset_policy">
+            <column name="subject_type"/>
+            <column name="subject_id"/>
+        </createIndex>
+        <createIndex indexName="idx_iam_dataset_policy_scope" tableName="iam_dataset_policy">
+            <column name="scope"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

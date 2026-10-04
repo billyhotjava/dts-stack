@@ -1,0 +1,250 @@
+import type { ReactNode } from "react";
+import type { CatalogTagDto } from "@/api/catalogTagsApi";
+import type { DomainScopeNode, DomainScopeStats } from "@/components/catalog/DomainScopeNav";
+import { GOVERNANCE_STATUS_DICT } from "./assetEnumLabels";
+
+// DatasetsPage（资产概览/台账）拆分出的共享层：类型、常量、纯工具与指标卡片。
+// 视图组件与页面容器均从此处取用，保持单一事实源。
+
+export type AssetRow = {
+	id: string;
+	name: string;
+	type: string;
+	domainId?: string;
+	domain?: string;
+	classification?: string;
+	warehouseLayer?: string;
+	status?: string;
+	lifecycleStatus?: string;
+	owner?: string;
+	ownerDept?: string;
+	governanceStatus?: string;
+	matchStatus?: string;
+	metadataSource?: string;
+	legacyDatasetId?: string;
+	description?: string;
+	hiveDatabase?: string;
+	hiveTable?: string;
+	updatedAt?: string;
+	snapshotTime?: string;
+	assetType?: string;
+	assetKey?: string;
+	assetFamily?: string;
+	subtype?: string;
+	catalogIdentity?: string;
+	detailRoute?: string;
+	relationships?: Array<{
+		relationType?: string;
+		direction?: string;
+		assetType?: string;
+		assetKey?: string;
+		displayName?: string;
+		detailRoute?: string;
+	}>;
+	assetTags?: CatalogTagDto[];
+	statusAxes?: {
+		discovery?: string;
+		governance?: string;
+		publication?: string;
+		serving?: string;
+		lifecycle?: string;
+	};
+	consumptionEligibility?: string;
+	eligibilityReasons?: string[];
+	projectionUpdatedAt?: string;
+	modelRefs?: Array<{
+		tenantId?: string;
+		modelSpecId?: string;
+		modelRevision?: number;
+		candidateId?: string;
+		candidateVersion?: number;
+		serving?: boolean;
+	}>;
+	servingSync?: {
+		status?: string;
+		attempts?: number;
+		lastError?: string;
+		nextAttemptAt?: string;
+		updatedAt?: string;
+	};
+	qualityStatus?: string;
+};
+
+export type DomainNode = { id?: string; name?: string; code?: string; children?: DomainNode[] };
+
+export const TYPE_OPTIONS = [
+	{ label: "全部类型", value: "ALL" },
+	{ label: "Hive", value: "HIVE" },
+	{ label: "JDBC", value: "JDBC" },
+	{ label: "文件", value: "FILE" },
+];
+
+export const CLASSIFICATION_OPTIONS = [
+	{ label: "全部密级", value: "ALL" },
+	{ label: "公开", value: "PUBLIC" },
+	{ label: "内部", value: "INTERNAL" },
+	{ label: "秘密", value: "SECRET" },
+	{ label: "机密", value: "CONFIDENTIAL" },
+];
+
+// 由字典派生，避免选项表与字典各维护一份而漏掉 PENDING_GOVERNANCE 等实际在用的值——
+// 漏掉的值会让筛选框直接显示英文原值。
+export const GOVERNANCE_OPTIONS = [
+	{ label: "全部治理状态", value: "ALL" },
+	...Object.entries(GOVERNANCE_STATUS_DICT).map(([value, label]) => ({ label, value })),
+];
+
+export const MATCH_OPTIONS = [
+	{ label: "全部映射", value: "ALL" },
+	{ label: "已映射", value: "MATCHED" },
+	{ label: "未匹配", value: "UNMATCHED" },
+	{ label: "人工确认", value: "MANUAL_REVIEW" },
+];
+
+export const DATASET_FILTER_STORAGE_KEY = "catalog.asset.filter.v2";
+export const ASSET_PORTAL_V2_ENABLED = import.meta.env.VITE_CATALOG_ASSET_PORTAL_V2 !== "false";
+export const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
+
+export const CLASSIFICATION_LABEL: Record<string, string> = {
+	PUBLIC: "公开",
+	INTERNAL: "内部",
+	SECRET: "秘密",
+	CONFIDENTIAL: "机密",
+};
+
+export const LAYER_META: Record<string, { label: string; code?: string; color: string; tone: string }> = {
+	SOURCE: { label: "来源层", code: "SOURCE", color: "magenta", tone: "border-pink-200 bg-pink-50/60" },
+	ODS: { label: "贴源层", code: "ODS", color: "default", tone: "border-slate-200 bg-slate-50/70" },
+	STG: { label: "暂存层", code: "STG", color: "geekblue", tone: "border-indigo-200 bg-indigo-50/60" },
+	DWD: { label: "明细层", code: "DWD", color: "blue", tone: "border-blue-200 bg-blue-50/60" },
+	DIM: { label: "维度层", code: "DIM", color: "purple", tone: "border-purple-200 bg-purple-50/60" },
+	DWS: { label: "汇总层", code: "DWS", color: "cyan", tone: "border-cyan-200 bg-cyan-50/60" },
+	ADS: { label: "应用层", code: "ADS", color: "green", tone: "border-green-200 bg-green-50/60" },
+	OTHER: { label: "未分层", color: "default", tone: "border-slate-200 bg-white" },
+};
+
+export const LAYER_ORDER = ["SOURCE", "ODS", "STG", "DWD", "DIM", "DWS", "ADS", "OTHER"];
+// 台账遵循全局分页约定：默认 10 条/页；地图保持原有卡片档位
+export const LEDGER_PAGE_SIZE = 10;
+export const MAP_PAGE_SIZE = 18;
+export const ASSET_ACTION_COLUMN_WIDTH = 132;
+export const ASSET_TABLE_SCROLL_X = 1440;
+
+export type ReconciliationAssertion = {
+	code?: string;
+	name?: string;
+	passed?: boolean;
+	severity?: string;
+	detail?: string;
+	suggestion?: string;
+};
+
+export type ReconciliationResult = {
+	generatedAt?: string;
+	assertionCount?: number;
+	failedCount?: number;
+	errorCount?: number;
+	warningCount?: number;
+	assertions?: ReconciliationAssertion[];
+	regressionChecklist?: Array<{ code?: string; name?: string; route?: string; description?: string }>;
+};
+
+export type ResolutionFailureRow = {
+	id?: string;
+	ref?: string;
+	requestedAt?: string;
+	caller?: string;
+	typeHintGuess?: string;
+	reason?: string;
+};
+
+export type GovernanceGapRow = {
+	id?: string;
+	displayName?: string;
+	fqn?: string;
+	assetKey?: string;
+	grantAssetType?: string;
+	grantAssetId?: string;
+	lifecycleStatus?: string;
+	governanceStatus?: string;
+	severity?: string;
+	blockingGaps?: string[];
+	warningGaps?: string[];
+	metadataSource?: string;
+};
+
+export type LineageFailureRow = GovernanceGapRow & {
+	blocking?: boolean;
+	reason?: string;
+	evidenceSource?: string;
+	nextAction?: string;
+};
+
+export const normalizeLayer = (value?: string) => {
+	const normalized = String(value || "")
+		.trim()
+		.toUpperCase();
+	return normalized && LAYER_META[normalized] ? normalized : "OTHER";
+};
+
+export const classificationText = (value?: string | null) => {
+	const normalized = String(value || "")
+		.trim()
+		.toUpperCase();
+	return normalized ? CLASSIFICATION_LABEL[normalized] || normalized : "未设定";
+};
+
+// C1 统一密级色板：有密级一律 orange；缺密级在管理语境（台账/元数据管理）用 red，结果卡语境用 default
+export const classificationTagColor = (value?: string | null, missing: "red" | "default" = "red") =>
+	value ? "orange" : missing;
+
+export const formatTime = (value?: string | null) => {
+	if (!value) return "-";
+	try {
+		return new Date(value).toLocaleString();
+	} catch {
+		return value;
+	}
+};
+
+// 缺少标识的域保留 id: null，由 DomainScopeNav 渲染为禁用并给出说明；
+// 不再生成 fallback key —— 那会让点击被静默判成「全部资产」，用户以为筛了实际没筛。
+export const buildDomainScopeNodes = (
+	nodes: Array<{ id?: string | null; name?: string; code?: string; children?: any[] }>,
+	stats?: Record<string, DomainScopeStats>,
+): DomainScopeNode[] =>
+	nodes.map((node) => {
+		const id = node.id ? String(node.id) : null;
+		return {
+			id,
+			name: node.name ?? node.code ?? "未命名",
+			code: node.code,
+			stats: id ? stats?.[id] : undefined,
+			children: node.children?.length ? buildDomainScopeNodes(node.children, stats) : undefined,
+		};
+	});
+
+export const MetricTile = ({
+	icon,
+	label,
+	value,
+	footnote,
+	tone = "text-slate-700",
+	testId,
+}: {
+	icon: ReactNode;
+	label: string;
+	value: ReactNode;
+	footnote?: string;
+	tone?: string;
+	testId?: string;
+}) => (
+	<div className="rounded-lg border border-slate-200 bg-white px-4 py-3" data-testid={testId}>
+		<div className="flex items-center justify-between gap-3">
+			<div className="text-xs text-slate-500">{label}</div>
+			<div className={`text-lg ${tone}`}>{icon}</div>
+		</div>
+		<div className="mt-2 text-2xl font-semibold leading-none text-slate-900">{value}</div>
+		{footnote ? <div className="mt-2 truncate text-xs text-slate-500">{footnote}</div> : null}
+	</div>
+);

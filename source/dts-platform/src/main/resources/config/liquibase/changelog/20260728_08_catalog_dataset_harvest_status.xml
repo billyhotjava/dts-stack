@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-08-catalog-dataset-harvest-status" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="catalog_dataset"/>
+            <columnExists tableName="catalog_dataset" columnName="lifecycle_status"/>
+            <tableExists tableName="catalog_asset_extension"/>
+            <columnExists tableName="catalog_asset_extension" columnName="lifecycle_status"/>
+            <not>
+                <columnExists tableName="catalog_dataset" columnName="harvest_status"/>
+            </not>
+            <not>
+                <tableExists tableName="catalog_harvest_status_migration_backup"/>
+            </not>
+            <not>
+                <indexExists indexName="uk_catalog_asset_mapping_legacy_dataset"/>
+            </not>
+            <not>
+                <indexExists indexName="uk_catalog_asset_extension_legacy_dataset"/>
+            </not>
+            <sqlCheck expectedResult="0">
+                SELECT
+                    (SELECT count(*)
+                       FROM (
+                           SELECT legacy_dataset_id
+                             FROM catalog_asset_mapping
+                            WHERE legacy_dataset_id IS NOT NULL
+                            GROUP BY legacy_dataset_id
+                           HAVING count(*) &gt; 1
+                       ) mapping_duplicates)
+                    +
+                    (SELECT count(*)
+                       FROM (
+                           SELECT legacy_dataset_id
+                             FROM catalog_asset_extension
+                            WHERE legacy_dataset_id IS NOT NULL
+                            GROUP BY legacy_dataset_id
+                           HAVING count(*) &gt; 1
+                       ) extension_duplicates)
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Separate technical structure-harvest state from the governed business lifecycle.
+            Legacy SYNCED and STALE lifecycle values are preserved in harvest_status, while
+            an exact-row backup keeps rollback from rewriting rows created or edited later.
+        </comment>
+        <createTable tableName="catalog_harvest_status_migration_backup">
+            <column name="entity_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="previous_lifecycle_status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addPrimaryKey
+            tableName="catalog_harvest_status_migration_backup"
+            columnNames="entity_type,entity_id"
+            constraintName="pk_catalog_harvest_status_migration_backup"/>
+        <addColumn tableName="catalog_dataset">
+            <column name="harvest_status" type="varchar(32)"/>
+        </addColumn>
+        <createIndex
+            tableName="catalog_asset_mapping"
+            indexName="uk_catalog_asset_mapping_legacy_dataset"
+            unique="true">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
+        <createIndex
+            tableName="catalog_asset_extension"
+            indexName="uk_catalog_asset_extension_legacy_dataset"
+            unique="true">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
+        <sql splitStatements="true"><![CDATA[
+            INSERT INTO catalog_harvest_status_migration_backup (
+                entity_type,
+                entity_id,
+                previous_lifecycle_status
+            )
+            SELECT 'CATALOG_DATASET',
+                   id,
+                   lifecycle_status
+              FROM catalog_dataset
+             WHERE upper(lifecycle_status) IN ('SYNCED', 'STALE');
+
+            INSERT INTO catalog_harvest_status_migration_backup (
+                entity_type,
+                entity_id,
+                previous_lifecycle_status
+            )
+            SELECT 'CATALOG_ASSET_EXTENSION',
+                   id,
+                   lifecycle_status
+              FROM catalog_asset_extension
+             WHERE upper(lifecycle_status) IN ('SYNCED', 'STALE');
+
+            UPDATE catalog_dataset
+               SET harvest_status = upper(lifecycle_status),
+                   lifecycle_status = 'PENDING_GOVERNANCE'
+             WHERE upper(lifecycle_status) IN ('SYNCED', 'STALE');
+
+            UPDATE catalog_asset_extension
+               SET lifecycle_status = 'PENDING_GOVERNANCE'
+             WHERE upper(lifecycle_status) IN ('SYNCED', 'STALE');
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true"><![CDATA[
+                UPDATE catalog_asset_extension extension_row
+                   SET lifecycle_status = backup.previous_lifecycle_status
+                  FROM catalog_harvest_status_migration_backup backup
+                 WHERE backup.entity_type = 'CATALOG_ASSET_EXTENSION'
+                   AND backup.entity_id = extension_row.id
+                   AND upper(extension_row.lifecycle_status) = 'PENDING_GOVERNANCE';
+
+                UPDATE catalog_dataset dataset_row
+                   SET lifecycle_status = coalesce(
+                       nullif(upper(trim(dataset_row.harvest_status)), ''),
+                       backup.previous_lifecycle_status
+                   )
+                  FROM catalog_harvest_status_migration_backup backup
+                 WHERE backup.entity_type = 'CATALOG_DATASET'
+                   AND backup.entity_id = dataset_row.id
+                   AND upper(dataset_row.lifecycle_status) = 'PENDING_GOVERNANCE';
+            ]]></sql>
+            <dropIndex
+                tableName="catalog_asset_extension"
+                indexName="uk_catalog_asset_extension_legacy_dataset"/>
+            <dropIndex
+                tableName="catalog_asset_mapping"
+                indexName="uk_catalog_asset_mapping_legacy_dataset"/>
+            <dropTable tableName="catalog_harvest_status_migration_backup"/>
+            <dropColumn tableName="catalog_dataset" columnName="harvest_status"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

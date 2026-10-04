@@ -1,0 +1,15 @@
+Sprint-67 F3-T03 FACT 粒度与时间语义证据
+时间：2026-07-19 +08:00
+结果：PASS
+
+证据来源：ModelSpecContractTest、ModelSpecApplicationServiceTest、ModelSpecStageGateServiceTest、
+modelSpecV2Contract.test.ts、modelSpecWorkbench.test.ts。
+
+已验证：
+- FACT 保存必须有 grain 和至少一个 sourceRef，businessActivityRef 可空；
+- TRANSACTION 仅匹配 EVENT_TIME；
+- PERIODIC_SNAPSHOT 匹配 SNAPSHOT_DATE/PERIOD；
+- ACCUMULATING_SNAPSHOT 匹配 MILESTONE_DATES；
+- 时间语义字段必须引用 role=TIME 的 ModelField；
+- dimensionRefs 使用 modelSpecId + revision，来源证据使用 binding + resolvedVersion；
+- 错误返回稳定 code、field 与 repair route。

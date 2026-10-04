@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260819-01-sprint94-analysis-audit-catalog" author="codex">
+        <comment>登记治理分析查询专用审计动作，避免其落入未分类 Analytics 兜底口径</comment>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            ) VALUES (
+                'analytics',
+                'analytics.analysis',
+                '治理分析',
+                'analytics',
+                'analytics',
+                TRUE,
+                25,
+                'sprint-94-analysis-audit-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, module_key) DO UPDATE SET
+                module_name = EXCLUDED.module_name,
+                parent_module_key = EXCLUDED.parent_module_key,
+                owner = EXCLUDED.owner,
+                enabled = EXCLUDED.enabled,
+                order_value = EXCLUDED.order_value,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            ) VALUES (
+                'analytics',
+                'ANALYSIS_QUERY',
+                'analytics.analysis',
+                '治理分析',
+                'ANALYSIS_QUERY',
+                '执行治理分析查询',
+                'QUERY',
+                'ANALYSIS_QUERY',
+                FALSE,
+                TRUE,
+                'sprint-94-analysis-audit-v1',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (source_system, action_code) DO UPDATE SET
+                module_key = EXCLUDED.module_key,
+                module_name = EXCLUDED.module_name,
+                operation_code = EXCLUDED.operation_code,
+                operation_name = EXCLUDED.operation_name,
+                operation_kind = EXCLUDED.operation_kind,
+                resource_type = EXCLUDED.resource_type,
+                allow_empty_targets = EXCLUDED.allow_empty_targets,
+                enabled = EXCLUDED.enabled,
+                version = EXCLUDED.version,
+                updated_at = EXCLUDED.updated_at;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                -- Audit classification is durable evidence metadata and is preserved on image rollback.
+                SELECT 1;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

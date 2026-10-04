@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="0042-user-platform-username" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="analytics_user" columnName="platform_username"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="analytics_user">
+            <column name="platform_username" type="varchar(200)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="analytics_user" indexName="idx_analytics_user_platform_username">
+            <column name="platform_username"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="analytics_user" indexName="idx_analytics_user_platform_username"/>
+            <dropColumn tableName="analytics_user" columnName="platform_username"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

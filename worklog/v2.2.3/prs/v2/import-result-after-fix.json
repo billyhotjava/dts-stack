@@ -1,0 +1,2327 @@
+{
+  "status": 200,
+  "message": "OK",
+  "code": null,
+  "data": {
+    "attemptId": "9b347058-d7e7-4e86-be76-49fe352c9811",
+    "runId": "d6b38bb4-0ba1-46b8-8d91-271ee1039a81",
+    "disposition": "STARTED",
+    "status": "SUCCESS",
+    "summary": {
+      "selected": 31,
+      "pending": 0,
+      "succeeded": 31,
+      "created": 0,
+      "updated": 31,
+      "skipped": 0,
+      "failed": 0,
+      "blocked": 0
+    },
+    "items": [
+      {
+        "resultId": "965e1902-4990-41d3-95bd-80aef08192c6",
+        "sequence": 0,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_contract",
+        "candidateIdempotencyKey": "model-import-candidate:f18599b00d891362e498d627716dccbd6a2715a165c8719eeb7e55f236886cae",
+        "candidateRequestHash": "25f67c136002e813af516bd9ccc050b82efab0f948a2a24e6ee7667a84d87ab1",
+        "status": "UPDATED",
+        "modelSpecId": "1b3a87cf-ece5-3d1b-a804-23953632307c",
+        "revision": 2,
+        "modelChecksum": "003ea13c9f387fe650e184838cb98cab1e55c23cf015d010ea1de159c2d85115",
+        "implementationRevision": 2,
+        "implementationChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.585411Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_contract",
+          "acceptedExternalChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "003ea13c9f387fe650e184838cb98cab1e55c23cf015d010ea1de159c2d85115"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "15a623da9aa423c21f8ff97bbabaecba93e2f62eb6d3996eb13b19822ffcf1ae",
+          "implementationRevision": 1,
+          "implementationChecksum": "9e63827fbdddc9cbf5435badf4373a0ff1e9c7a7534f31f68eaab393db3d48d2"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "46a99ed4-e5c9-4164-ba38-5b345aae680b",
+        "sequence": 1,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing",
+        "candidateIdempotencyKey": "model-import-candidate:e00fb53611435369c96c1b67b6f4bfe772a2b1361f05fbdb2c8797137ac9edbe",
+        "candidateRequestHash": "589245bdd2e1541cdb484e78ee8056d1aeb61612868a8b00eaacb5a4a7dca3a8",
+        "status": "UPDATED",
+        "modelSpecId": "cd83e567-acf4-3501-b7a9-5932a19c83d6",
+        "revision": 2,
+        "modelChecksum": "03f4b3123d90045bb7aea45a0521c27f6360f1e98956de487b98c50de09c8f51",
+        "implementationRevision": 2,
+        "implementationChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.660132Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing",
+          "acceptedExternalChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "03f4b3123d90045bb7aea45a0521c27f6360f1e98956de487b98c50de09c8f51"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "06166e9fdb1b92550b73cd194a6433112494a4853aca8ab234e7993f32bba644",
+          "implementationRevision": 1,
+          "implementationChecksum": "805b75f7a87c09de2a0c8f717461c2651eb2d421fc012c7489ad83feffcd52a3"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "d36a3816-dae0-4f3c-8dd9-1fcd933f3db3",
+        "sequence": 2,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing_item",
+        "candidateIdempotencyKey": "model-import-candidate:d5ffc0fd2252771585dbfde3d4e356779afdb33a83d4c655e57641e625956fba",
+        "candidateRequestHash": "169e39598414578ce55d196818b1246b565cb0714b145a8e51406c8de0e0e5ba",
+        "status": "UPDATED",
+        "modelSpecId": "6e20db68-6888-3551-aec0-0f42492d8e13",
+        "revision": 2,
+        "modelChecksum": "c8b38552f47d31f6e4f17c684710f7cfb99b6a44ef4a57f532f0d9b88749e2ae",
+        "implementationRevision": 2,
+        "implementationChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.733411Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing_item",
+          "acceptedExternalChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "c8b38552f47d31f6e4f17c684710f7cfb99b6a44ef4a57f532f0d9b88749e2ae"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "00a57a3752f1d03c84acd180775e245aef924f0d79392d329088aced53417bfc",
+          "implementationRevision": 1,
+          "implementationChecksum": "073f8fa631c32fa928f7796fe9ae24ec5b475f192244f61bcc5436982b671c64"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_curing"
+        ]
+      },
+      {
+        "resultId": "dc6d9c46-31ac-426e-9fd5-d3e465420258",
+        "sequence": 3,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_customer",
+        "candidateIdempotencyKey": "model-import-candidate:52351d990b330698d4aedae026a159a33af9431cea60d967c53f1eb2cedc1c92",
+        "candidateRequestHash": "ef428ffa9eac95b9eaa6b4aab2c3b16c80d38bf995b7d118031aa10c842c220a",
+        "status": "UPDATED",
+        "modelSpecId": "88c62123-0c68-3e66-a20a-eb2d40262af5",
+        "revision": 2,
+        "modelChecksum": "050e8fb66fad71fc80edeaa39462edcdeb63d3408a4e00cae401adf3c0ebbc21",
+        "implementationRevision": 2,
+        "implementationChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.802079Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_customer",
+          "acceptedExternalChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "050e8fb66fad71fc80edeaa39462edcdeb63d3408a4e00cae401adf3c0ebbc21"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "b48ad8a71d24635b67154a5bdcd806f2b375ec03ba26fd35082c5392cd23113b",
+          "implementationRevision": 1,
+          "implementationChecksum": "2658499aad6cce085cdd53f603023eadf696c58a3b35c158d6a15b95e037b403"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "233521d3-7856-4661-8ff4-749f5b6ac945",
+        "sequence": 4,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_goods",
+        "candidateIdempotencyKey": "model-import-candidate:d60abc62403f62460c9146b20a361cff52e535560abcad054bd939f1b5ffc5e1",
+        "candidateRequestHash": "2936c7aab83b8637b662ca3b109b6dc7a9f81d295277f3805412a74839cafa6f",
+        "status": "UPDATED",
+        "modelSpecId": "8ca76b32-1b51-34d5-a434-820685808164",
+        "revision": 2,
+        "modelChecksum": "966709cb8a117fa97ec1d1381207ccb9e15cf9b32d4ea416302866cf148a62da",
+        "implementationRevision": 2,
+        "implementationChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.868006Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_goods",
+          "acceptedExternalChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "966709cb8a117fa97ec1d1381207ccb9e15cf9b32d4ea416302866cf148a62da"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "62f2cd65e4a683d0201bd5447c18a4d156dacacbefde579a6fcc53fb7639f066",
+          "implementationRevision": 1,
+          "implementationChecksum": "4411d79edd95d0d1a9058ec09521d9d14283083603b27d4f4e0f75cf8d7bac4e"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "c228cedc-a92e-4af0-aa24-d38bfcb3e5b7",
+        "sequence": 5,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_position",
+        "candidateIdempotencyKey": "model-import-candidate:ab5ff41774fea80e7c5dbcfdadb45afbaaf4c23b9f81e86127e249d74b2962bf",
+        "candidateRequestHash": "1cef8b8a21aaae642d3dc61bd1ae01a6a19c72eece77d89257436cbf346c1886",
+        "status": "UPDATED",
+        "modelSpecId": "4db7744f-1f4d-3b6c-a464-9d033cb02c7f",
+        "revision": 2,
+        "modelChecksum": "b45e5a04f493b70217c7ebf0795e8077ef464019d03d1f1dfe70cb63b60afade",
+        "implementationRevision": 2,
+        "implementationChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.928671Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_position",
+          "acceptedExternalChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "b45e5a04f493b70217c7ebf0795e8077ef464019d03d1f1dfe70cb63b60afade"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "5a1bd5b022fb0b4596f24e9e20f65324d93f8481a98adc67971511fd02534622",
+          "implementationRevision": 1,
+          "implementationChecksum": "6ea9259d4d777c1b67afdd23b35f0d46bd746f539581a6adf02e877dfdce3e40"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "eb101753-2157-4726-b0a3-439295218f77",
+        "sequence": 6,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_project",
+        "candidateIdempotencyKey": "model-import-candidate:65cbd7fe5490a180dfec3ee2e05e7868db7bc0319c7cdd94a22e70fdd4a18b77",
+        "candidateRequestHash": "85bc7e247aa963c71939a4dd8b8aeaf799e609b1c94c4ac64b50785c09b5fc2c",
+        "status": "UPDATED",
+        "modelSpecId": "e5f5e556-4de1-306b-b619-201da623761d",
+        "revision": 2,
+        "modelChecksum": "4889805da65e11a2de77f9b137a53b73eb5ca62caff609ce14822c72e9f9aa46",
+        "implementationRevision": 2,
+        "implementationChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:04.987801Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_project",
+          "acceptedExternalChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "4889805da65e11a2de77f9b137a53b73eb5ca62caff609ce14822c72e9f9aa46"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "03756ed6b2c81b18b37deeb6a35b165d05a6fb31c801b8d6e0756a2a540a9ae5",
+          "implementationRevision": 1,
+          "implementationChecksum": "78b1631f2d090aa3e8cf6e3f09f049a6ca6037fe07ad6118276631ed09090d01"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "afd90caa-6768-4d8d-9d11-0be41fa08c0b",
+        "sequence": 7,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+        "candidateIdempotencyKey": "model-import-candidate:46b0cb12afe85284d3114b4e8585740ed24b65f27570c209ae8950363e8af92a",
+        "candidateRequestHash": "25a70e3c15675df7ef8c247a1a0815d88ba758c421869718b2b522656e13cf22",
+        "status": "UPDATED",
+        "modelSpecId": "1e7ab12a-4034-3922-b2ae-b47ee00ad9a1",
+        "revision": 2,
+        "modelChecksum": "ca41fe8e4f732b20fdabdd8f4bea0803abf7b305b199527ad5656afbfd19e553",
+        "implementationRevision": 2,
+        "implementationChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.053590Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+          "acceptedExternalChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "ca41fe8e4f732b20fdabdd8f4bea0803abf7b305b199527ad5656afbfd19e553"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "84b142b77ca4bc57aad24619d9458f099ac783419b974dfe808f4c0a9f47bf91",
+          "implementationRevision": 1,
+          "implementationChecksum": "02c9744da20166bb6c9bdbf993d7daee15ba5fc95cf3cb2122745788180a486b"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "ddd5cd41-696d-49a1-afab-ae9754ba0062",
+        "sequence": 8,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+        "candidateIdempotencyKey": "model-import-candidate:6f62cdaf3298058e30746caf4d47801017288bd8bdcaf13b8e12f9665dca15bc",
+        "candidateRequestHash": "8799f0a1038d72a923bc4c91ced1035a58846c46e5f76be048678df07689c7d5",
+        "status": "UPDATED",
+        "modelSpecId": "49e84774-211a-39cf-98d4-47d62897296e",
+        "revision": 2,
+        "modelChecksum": "886a7da483e62c3581b75fa7d1dca12f356510e1b567be5c6fd50aab6689d8e4",
+        "implementationRevision": 2,
+        "implementationChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.130221Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+          "acceptedExternalChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "886a7da483e62c3581b75fa7d1dca12f356510e1b567be5c6fd50aab6689d8e4"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "3e78a929385ee8c51ce13285cd035af82f5d13e74dfdcf6d04eafb3d8914031c",
+          "implementationRevision": 1,
+          "implementationChecksum": "d42839be2c4fd56affb559a5f593d23f9bbb43aafd6b3043e82e0bd9a593bc3d"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_finance_collection"
+        ]
+      },
+      {
+        "resultId": "12dbecc3-c3f4-427c-86a2-4271e3a649a2",
+        "sequence": 9,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_collection",
+        "candidateIdempotencyKey": "model-import-candidate:ea2a16516f181a2d18da60033f12f85c4fbf440fc19bcd06d799738652fd1535",
+        "candidateRequestHash": "86fc6dd47e270e0ebc727a498cd9857330f281280d492ec2bc7f6e82d06f0307",
+        "status": "UPDATED",
+        "modelSpecId": "11ba4443-f224-3d31-bd64-f8502ea6c05a",
+        "revision": 2,
+        "modelChecksum": "3211c79a878c27e018a98782ebef0749e7f5fb83749691b4d0038632a2531663",
+        "implementationRevision": 1,
+        "implementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.186298Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_collection",
+          "acceptedExternalChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "3211c79a878c27e018a98782ebef0749e7f5fb83749691b4d0038632a2531663"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "c32ae4ad1e32dfe1d25b7a75b915f76a198e5de6c1a81ba0d895f43daacac950",
+          "implementationRevision": 1,
+          "implementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+          "model.prs_flower_v2.prs_v2_dwd_finance_collection"
+        ]
+      },
+      {
+        "resultId": "35c5823d-a531-4114-b316-0647c69fa604",
+        "sequence": 10,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement",
+        "candidateIdempotencyKey": "model-import-candidate:12246f1d3bf4633d6a7648d3b096748c205681bf78f4703b165e2307e1532f89",
+        "candidateRequestHash": "8eb329b781dfeaf653c95ed385d6daee7f173b52e65d9726e32307ddd5d9c731",
+        "status": "UPDATED",
+        "modelSpecId": "24dc73f3-f431-3c1e-9c5d-384e19440ee8",
+        "revision": 2,
+        "modelChecksum": "80f5006a775dfb193d83310eed81c6ac2e2f84159eacb215dbbb71d55f6d0afa",
+        "implementationRevision": 2,
+        "implementationChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.237677Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement",
+          "acceptedExternalChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "80f5006a775dfb193d83310eed81c6ac2e2f84159eacb215dbbb71d55f6d0afa"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "f1d11a743167a2018a4cf4642f4fb5ca915f5978d165f0134b64d1826c46041a",
+          "implementationRevision": 1,
+          "implementationChecksum": "507410c0679ba1089fef81baecfc841e07030bf3421261a93420f8e98ff2bb0a"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "5285ec20-5363-444c-a454-08c3c0399871",
+        "sequence": 11,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_order",
+        "candidateIdempotencyKey": "model-import-candidate:0e0169474f147a170384447f5f2a17af578c7cfc3fd73c37d0e104a6e5af3371",
+        "candidateRequestHash": "cb4fddcce1ad93c83a5b2f1a92f0b9d2253a36193f1ab2ffbf169ee11342e2de",
+        "status": "UPDATED",
+        "modelSpecId": "9c139aec-a0bc-33bf-8382-dc0ee50a2266",
+        "revision": 2,
+        "modelChecksum": "7fa8f3430e64e3eafd1314d9b17df872dbd4d786ea6b8e7be990433fda094971",
+        "implementationRevision": 2,
+        "implementationChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.301569Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_order",
+          "acceptedExternalChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "7fa8f3430e64e3eafd1314d9b17df872dbd4d786ea6b8e7be990433fda094971"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "5725aadad19a27ed4f889b51b74b0e3a35ba21ade337a7adb926caffa204c98b",
+          "implementationRevision": 1,
+          "implementationChecksum": "4930c7c18f201d618fadf663bdd4228b409e2791a5ada3c1099bdc60f1f34c30"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "b7401b73-2fcb-48a1-87c4-c10ab1239bf0",
+        "sequence": 12,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_change",
+        "candidateIdempotencyKey": "model-import-candidate:2dfdd585b9827407bce87b7e81a49c17af0f1ff60c840e12b0ca24febd4248ab",
+        "candidateRequestHash": "d921e8b03e6500148a1bba041813651d1d11e40210262c84d5fdcc4da39eacf8",
+        "status": "UPDATED",
+        "modelSpecId": "46d504fa-249f-3f37-8b49-02ab701496b4",
+        "revision": 2,
+        "modelChecksum": "94a6358d872fbcaa248eda302df5f4c5e3f5fdd4007e540f5acd62edfc7b5b4c",
+        "implementationRevision": 2,
+        "implementationChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.361887Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_change",
+          "acceptedExternalChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "94a6358d872fbcaa248eda302df5f4c5e3f5fdd4007e540f5acd62edfc7b5b4c"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "95ae1bf7c4228e0e5c1ef8899ea995d5eadb1e365fa112acc7f45665944143a9",
+          "implementationRevision": 1,
+          "implementationChecksum": "0e8e482ab947b8b5f083b071dfe6a92a253ce35a348c62f1902ee3bd76f5028a"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_flower_order"
+        ]
+      },
+      {
+        "resultId": "a49a4bba-c432-40ca-b20e-d4756420398a",
+        "sequence": 13,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_change_detail",
+        "candidateIdempotencyKey": "model-import-candidate:aba61087837b99689e077bedb24f05ffdb3a9caf291f1c171cb5b0d321d5f778",
+        "candidateRequestHash": "9775aa80bc4cffdba3ccc608413de8d5f79060241582dd2cefcf4d5bf3b8d17a",
+        "status": "UPDATED",
+        "modelSpecId": "3d4bc0e9-f3cc-3eb0-99c5-32ad27b2819c",
+        "revision": 2,
+        "modelChecksum": "385c64edb6956a7a3d1c4a67a4c0381eae9db8cf6e9e9437f153bea65275c79d",
+        "implementationRevision": 1,
+        "implementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.423381Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_change_detail",
+          "acceptedExternalChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "385c64edb6956a7a3d1c4a67a4c0381eae9db8cf6e9e9437f153bea65275c79d"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "8fb2ac6410d063b39d5a0c7ef64da0d77b3beb97bc783c2cffc90d6b7eafa147",
+          "implementationRevision": 1,
+          "implementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_change",
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "22885129-2e5c-4a46-8101-aef20ce75c01",
+        "sequence": 14,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_extra_cost",
+        "candidateIdempotencyKey": "model-import-candidate:daa19c576725a66f58e2b1b3fc0215ae0ff2955bdc5b12abf0220ed20d343c6f",
+        "candidateRequestHash": "f741b2ef108302d7b8cc3c3428979157350e5c327f1bff1ac6a1e6d38107f20f",
+        "status": "UPDATED",
+        "modelSpecId": "e84b3bf0-98dd-3f02-8cd2-521bedab4358",
+        "revision": 2,
+        "modelChecksum": "6ab51cc97942d940a5df01009071aed83b17aa386bd99f74af2f51ef3aced0c3",
+        "implementationRevision": 2,
+        "implementationChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.490312Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_extra_cost",
+          "acceptedExternalChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "6ab51cc97942d940a5df01009071aed83b17aa386bd99f74af2f51ef3aced0c3"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "85e7cef4fdcdba683bebc734cb7de55543ea91c33195ab91bdd9959ff2cf4291",
+          "implementationRevision": 1,
+          "implementationChecksum": "df6d1f4419067346fabdfd459bcc4060987a0147736b6970ec1e7279cf90bce5"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_flower_order"
+        ]
+      },
+      {
+        "resultId": "a4ee8a6b-e4b5-4734-8e14-559763131edd",
+        "sequence": 15,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_item",
+        "candidateIdempotencyKey": "model-import-candidate:ca6afe6dc069f0b3d4f58763c2a4dcd5981a17bde75916eca1a9421c1302d8ab",
+        "candidateRequestHash": "983fec442be2463e09f86e85e3b5b4fe7473ab1b4317c76c87f51373c6ae24a9",
+        "status": "UPDATED",
+        "modelSpecId": "8a8b1932-3f3c-3cd9-b49b-6a4bca8084df",
+        "revision": 2,
+        "modelChecksum": "5df0bfe84aababd069ff723ec067bd7141ac4fc7a8794d88d06eea2e011fae52",
+        "implementationRevision": 2,
+        "implementationChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.576630Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_item",
+          "acceptedExternalChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "5df0bfe84aababd069ff723ec067bd7141ac4fc7a8794d88d06eea2e011fae52"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "e302fc739799de79680458defaac8d4076be62bc734486086f92e75ec127d634",
+          "implementationRevision": 1,
+          "implementationChecksum": "eabae65482f4d1a9c304f149efb08fd1ab852552baef9d19f55073a65e07e549"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_flower_order"
+        ]
+      },
+      {
+        "resultId": "f28706d1-aea5-4506-9f3f-3cf319406d34",
+        "sequence": 16,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_lease_detail",
+        "candidateIdempotencyKey": "model-import-candidate:5eb1b4810a69b23daa67a85cc687b873c285c8c3a9ae2382a7745524a62a0aa0",
+        "candidateRequestHash": "fe1984c0d4652e424a0e7293fb3f66f1997f2e4c31331732e8a02f0260396c8b",
+        "status": "UPDATED",
+        "modelSpecId": "27ab66a3-2fb5-3faa-9b4e-fd025cdab796",
+        "revision": 2,
+        "modelChecksum": "898e8986cd5b40c6d34968094b6f3a76b43b3bd6102712c5d53f26a06f7e4c38",
+        "implementationRevision": 1,
+        "implementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.645620Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_lease_detail",
+          "acceptedExternalChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "898e8986cd5b40c6d34968094b6f3a76b43b3bd6102712c5d53f26a06f7e4c38"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "e60ca44453ebfeef7117a25e84991dd46ba18b7b82c6d1543abb8b4b01674a7f",
+          "implementationRevision": 1,
+          "implementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_flower_item",
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "5513b149-a4d5-4d34-addd-8f786a493043",
+        "sequence": 17,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_placement",
+        "candidateIdempotencyKey": "model-import-candidate:dfe1bcea6c9f0b74d671ccff571f982883df50d0c83d7c3443257162c03a45d1",
+        "candidateRequestHash": "70675fe2aa1aa38c10144b64c0f9525657b795b92b3ec757b951b458ad3e7c97",
+        "status": "UPDATED",
+        "modelSpecId": "7dc5b164-f4a0-317c-b644-e04e31b1f375",
+        "revision": 2,
+        "modelChecksum": "4dae6b8a6d48b30db30e491ec44eefca9a7c2596fb991d40bee7d6826c52d5fa",
+        "implementationRevision": 2,
+        "implementationChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.721186Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_placement",
+          "acceptedExternalChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "4dae6b8a6d48b30db30e491ec44eefca9a7c2596fb991d40bee7d6826c52d5fa"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "591f081519c02e7764c85896f88132c0f2b9f20e86fbf26de8495cfc66465ac6",
+          "implementationRevision": 1,
+          "implementationChecksum": "8e8e85b8fd37dafbd11fe0aeb31b27c1aa632c5074fd45402de28cca4402b17d"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "892e189e-b05c-42f0-a1c9-2dc5cec33e98",
+        "sequence": 18,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_recovery",
+        "candidateIdempotencyKey": "model-import-candidate:7f259ab6cefe66dc1beef900374d632f61ee308dff51af119bd512660036fefc",
+        "candidateRequestHash": "c9f72820ba480731375548764eaacfb5a114a9863e228827e5fc6d594e3793eb",
+        "status": "UPDATED",
+        "modelSpecId": "3b9b1237-de6e-38ca-b5af-fa4f2ae4d0dd",
+        "revision": 2,
+        "modelChecksum": "e0d2cf9e8d40c71ecde0952ccf5538a0dc21530aa5e0a10aa092f178e651edf4",
+        "implementationRevision": 2,
+        "implementationChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.783919Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_recovery",
+          "acceptedExternalChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "e0d2cf9e8d40c71ecde0952ccf5538a0dc21530aa5e0a10aa092f178e651edf4"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "3397d95b0173e67f772a60cccf1c98d076c081ab617db01de4fa1b0521be342e",
+          "implementationRevision": 1,
+          "implementationChecksum": "f10559e39d105298cdbeb5457ff8ea29e7ac45baa89b21ef2eb85cad947b12a8"
+        },
+        "dependencyUniqueIds": []
+      },
+      {
+        "resultId": "1032299e-9032-4fdd-b18d-658ac37980eb",
+        "sequence": 19,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_recovery_detail",
+        "candidateIdempotencyKey": "model-import-candidate:a78ec07189b2166f68c1755e2da6c48f94688af50dc88ed578037b1f5db83a5a",
+        "candidateRequestHash": "2cc96012239d511294ebdd8e8c430c130f09ef7f0f37ec27e400720a243e1798",
+        "status": "UPDATED",
+        "modelSpecId": "c6daae48-e764-3aa4-9ef0-f9c5d50e7724",
+        "revision": 2,
+        "modelChecksum": "28208d2cfde3dd04649e1de89f4ba3f6a030a480da0645516453a0075f11aa5e",
+        "implementationRevision": 1,
+        "implementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.854514Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_recovery_detail",
+          "acceptedExternalChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "28208d2cfde3dd04649e1de89f4ba3f6a030a480da0645516453a0075f11aa5e"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "49329c7d4390622ebb98583f317f5e1a257c3c18e4ccbb9ba3b709088b931ffe",
+          "implementationRevision": 1,
+          "implementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dwd_recovery"
+        ]
+      },
+      {
+        "resultId": "acb2c13e-4f6d-421d-8f0c-ff208ddc610a",
+        "sequence": 20,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_rent_snapshot",
+        "candidateIdempotencyKey": "model-import-candidate:dcecb4a673134c0430ada0d125aa158421586a8f02a3d21f47730a8f91d52ca0",
+        "candidateRequestHash": "8b22cd8f3d997488a7c840260880f1c84df55300865ca52a1cdabf10c3e83c94",
+        "status": "UPDATED",
+        "modelSpecId": "1df53cfa-fba9-32b3-a261-f5e33ae6d964",
+        "revision": 2,
+        "modelChecksum": "1b79ec0fe61624879682189fa1c537832e39c214cfc75c4e3925046d0565b75b",
+        "implementationRevision": 2,
+        "implementationChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:05.941571Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_rent_snapshot",
+          "acceptedExternalChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+          "acceptedImplementationRevision": 2,
+          "acceptedImplementationChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "1b79ec0fe61624879682189fa1c537832e39c214cfc75c4e3925046d0565b75b"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "6364d4f9fdf9ba662b32a4347f3971b84d4dd9a93b64775784f20749cde6e5f7",
+          "implementationRevision": 1,
+          "implementationChecksum": "7fd0e0adeee6c1e302acbcc442593121a767bd02c9d9c8d3b1060198378eae02"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project"
+        ]
+      },
+      {
+        "resultId": "18eec0e7-4d14-4cd5-aee8-e437a04caa12",
+        "sequence": 21,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly",
+        "candidateIdempotencyKey": "model-import-candidate:b50656004ce9e3689736ca76c5cf466a9e12f88bbc952652ae3f7d25175d0ecc",
+        "candidateRequestHash": "961c9bf6ca87371654ae038352fd39389529a39ee18de4d053439f1de212d939",
+        "status": "UPDATED",
+        "modelSpecId": "dd90ccd3-0943-30ba-874a-41adf72b9efd",
+        "revision": 2,
+        "modelChecksum": "d39d8e1130ea70c6aa2853db93afd6e9f074b5094f7133bc07da3121c92f2955",
+        "implementationRevision": 1,
+        "implementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.008604Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly",
+          "acceptedExternalChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "d39d8e1130ea70c6aa2853db93afd6e9f074b5094f7133bc07da3121c92f2955"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "929d48efaf71b2d9c8266587ca7894f627fcc19f834aaa94d6ae4e5763b0dbe5",
+          "implementationRevision": 1,
+          "implementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_curing"
+        ]
+      },
+      {
+        "resultId": "98bd06ec-8e95-43df-ac50-d02d52be6179",
+        "sequence": 22,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_curing_workload",
+        "candidateIdempotencyKey": "model-import-candidate:800caf82da11edecff087bd94af4e2a329d0c5dd793e2341442bb938c4fa2dbc",
+        "candidateRequestHash": "813188608b7464019063d2003e21a13a6361951d057b30ae6d53cbe896644727",
+        "status": "UPDATED",
+        "modelSpecId": "5f1323a0-7e64-359c-8bb3-c78c7848823c",
+        "revision": 2,
+        "modelChecksum": "8233125781e4cecae3f03ac9e314227ad89911a702dab768a601d7ea45464fb8",
+        "implementationRevision": 1,
+        "implementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.071699Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_curing_workload",
+          "acceptedExternalChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "8233125781e4cecae3f03ac9e314227ad89911a702dab768a601d7ea45464fb8"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "385109dffd0fb73ca6cff5fd50ba85f8607d8d80174b11e955d85d9b8d385150",
+          "implementationRevision": 1,
+          "implementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly"
+        ]
+      },
+      {
+        "resultId": "c5e7ee09-81c6-48dd-92a8-47687fb19696",
+        "sequence": 23,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary",
+        "candidateIdempotencyKey": "model-import-candidate:2aac60f1df1b0caf9be239a4466cd5eedc0c1509cda0f8306eaf5d95fdf6febd",
+        "candidateRequestHash": "ed3514781ab4f64572895d1ef7cccc7eb018183a3429d9fb0f362329b7abf9df",
+        "status": "UPDATED",
+        "modelSpecId": "ef1d89ef-60c5-3149-8b67-955ee3348202",
+        "revision": 2,
+        "modelChecksum": "f550b1e9a45f4ea9ad21a1460ff3bb4e561288085ee5db9d508a9bfc22171b54",
+        "implementationRevision": 1,
+        "implementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.136526Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary",
+          "acceptedExternalChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "f550b1e9a45f4ea9ad21a1460ff3bb4e561288085ee5db9d508a9bfc22171b54"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "556dda521826aad8f9dafecb97491c7d2cc76b3adb6980d92f468bd804938ad9",
+          "implementationRevision": 1,
+          "implementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+          "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement"
+        ]
+      },
+      {
+        "resultId": "870b3d7a-2d75-42a1-8fec-3a8db03c4fc4",
+        "sequence": 24,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_month_settlement",
+        "candidateIdempotencyKey": "model-import-candidate:4f5ec7f8968a13cd88061ae326b5f09c4311ef6f775fee72b676b63517c315d6",
+        "candidateRequestHash": "97a83357c36397a646834aa1538a17e710b223ea1e0a0511f1a7af7f09479b39",
+        "status": "UPDATED",
+        "modelSpecId": "6b387d97-5dc1-3d86-b2f0-b69da3c29a84",
+        "revision": 2,
+        "modelChecksum": "425f508d3414904e03fa80f338c2e528ef873017cca2e3b398d5f6e903f9bdcf",
+        "implementationRevision": 1,
+        "implementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.202030Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_month_settlement",
+          "acceptedExternalChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "425f508d3414904e03fa80f338c2e528ef873017cca2e3b398d5f6e903f9bdcf"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "487cddbc1ca133af4a6b5d256d9f1cb9b640d339b1bfa2ed63ffc787f6c1b2ca",
+          "implementationRevision": 1,
+          "implementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary"
+        ]
+      },
+      {
+        "resultId": "e07a0679-dafa-4810-8e20-b9aed5a3f7e7",
+        "sequence": 25,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly",
+        "candidateIdempotencyKey": "model-import-candidate:4b0b4c5dbdb9cc24b1855c7923f602d3d51ed0590eac1e43f3ec65e66874630a",
+        "candidateRequestHash": "781e15c365c63c7914eb1ef417c3c576bee0b33ab8a674c3674eeb232420bc54",
+        "status": "UPDATED",
+        "modelSpecId": "c8c0b94c-de5f-3a0f-8a5d-66670033dcfd",
+        "revision": 2,
+        "modelChecksum": "f10198793a35bab92777edbe09077b07fae6268de7b2e75fe4c4641ba77b766f",
+        "implementationRevision": 1,
+        "implementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.278445Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly",
+          "acceptedExternalChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "f10198793a35bab92777edbe09077b07fae6268de7b2e75fe4c4641ba77b766f"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "ee59da17256b5144c3aaaddb37fb2972da7851b72b0980b2a3aaac141fc0d905",
+          "implementationRevision": 1,
+          "implementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary"
+        ]
+      },
+      {
+        "resultId": "b28f5185-1f6a-423f-8491-40028da30813",
+        "sequence": 26,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_customer_finance",
+        "candidateIdempotencyKey": "model-import-candidate:c6ce35b34a83f26205d946dd4d648cb9d2e0f36cfbf3536bd69d66ef0ef895fa",
+        "candidateRequestHash": "f25303b403db8846f675412bbd1776f5f5e8fa88fa269ca6f7b5a0fda1b6b97c",
+        "status": "UPDATED",
+        "modelSpecId": "b07ee51a-71b5-309a-a4d4-0ec834950602",
+        "revision": 2,
+        "modelChecksum": "3c449caf1a62a4da9fe1d4eba8311ecb9bd46334d06c87306b2a5cf4bc1d19a4",
+        "implementationRevision": 1,
+        "implementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.346958Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_customer_finance",
+          "acceptedExternalChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "3c449caf1a62a4da9fe1d4eba8311ecb9bd46334d06c87306b2a5cf4bc1d19a4"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "565686d859f50678e0c53d4f2642aee6629f5cc5f0dd38fe2755232a0ea9fd82",
+          "implementationRevision": 1,
+          "implementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_customer",
+          "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly"
+        ]
+      },
+      {
+        "resultId": "fc5c16e7-a5b4-4ca0-b2f3-f9a77117363c",
+        "sequence": 27,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_current",
+        "candidateIdempotencyKey": "model-import-candidate:68cb26a06f9306d68fae3ed450dff5920a1a0b5953323dae6d006f6ffa2035cf",
+        "candidateRequestHash": "7d8af4c2e765c14d82712cd60f1e0dd7f5ddaee798f4fc255f4d3c7140413142",
+        "status": "UPDATED",
+        "modelSpecId": "4971efce-437a-3a4c-9a0a-64a257781a89",
+        "revision": 2,
+        "modelChecksum": "ca8fba40745109c6a01351daa6449222a59ec21f1df16fa3e32e3b16ac4a1eb5",
+        "implementationRevision": 1,
+        "implementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.394147Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_current",
+          "acceptedExternalChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "ca8fba40745109c6a01351daa6449222a59ec21f1df16fa3e32e3b16ac4a1eb5"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "237cafdbb12c3b55deec696891df3a91fc9387fded0fb57288d39ca638d66963",
+          "implementationRevision": 1,
+          "implementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_placement"
+        ]
+      },
+      {
+        "resultId": "711452c0-4978-471b-8bb0-dfe5335cfff8",
+        "sequence": 28,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_current_placement",
+        "candidateIdempotencyKey": "model-import-candidate:2f93050c4c1326ace8599243961ffcf2e93aa1d8d08f941a4022cf9a3ae1a9a3",
+        "candidateRequestHash": "7b5f66a58e26a5c91cc882d1132f42f5be49ed9415a2e4ed9d49cf45cfb1c41e",
+        "status": "UPDATED",
+        "modelSpecId": "ccaf1157-78a2-309f-8d28-288173ba5c7b",
+        "revision": 2,
+        "modelChecksum": "0044724a9da0282ccf485b7243c1961f046c4bea827cb43f44d13380d6877570",
+        "implementationRevision": 1,
+        "implementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.438979Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_current_placement",
+          "acceptedExternalChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "0044724a9da0282ccf485b7243c1961f046c4bea827cb43f44d13380d6877570"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "76801901d7f1fcab8ce324a0cbc4ed67ccc5cf907ae1b0600139f928effcbdb3",
+          "implementationRevision": 1,
+          "implementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dws_project_current"
+        ]
+      },
+      {
+        "resultId": "75dca97b-579d-4257-8acc-f477c050e30c",
+        "sequence": 29,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_operations_monthly",
+        "candidateIdempotencyKey": "model-import-candidate:a3b888553afcfd4fb8bd7fe47510a4501425b18c026c033b63ce9a43bbc616f5",
+        "candidateRequestHash": "9a8841ec857ebfddb3ebc26ec9073ff74e714d1f53c98e95aad1b132227e8cf3",
+        "status": "UPDATED",
+        "modelSpecId": "53363f3e-b3ef-3a5b-9fec-9ebec79bc484",
+        "revision": 2,
+        "modelChecksum": "046ca65519394f1c78df4d6f131fe671c5e370af9dd1b1462c598373049a4ffc",
+        "implementationRevision": 1,
+        "implementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.480828Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_operations_monthly",
+          "acceptedExternalChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "046ca65519394f1c78df4d6f131fe671c5e370af9dd1b1462c598373049a4ffc"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "b0f80b3e356c9f4c26dde7264b39002cba5a787053eb7b72b9b57d7b93a2e4c3",
+          "implementationRevision": 1,
+          "implementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_flower_order"
+        ]
+      },
+      {
+        "resultId": "abde6b37-7a85-4de6-b424-fc7a2fa9b4d0",
+        "sequence": 30,
+        "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_operations_overview",
+        "candidateIdempotencyKey": "model-import-candidate:97fe5007a2d1621109ad67a9610b6ee3e2c1209d83eb3296fc9fb6f539bcad03",
+        "candidateRequestHash": "2e1969ddb26849c404ac5e0e22bf3d0be01fccdc0db0e618aa0a272236f2404b",
+        "status": "UPDATED",
+        "modelSpecId": "03a95428-a157-3968-9531-9a8fc19c0ad0",
+        "revision": 2,
+        "modelChecksum": "376282772381cc901d6bab0e2344bb38fe029a93a7e74b7a3f522620c22eed21",
+        "implementationRevision": 1,
+        "implementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+        "artifactCount": 4,
+        "issues": [],
+        "recordedAt": "2026-09-13T11:48:06.521693Z",
+        "appliedAction": "UPDATE",
+        "projectKey": "prs_flower_v2",
+        "mergeCheckpoint": {
+          "tenantId": "default",
+          "projectKey": "prs_flower_v2",
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_operations_overview",
+          "acceptedExternalChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+          "acceptedImplementationRevision": 1,
+          "acceptedImplementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+          "mappedModelSpecRevision": 2,
+          "mappedModelSpecEtag": "376282772381cc901d6bab0e2344bb38fe029a93a7e74b7a3f522620c22eed21"
+        },
+        "preAttemptPins": {
+          "modelRevision": 1,
+          "modelChecksum": "1761f0c8c21569227316128fe3133e020d47cd08dab768de880262cf90fb1a23",
+          "implementationRevision": 1,
+          "implementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f"
+        },
+        "dependencyUniqueIds": [
+          "model.prs_flower_v2.prs_v2_dwd_project",
+          "model.prs_flower_v2.prs_v2_dws_project_operations_monthly"
+        ]
+      }
+    ],
+    "overallRun": {
+      "rootAttemptId": "9b347058-d7e7-4e86-be76-49fe352c9811",
+      "status": "SUCCESS",
+      "summary": {
+        "selected": 31,
+        "pending": 0,
+        "succeeded": 31,
+        "created": 0,
+        "updated": 31,
+        "skipped": 0,
+        "failed": 0,
+        "blocked": 0
+      },
+      "items": [
+        {
+          "resultId": "965e1902-4990-41d3-95bd-80aef08192c6",
+          "sequence": 0,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_contract",
+          "candidateIdempotencyKey": "model-import-candidate:f18599b00d891362e498d627716dccbd6a2715a165c8719eeb7e55f236886cae",
+          "candidateRequestHash": "25f67c136002e813af516bd9ccc050b82efab0f948a2a24e6ee7667a84d87ab1",
+          "status": "UPDATED",
+          "modelSpecId": "1b3a87cf-ece5-3d1b-a804-23953632307c",
+          "revision": 2,
+          "modelChecksum": "003ea13c9f387fe650e184838cb98cab1e55c23cf015d010ea1de159c2d85115",
+          "implementationRevision": 2,
+          "implementationChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.585411Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_contract",
+            "acceptedExternalChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "cc2a97ad64c8f2e6de57841153b62f6c81cd9241ff0987a6511417ac340ee769",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "003ea13c9f387fe650e184838cb98cab1e55c23cf015d010ea1de159c2d85115"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "15a623da9aa423c21f8ff97bbabaecba93e2f62eb6d3996eb13b19822ffcf1ae",
+            "implementationRevision": 1,
+            "implementationChecksum": "9e63827fbdddc9cbf5435badf4373a0ff1e9c7a7534f31f68eaab393db3d48d2"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "46a99ed4-e5c9-4164-ba38-5b345aae680b",
+          "sequence": 1,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing",
+          "candidateIdempotencyKey": "model-import-candidate:e00fb53611435369c96c1b67b6f4bfe772a2b1361f05fbdb2c8797137ac9edbe",
+          "candidateRequestHash": "589245bdd2e1541cdb484e78ee8056d1aeb61612868a8b00eaacb5a4a7dca3a8",
+          "status": "UPDATED",
+          "modelSpecId": "cd83e567-acf4-3501-b7a9-5932a19c83d6",
+          "revision": 2,
+          "modelChecksum": "03f4b3123d90045bb7aea45a0521c27f6360f1e98956de487b98c50de09c8f51",
+          "implementationRevision": 2,
+          "implementationChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.660132Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing",
+            "acceptedExternalChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "600fc02bf854dc55ef5bf4497ad46a47b79333ee40afb4d80db2ce51707e1904",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "03f4b3123d90045bb7aea45a0521c27f6360f1e98956de487b98c50de09c8f51"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "06166e9fdb1b92550b73cd194a6433112494a4853aca8ab234e7993f32bba644",
+            "implementationRevision": 1,
+            "implementationChecksum": "805b75f7a87c09de2a0c8f717461c2651eb2d421fc012c7489ad83feffcd52a3"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "d36a3816-dae0-4f3c-8dd9-1fcd933f3db3",
+          "sequence": 2,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing_item",
+          "candidateIdempotencyKey": "model-import-candidate:d5ffc0fd2252771585dbfde3d4e356779afdb33a83d4c655e57641e625956fba",
+          "candidateRequestHash": "169e39598414578ce55d196818b1246b565cb0714b145a8e51406c8de0e0e5ba",
+          "status": "UPDATED",
+          "modelSpecId": "6e20db68-6888-3551-aec0-0f42492d8e13",
+          "revision": 2,
+          "modelChecksum": "c8b38552f47d31f6e4f17c684710f7cfb99b6a44ef4a57f532f0d9b88749e2ae",
+          "implementationRevision": 2,
+          "implementationChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.733411Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_curing_item",
+            "acceptedExternalChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "88cadbd61e059cd75189e1fce13922241acbd010d737b9f6002ad28568786a7a",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "c8b38552f47d31f6e4f17c684710f7cfb99b6a44ef4a57f532f0d9b88749e2ae"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "00a57a3752f1d03c84acd180775e245aef924f0d79392d329088aced53417bfc",
+            "implementationRevision": 1,
+            "implementationChecksum": "073f8fa631c32fa928f7796fe9ae24ec5b475f192244f61bcc5436982b671c64"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_curing"
+          ]
+        },
+        {
+          "resultId": "dc6d9c46-31ac-426e-9fd5-d3e465420258",
+          "sequence": 3,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_customer",
+          "candidateIdempotencyKey": "model-import-candidate:52351d990b330698d4aedae026a159a33af9431cea60d967c53f1eb2cedc1c92",
+          "candidateRequestHash": "ef428ffa9eac95b9eaa6b4aab2c3b16c80d38bf995b7d118031aa10c842c220a",
+          "status": "UPDATED",
+          "modelSpecId": "88c62123-0c68-3e66-a20a-eb2d40262af5",
+          "revision": 2,
+          "modelChecksum": "050e8fb66fad71fc80edeaa39462edcdeb63d3408a4e00cae401adf3c0ebbc21",
+          "implementationRevision": 2,
+          "implementationChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.802079Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_customer",
+            "acceptedExternalChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "448daa97f53ceba306a2882b085fd161da6cab67bf809d962cebc7abb0c940cd",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "050e8fb66fad71fc80edeaa39462edcdeb63d3408a4e00cae401adf3c0ebbc21"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "b48ad8a71d24635b67154a5bdcd806f2b375ec03ba26fd35082c5392cd23113b",
+            "implementationRevision": 1,
+            "implementationChecksum": "2658499aad6cce085cdd53f603023eadf696c58a3b35c158d6a15b95e037b403"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "233521d3-7856-4661-8ff4-749f5b6ac945",
+          "sequence": 4,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_goods",
+          "candidateIdempotencyKey": "model-import-candidate:d60abc62403f62460c9146b20a361cff52e535560abcad054bd939f1b5ffc5e1",
+          "candidateRequestHash": "2936c7aab83b8637b662ca3b109b6dc7a9f81d295277f3805412a74839cafa6f",
+          "status": "UPDATED",
+          "modelSpecId": "8ca76b32-1b51-34d5-a434-820685808164",
+          "revision": 2,
+          "modelChecksum": "966709cb8a117fa97ec1d1381207ccb9e15cf9b32d4ea416302866cf148a62da",
+          "implementationRevision": 2,
+          "implementationChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.868006Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_goods",
+            "acceptedExternalChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "e19e2b2e1d1b4109641d7ffae4287a9c2a100e7191fbeecc279470876b12d25f",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "966709cb8a117fa97ec1d1381207ccb9e15cf9b32d4ea416302866cf148a62da"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "62f2cd65e4a683d0201bd5447c18a4d156dacacbefde579a6fcc53fb7639f066",
+            "implementationRevision": 1,
+            "implementationChecksum": "4411d79edd95d0d1a9058ec09521d9d14283083603b27d4f4e0f75cf8d7bac4e"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "c228cedc-a92e-4af0-aa24-d38bfcb3e5b7",
+          "sequence": 5,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_position",
+          "candidateIdempotencyKey": "model-import-candidate:ab5ff41774fea80e7c5dbcfdadb45afbaaf4c23b9f81e86127e249d74b2962bf",
+          "candidateRequestHash": "1cef8b8a21aaae642d3dc61bd1ae01a6a19c72eece77d89257436cbf346c1886",
+          "status": "UPDATED",
+          "modelSpecId": "4db7744f-1f4d-3b6c-a464-9d033cb02c7f",
+          "revision": 2,
+          "modelChecksum": "b45e5a04f493b70217c7ebf0795e8077ef464019d03d1f1dfe70cb63b60afade",
+          "implementationRevision": 2,
+          "implementationChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.928671Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_position",
+            "acceptedExternalChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "7fe81cebf1f47d73c844f21fefee314105874dd8895fba208739bf0eef74ed15",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "b45e5a04f493b70217c7ebf0795e8077ef464019d03d1f1dfe70cb63b60afade"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "5a1bd5b022fb0b4596f24e9e20f65324d93f8481a98adc67971511fd02534622",
+            "implementationRevision": 1,
+            "implementationChecksum": "6ea9259d4d777c1b67afdd23b35f0d46bd746f539581a6adf02e877dfdce3e40"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "eb101753-2157-4726-b0a3-439295218f77",
+          "sequence": 6,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_project",
+          "candidateIdempotencyKey": "model-import-candidate:65cbd7fe5490a180dfec3ee2e05e7868db7bc0319c7cdd94a22e70fdd4a18b77",
+          "candidateRequestHash": "85bc7e247aa963c71939a4dd8b8aeaf799e609b1c94c4ac64b50785c09b5fc2c",
+          "status": "UPDATED",
+          "modelSpecId": "e5f5e556-4de1-306b-b619-201da623761d",
+          "revision": 2,
+          "modelChecksum": "4889805da65e11a2de77f9b137a53b73eb5ca62caff609ce14822c72e9f9aa46",
+          "implementationRevision": 2,
+          "implementationChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:04.987801Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_project",
+            "acceptedExternalChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "7c2201b524ec3119c86f6152a480d75f1bf284cfc896a3ebebcf14f53031b34a",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "4889805da65e11a2de77f9b137a53b73eb5ca62caff609ce14822c72e9f9aa46"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "03756ed6b2c81b18b37deeb6a35b165d05a6fb31c801b8d6e0756a2a540a9ae5",
+            "implementationRevision": 1,
+            "implementationChecksum": "78b1631f2d090aa3e8cf6e3f09f049a6ca6037fe07ad6118276631ed09090d01"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "afd90caa-6768-4d8d-9d11-0be41fa08c0b",
+          "sequence": 7,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+          "candidateIdempotencyKey": "model-import-candidate:46b0cb12afe85284d3114b4e8585740ed24b65f27570c209ae8950363e8af92a",
+          "candidateRequestHash": "25a70e3c15675df7ef8c247a1a0815d88ba758c421869718b2b522656e13cf22",
+          "status": "UPDATED",
+          "modelSpecId": "1e7ab12a-4034-3922-b2ae-b47ee00ad9a1",
+          "revision": 2,
+          "modelChecksum": "ca41fe8e4f732b20fdabdd8f4bea0803abf7b305b199527ad5656afbfd19e553",
+          "implementationRevision": 2,
+          "implementationChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.053590Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+            "acceptedExternalChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "098be4604bfe9afa37fde40fba0e298d8ffa0c5f66b2acfaf7cca720b3f0d710",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "ca41fe8e4f732b20fdabdd8f4bea0803abf7b305b199527ad5656afbfd19e553"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "84b142b77ca4bc57aad24619d9458f099ac783419b974dfe808f4c0a9f47bf91",
+            "implementationRevision": 1,
+            "implementationChecksum": "02c9744da20166bb6c9bdbf993d7daee15ba5fc95cf3cb2122745788180a486b"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "ddd5cd41-696d-49a1-afab-ae9754ba0062",
+          "sequence": 8,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+          "candidateIdempotencyKey": "model-import-candidate:6f62cdaf3298058e30746caf4d47801017288bd8bdcaf13b8e12f9665dca15bc",
+          "candidateRequestHash": "8799f0a1038d72a923bc4c91ced1035a58846c46e5f76be048678df07689c7d5",
+          "status": "UPDATED",
+          "modelSpecId": "49e84774-211a-39cf-98d4-47d62897296e",
+          "revision": 2,
+          "modelChecksum": "886a7da483e62c3581b75fa7d1dca12f356510e1b567be5c6fd50aab6689d8e4",
+          "implementationRevision": 2,
+          "implementationChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.130221Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+            "acceptedExternalChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "4f7d621437fcb0be99abbed2e6319bb57fd998da10696c169b8e30ce118df590",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "886a7da483e62c3581b75fa7d1dca12f356510e1b567be5c6fd50aab6689d8e4"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "3e78a929385ee8c51ce13285cd035af82f5d13e74dfdcf6d04eafb3d8914031c",
+            "implementationRevision": 1,
+            "implementationChecksum": "d42839be2c4fd56affb559a5f593d23f9bbb43aafd6b3043e82e0bd9a593bc3d"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_finance_collection"
+          ]
+        },
+        {
+          "resultId": "12dbecc3-c3f4-427c-86a2-4271e3a649a2",
+          "sequence": 9,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_collection",
+          "candidateIdempotencyKey": "model-import-candidate:ea2a16516f181a2d18da60033f12f85c4fbf440fc19bcd06d799738652fd1535",
+          "candidateRequestHash": "86fc6dd47e270e0ebc727a498cd9857330f281280d492ec2bc7f6e82d06f0307",
+          "status": "UPDATED",
+          "modelSpecId": "11ba4443-f224-3d31-bd64-f8502ea6c05a",
+          "revision": 2,
+          "modelChecksum": "3211c79a878c27e018a98782ebef0749e7f5fb83749691b4d0038632a2531663",
+          "implementationRevision": 1,
+          "implementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.186298Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_collection",
+            "acceptedExternalChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "3211c79a878c27e018a98782ebef0749e7f5fb83749691b4d0038632a2531663"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "c32ae4ad1e32dfe1d25b7a75b915f76a198e5de6c1a81ba0d895f43daacac950",
+            "implementationRevision": 1,
+            "implementationChecksum": "96b9ab5594ca0f260d5556d286f5253a132d012f92fc0b0481cb09f501d3c812"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_collection_allocation",
+            "model.prs_flower_v2.prs_v2_dwd_finance_collection"
+          ]
+        },
+        {
+          "resultId": "35c5823d-a531-4114-b316-0647c69fa604",
+          "sequence": 10,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement",
+          "candidateIdempotencyKey": "model-import-candidate:12246f1d3bf4633d6a7648d3b096748c205681bf78f4703b165e2307e1532f89",
+          "candidateRequestHash": "8eb329b781dfeaf653c95ed385d6daee7f173b52e65d9726e32307ddd5d9c731",
+          "status": "UPDATED",
+          "modelSpecId": "24dc73f3-f431-3c1e-9c5d-384e19440ee8",
+          "revision": 2,
+          "modelChecksum": "80f5006a775dfb193d83310eed81c6ac2e2f84159eacb215dbbb71d55f6d0afa",
+          "implementationRevision": 2,
+          "implementationChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.237677Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement",
+            "acceptedExternalChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "d970aa03d2682ddd95007a827f9b8ce2e37b9d8b474565d3e3b98728311e2530",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "80f5006a775dfb193d83310eed81c6ac2e2f84159eacb215dbbb71d55f6d0afa"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "f1d11a743167a2018a4cf4642f4fb5ca915f5978d165f0134b64d1826c46041a",
+            "implementationRevision": 1,
+            "implementationChecksum": "507410c0679ba1089fef81baecfc841e07030bf3421261a93420f8e98ff2bb0a"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "5285ec20-5363-444c-a454-08c3c0399871",
+          "sequence": 11,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_order",
+          "candidateIdempotencyKey": "model-import-candidate:0e0169474f147a170384447f5f2a17af578c7cfc3fd73c37d0e104a6e5af3371",
+          "candidateRequestHash": "cb4fddcce1ad93c83a5b2f1a92f0b9d2253a36193f1ab2ffbf169ee11342e2de",
+          "status": "UPDATED",
+          "modelSpecId": "9c139aec-a0bc-33bf-8382-dc0ee50a2266",
+          "revision": 2,
+          "modelChecksum": "7fa8f3430e64e3eafd1314d9b17df872dbd4d786ea6b8e7be990433fda094971",
+          "implementationRevision": 2,
+          "implementationChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.301569Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_order",
+            "acceptedExternalChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "786b34fb1180221d165cf7cf6d09158565d6fae2270389f470012b3fa00b8b4b",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "7fa8f3430e64e3eafd1314d9b17df872dbd4d786ea6b8e7be990433fda094971"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "5725aadad19a27ed4f889b51b74b0e3a35ba21ade337a7adb926caffa204c98b",
+            "implementationRevision": 1,
+            "implementationChecksum": "4930c7c18f201d618fadf663bdd4228b409e2791a5ada3c1099bdc60f1f34c30"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "b7401b73-2fcb-48a1-87c4-c10ab1239bf0",
+          "sequence": 12,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_change",
+          "candidateIdempotencyKey": "model-import-candidate:2dfdd585b9827407bce87b7e81a49c17af0f1ff60c840e12b0ca24febd4248ab",
+          "candidateRequestHash": "d921e8b03e6500148a1bba041813651d1d11e40210262c84d5fdcc4da39eacf8",
+          "status": "UPDATED",
+          "modelSpecId": "46d504fa-249f-3f37-8b49-02ab701496b4",
+          "revision": 2,
+          "modelChecksum": "94a6358d872fbcaa248eda302df5f4c5e3f5fdd4007e540f5acd62edfc7b5b4c",
+          "implementationRevision": 2,
+          "implementationChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.361887Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_change",
+            "acceptedExternalChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "f426380d488aa8cb13a0041bc0fb35d329eb008056fcc1d2b8acf5c4680db5dd",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "94a6358d872fbcaa248eda302df5f4c5e3f5fdd4007e540f5acd62edfc7b5b4c"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "95ae1bf7c4228e0e5c1ef8899ea995d5eadb1e365fa112acc7f45665944143a9",
+            "implementationRevision": 1,
+            "implementationChecksum": "0e8e482ab947b8b5f083b071dfe6a92a253ce35a348c62f1902ee3bd76f5028a"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_flower_order"
+          ]
+        },
+        {
+          "resultId": "a49a4bba-c432-40ca-b20e-d4756420398a",
+          "sequence": 13,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_change_detail",
+          "candidateIdempotencyKey": "model-import-candidate:aba61087837b99689e077bedb24f05ffdb3a9caf291f1c171cb5b0d321d5f778",
+          "candidateRequestHash": "9775aa80bc4cffdba3ccc608413de8d5f79060241582dd2cefcf4d5bf3b8d17a",
+          "status": "UPDATED",
+          "modelSpecId": "3d4bc0e9-f3cc-3eb0-99c5-32ad27b2819c",
+          "revision": 2,
+          "modelChecksum": "385c64edb6956a7a3d1c4a67a4c0381eae9db8cf6e9e9437f153bea65275c79d",
+          "implementationRevision": 1,
+          "implementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.423381Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_change_detail",
+            "acceptedExternalChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "385c64edb6956a7a3d1c4a67a4c0381eae9db8cf6e9e9437f153bea65275c79d"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "8fb2ac6410d063b39d5a0c7ef64da0d77b3beb97bc783c2cffc90d6b7eafa147",
+            "implementationRevision": 1,
+            "implementationChecksum": "ed1fe5f718a0298c8cbbca39b51b4d1c5536ce4311b486407c18495d59150738"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_change",
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "22885129-2e5c-4a46-8101-aef20ce75c01",
+          "sequence": 14,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_extra_cost",
+          "candidateIdempotencyKey": "model-import-candidate:daa19c576725a66f58e2b1b3fc0215ae0ff2955bdc5b12abf0220ed20d343c6f",
+          "candidateRequestHash": "f741b2ef108302d7b8cc3c3428979157350e5c327f1bff1ac6a1e6d38107f20f",
+          "status": "UPDATED",
+          "modelSpecId": "e84b3bf0-98dd-3f02-8cd2-521bedab4358",
+          "revision": 2,
+          "modelChecksum": "6ab51cc97942d940a5df01009071aed83b17aa386bd99f74af2f51ef3aced0c3",
+          "implementationRevision": 2,
+          "implementationChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.490312Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_extra_cost",
+            "acceptedExternalChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "53d40e41505cda88df4eba3d6e910d38963c585d3830822ea7bc05026bb44972",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "6ab51cc97942d940a5df01009071aed83b17aa386bd99f74af2f51ef3aced0c3"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "85e7cef4fdcdba683bebc734cb7de55543ea91c33195ab91bdd9959ff2cf4291",
+            "implementationRevision": 1,
+            "implementationChecksum": "df6d1f4419067346fabdfd459bcc4060987a0147736b6970ec1e7279cf90bce5"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_flower_order"
+          ]
+        },
+        {
+          "resultId": "a4ee8a6b-e4b5-4734-8e14-559763131edd",
+          "sequence": 15,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_item",
+          "candidateIdempotencyKey": "model-import-candidate:ca6afe6dc069f0b3d4f58763c2a4dcd5981a17bde75916eca1a9421c1302d8ab",
+          "candidateRequestHash": "983fec442be2463e09f86e85e3b5b4fe7473ab1b4317c76c87f51373c6ae24a9",
+          "status": "UPDATED",
+          "modelSpecId": "8a8b1932-3f3c-3cd9-b49b-6a4bca8084df",
+          "revision": 2,
+          "modelChecksum": "5df0bfe84aababd069ff723ec067bd7141ac4fc7a8794d88d06eea2e011fae52",
+          "implementationRevision": 2,
+          "implementationChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.576630Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_flower_item",
+            "acceptedExternalChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "76046f24537a18abb8767ae8dc94043b1de6514a982ce1ce24974eecc163c627",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "5df0bfe84aababd069ff723ec067bd7141ac4fc7a8794d88d06eea2e011fae52"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "e302fc739799de79680458defaac8d4076be62bc734486086f92e75ec127d634",
+            "implementationRevision": 1,
+            "implementationChecksum": "eabae65482f4d1a9c304f149efb08fd1ab852552baef9d19f55073a65e07e549"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_flower_order"
+          ]
+        },
+        {
+          "resultId": "f28706d1-aea5-4506-9f3f-3cf319406d34",
+          "sequence": 16,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_lease_detail",
+          "candidateIdempotencyKey": "model-import-candidate:5eb1b4810a69b23daa67a85cc687b873c285c8c3a9ae2382a7745524a62a0aa0",
+          "candidateRequestHash": "fe1984c0d4652e424a0e7293fb3f66f1997f2e4c31331732e8a02f0260396c8b",
+          "status": "UPDATED",
+          "modelSpecId": "27ab66a3-2fb5-3faa-9b4e-fd025cdab796",
+          "revision": 2,
+          "modelChecksum": "898e8986cd5b40c6d34968094b6f3a76b43b3bd6102712c5d53f26a06f7e4c38",
+          "implementationRevision": 1,
+          "implementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.645620Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_lease_detail",
+            "acceptedExternalChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "898e8986cd5b40c6d34968094b6f3a76b43b3bd6102712c5d53f26a06f7e4c38"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "e60ca44453ebfeef7117a25e84991dd46ba18b7b82c6d1543abb8b4b01674a7f",
+            "implementationRevision": 1,
+            "implementationChecksum": "40ab46c82720ffeff6770fd46432a512c10a5ea844add3af3cc391238904c916"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_flower_item",
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "5513b149-a4d5-4d34-addd-8f786a493043",
+          "sequence": 17,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_placement",
+          "candidateIdempotencyKey": "model-import-candidate:dfe1bcea6c9f0b74d671ccff571f982883df50d0c83d7c3443257162c03a45d1",
+          "candidateRequestHash": "70675fe2aa1aa38c10144b64c0f9525657b795b92b3ec757b951b458ad3e7c97",
+          "status": "UPDATED",
+          "modelSpecId": "7dc5b164-f4a0-317c-b644-e04e31b1f375",
+          "revision": 2,
+          "modelChecksum": "4dae6b8a6d48b30db30e491ec44eefca9a7c2596fb991d40bee7d6826c52d5fa",
+          "implementationRevision": 2,
+          "implementationChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.721186Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_placement",
+            "acceptedExternalChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "e06be289d981473cd371846c93e0d16c20fbe7a538be507db83abad28c868ce7",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "4dae6b8a6d48b30db30e491ec44eefca9a7c2596fb991d40bee7d6826c52d5fa"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "591f081519c02e7764c85896f88132c0f2b9f20e86fbf26de8495cfc66465ac6",
+            "implementationRevision": 1,
+            "implementationChecksum": "8e8e85b8fd37dafbd11fe0aeb31b27c1aa632c5074fd45402de28cca4402b17d"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "892e189e-b05c-42f0-a1c9-2dc5cec33e98",
+          "sequence": 18,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_recovery",
+          "candidateIdempotencyKey": "model-import-candidate:7f259ab6cefe66dc1beef900374d632f61ee308dff51af119bd512660036fefc",
+          "candidateRequestHash": "c9f72820ba480731375548764eaacfb5a114a9863e228827e5fc6d594e3793eb",
+          "status": "UPDATED",
+          "modelSpecId": "3b9b1237-de6e-38ca-b5af-fa4f2ae4d0dd",
+          "revision": 2,
+          "modelChecksum": "e0d2cf9e8d40c71ecde0952ccf5538a0dc21530aa5e0a10aa092f178e651edf4",
+          "implementationRevision": 2,
+          "implementationChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.783919Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_recovery",
+            "acceptedExternalChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "8cdd04d1bbef38798e7c5d434fcd9233287ef41d8f4acc7527e8332f8fa32d54",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "e0d2cf9e8d40c71ecde0952ccf5538a0dc21530aa5e0a10aa092f178e651edf4"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "3397d95b0173e67f772a60cccf1c98d076c081ab617db01de4fa1b0521be342e",
+            "implementationRevision": 1,
+            "implementationChecksum": "f10559e39d105298cdbeb5457ff8ea29e7ac45baa89b21ef2eb85cad947b12a8"
+          },
+          "dependencyUniqueIds": []
+        },
+        {
+          "resultId": "1032299e-9032-4fdd-b18d-658ac37980eb",
+          "sequence": 19,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_recovery_detail",
+          "candidateIdempotencyKey": "model-import-candidate:a78ec07189b2166f68c1755e2da6c48f94688af50dc88ed578037b1f5db83a5a",
+          "candidateRequestHash": "2cc96012239d511294ebdd8e8c430c130f09ef7f0f37ec27e400720a243e1798",
+          "status": "UPDATED",
+          "modelSpecId": "c6daae48-e764-3aa4-9ef0-f9c5d50e7724",
+          "revision": 2,
+          "modelChecksum": "28208d2cfde3dd04649e1de89f4ba3f6a030a480da0645516453a0075f11aa5e",
+          "implementationRevision": 1,
+          "implementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.854514Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_recovery_detail",
+            "acceptedExternalChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "28208d2cfde3dd04649e1de89f4ba3f6a030a480da0645516453a0075f11aa5e"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "49329c7d4390622ebb98583f317f5e1a257c3c18e4ccbb9ba3b709088b931ffe",
+            "implementationRevision": 1,
+            "implementationChecksum": "04f9e3ba8babb0ff906a35c38bf3cb5a860f650458dedd0dae7d7e40d543e792"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dwd_recovery"
+          ]
+        },
+        {
+          "resultId": "acb2c13e-4f6d-421d-8f0c-ff208ddc610a",
+          "sequence": 20,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_rent_snapshot",
+          "candidateIdempotencyKey": "model-import-candidate:dcecb4a673134c0430ada0d125aa158421586a8f02a3d21f47730a8f91d52ca0",
+          "candidateRequestHash": "8b22cd8f3d997488a7c840260880f1c84df55300865ca52a1cdabf10c3e83c94",
+          "status": "UPDATED",
+          "modelSpecId": "1df53cfa-fba9-32b3-a261-f5e33ae6d964",
+          "revision": 2,
+          "modelChecksum": "1b79ec0fe61624879682189fa1c537832e39c214cfc75c4e3925046d0565b75b",
+          "implementationRevision": 2,
+          "implementationChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:05.941571Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dwd_rent_snapshot",
+            "acceptedExternalChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+            "acceptedImplementationRevision": 2,
+            "acceptedImplementationChecksum": "01be6e24b07e609205d3f34bcfbd37ab8759cc3d74f85b319a86b6f878d841ce",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "1b79ec0fe61624879682189fa1c537832e39c214cfc75c4e3925046d0565b75b"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "6364d4f9fdf9ba662b32a4347f3971b84d4dd9a93b64775784f20749cde6e5f7",
+            "implementationRevision": 1,
+            "implementationChecksum": "7fd0e0adeee6c1e302acbcc442593121a767bd02c9d9c8d3b1060198378eae02"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project"
+          ]
+        },
+        {
+          "resultId": "18eec0e7-4d14-4cd5-aee8-e437a04caa12",
+          "sequence": 21,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly",
+          "candidateIdempotencyKey": "model-import-candidate:b50656004ce9e3689736ca76c5cf466a9e12f88bbc952652ae3f7d25175d0ecc",
+          "candidateRequestHash": "961c9bf6ca87371654ae038352fd39389529a39ee18de4d053439f1de212d939",
+          "status": "UPDATED",
+          "modelSpecId": "dd90ccd3-0943-30ba-874a-41adf72b9efd",
+          "revision": 2,
+          "modelChecksum": "d39d8e1130ea70c6aa2853db93afd6e9f074b5094f7133bc07da3121c92f2955",
+          "implementationRevision": 1,
+          "implementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.008604Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly",
+            "acceptedExternalChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "d39d8e1130ea70c6aa2853db93afd6e9f074b5094f7133bc07da3121c92f2955"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "929d48efaf71b2d9c8266587ca7894f627fcc19f834aaa94d6ae4e5763b0dbe5",
+            "implementationRevision": 1,
+            "implementationChecksum": "e51e33f478b7175b4eb0130ab2238789660d9eaaf3f3d7e70efb023120d2aba8"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_curing"
+          ]
+        },
+        {
+          "resultId": "98bd06ec-8e95-43df-ac50-d02d52be6179",
+          "sequence": 22,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_curing_workload",
+          "candidateIdempotencyKey": "model-import-candidate:800caf82da11edecff087bd94af4e2a329d0c5dd793e2341442bb938c4fa2dbc",
+          "candidateRequestHash": "813188608b7464019063d2003e21a13a6361951d057b30ae6d53cbe896644727",
+          "status": "UPDATED",
+          "modelSpecId": "5f1323a0-7e64-359c-8bb3-c78c7848823c",
+          "revision": 2,
+          "modelChecksum": "8233125781e4cecae3f03ac9e314227ad89911a702dab768a601d7ea45464fb8",
+          "implementationRevision": 1,
+          "implementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.071699Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_curing_workload",
+            "acceptedExternalChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "8233125781e4cecae3f03ac9e314227ad89911a702dab768a601d7ea45464fb8"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "385109dffd0fb73ca6cff5fd50ba85f8607d8d80174b11e955d85d9b8d385150",
+            "implementationRevision": 1,
+            "implementationChecksum": "3b557c6631c6c276f3a5552b6265e319c909b1f42f42d09d6936f6121438fba3"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dws_curing_workload_monthly"
+          ]
+        },
+        {
+          "resultId": "c5e7ee09-81c6-48dd-92a8-47687fb19696",
+          "sequence": 23,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary",
+          "candidateIdempotencyKey": "model-import-candidate:2aac60f1df1b0caf9be239a4466cd5eedc0c1509cda0f8306eaf5d95fdf6febd",
+          "candidateRequestHash": "ed3514781ab4f64572895d1ef7cccc7eb018183a3429d9fb0f362329b7abf9df",
+          "status": "UPDATED",
+          "modelSpecId": "ef1d89ef-60c5-3149-8b67-955ee3348202",
+          "revision": 2,
+          "modelChecksum": "f550b1e9a45f4ea9ad21a1460ff3bb4e561288085ee5db9d508a9bfc22171b54",
+          "implementationRevision": 1,
+          "implementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.136526Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary",
+            "acceptedExternalChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "f550b1e9a45f4ea9ad21a1460ff3bb4e561288085ee5db9d508a9bfc22171b54"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "556dda521826aad8f9dafecb97491c7d2cc76b3adb6980d92f468bd804938ad9",
+            "implementationRevision": 1,
+            "implementationChecksum": "0d8679503517452b68998280d69aa6ac8d0755a3755ba857b07ba387ed37d1dd"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_finance_collection",
+            "model.prs_flower_v2.prs_v2_dwd_finance_month_settlement"
+          ]
+        },
+        {
+          "resultId": "870b3d7a-2d75-42a1-8fec-3a8db03c4fc4",
+          "sequence": 24,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_month_settlement",
+          "candidateIdempotencyKey": "model-import-candidate:4f5ec7f8968a13cd88061ae326b5f09c4311ef6f775fee72b676b63517c315d6",
+          "candidateRequestHash": "97a83357c36397a646834aa1538a17e710b223ea1e0a0511f1a7af7f09479b39",
+          "status": "UPDATED",
+          "modelSpecId": "6b387d97-5dc1-3d86-b2f0-b69da3c29a84",
+          "revision": 2,
+          "modelChecksum": "425f508d3414904e03fa80f338c2e528ef873017cca2e3b398d5f6e903f9bdcf",
+          "implementationRevision": 1,
+          "implementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.202030Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_finance_month_settlement",
+            "acceptedExternalChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "425f508d3414904e03fa80f338c2e528ef873017cca2e3b398d5f6e903f9bdcf"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "487cddbc1ca133af4a6b5d256d9f1cb9b640d339b1bfa2ed63ffc787f6c1b2ca",
+            "implementationRevision": 1,
+            "implementationChecksum": "a070aa7d3598a1e7b63c5cd423d30adec328e3562ed9196150ffd51ba8122ad0"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary"
+          ]
+        },
+        {
+          "resultId": "e07a0679-dafa-4810-8e20-b9aed5a3f7e7",
+          "sequence": 25,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly",
+          "candidateIdempotencyKey": "model-import-candidate:4b0b4c5dbdb9cc24b1855c7923f602d3d51ed0590eac1e43f3ec65e66874630a",
+          "candidateRequestHash": "781e15c365c63c7914eb1ef417c3c576bee0b33ab8a674c3674eeb232420bc54",
+          "status": "UPDATED",
+          "modelSpecId": "c8c0b94c-de5f-3a0f-8a5d-66670033dcfd",
+          "revision": 2,
+          "modelChecksum": "f10198793a35bab92777edbe09077b07fae6268de7b2e75fe4c4641ba77b766f",
+          "implementationRevision": 1,
+          "implementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.278445Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly",
+            "acceptedExternalChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "f10198793a35bab92777edbe09077b07fae6268de7b2e75fe4c4641ba77b766f"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "ee59da17256b5144c3aaaddb37fb2972da7851b72b0980b2a3aaac141fc0d905",
+            "implementationRevision": 1,
+            "implementationChecksum": "a47b80a70334d795fc8824b426ae7f334a72691022927ad0d46548d6640d4eaf"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dws_finance_monthly_summary"
+          ]
+        },
+        {
+          "resultId": "b28f5185-1f6a-423f-8491-40028da30813",
+          "sequence": 26,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_customer_finance",
+          "candidateIdempotencyKey": "model-import-candidate:c6ce35b34a83f26205d946dd4d648cb9d2e0f36cfbf3536bd69d66ef0ef895fa",
+          "candidateRequestHash": "f25303b403db8846f675412bbd1776f5f5e8fa88fa269ca6f7b5a0fda1b6b97c",
+          "status": "UPDATED",
+          "modelSpecId": "b07ee51a-71b5-309a-a4d4-0ec834950602",
+          "revision": 2,
+          "modelChecksum": "3c449caf1a62a4da9fe1d4eba8311ecb9bd46334d06c87306b2a5cf4bc1d19a4",
+          "implementationRevision": 1,
+          "implementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.346958Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_customer_finance",
+            "acceptedExternalChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "3c449caf1a62a4da9fe1d4eba8311ecb9bd46334d06c87306b2a5cf4bc1d19a4"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "565686d859f50678e0c53d4f2642aee6629f5cc5f0dd38fe2755232a0ea9fd82",
+            "implementationRevision": 1,
+            "implementationChecksum": "3c3e4748ed7a54b17439b2b985f0535a7cb1884f1867b216c502abecf9fc9ef8"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_customer",
+            "model.prs_flower_v2.prs_v2_dws_customer_finance_monthly"
+          ]
+        },
+        {
+          "resultId": "fc5c16e7-a5b4-4ca0-b2f3-f9a77117363c",
+          "sequence": 27,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_current",
+          "candidateIdempotencyKey": "model-import-candidate:68cb26a06f9306d68fae3ed450dff5920a1a0b5953323dae6d006f6ffa2035cf",
+          "candidateRequestHash": "7d8af4c2e765c14d82712cd60f1e0dd7f5ddaee798f4fc255f4d3c7140413142",
+          "status": "UPDATED",
+          "modelSpecId": "4971efce-437a-3a4c-9a0a-64a257781a89",
+          "revision": 2,
+          "modelChecksum": "ca8fba40745109c6a01351daa6449222a59ec21f1df16fa3e32e3b16ac4a1eb5",
+          "implementationRevision": 1,
+          "implementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.394147Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_current",
+            "acceptedExternalChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "ca8fba40745109c6a01351daa6449222a59ec21f1df16fa3e32e3b16ac4a1eb5"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "237cafdbb12c3b55deec696891df3a91fc9387fded0fb57288d39ca638d66963",
+            "implementationRevision": 1,
+            "implementationChecksum": "4ca003409d747a06a7c39ffbe8d9ed51b303fcdab1d1ccddd2febee333872610"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_placement"
+          ]
+        },
+        {
+          "resultId": "711452c0-4978-471b-8bb0-dfe5335cfff8",
+          "sequence": 28,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_current_placement",
+          "candidateIdempotencyKey": "model-import-candidate:2f93050c4c1326ace8599243961ffcf2e93aa1d8d08f941a4022cf9a3ae1a9a3",
+          "candidateRequestHash": "7b5f66a58e26a5c91cc882d1132f42f5be49ed9415a2e4ed9d49cf45cfb1c41e",
+          "status": "UPDATED",
+          "modelSpecId": "ccaf1157-78a2-309f-8d28-288173ba5c7b",
+          "revision": 2,
+          "modelChecksum": "0044724a9da0282ccf485b7243c1961f046c4bea827cb43f44d13380d6877570",
+          "implementationRevision": 1,
+          "implementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.438979Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_current_placement",
+            "acceptedExternalChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "0044724a9da0282ccf485b7243c1961f046c4bea827cb43f44d13380d6877570"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "76801901d7f1fcab8ce324a0cbc4ed67ccc5cf907ae1b0600139f928effcbdb3",
+            "implementationRevision": 1,
+            "implementationChecksum": "37fa85e9968829f0c7a3578084b613be6e59ea73f9d1b2616459ae83b413bc36"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dws_project_current"
+          ]
+        },
+        {
+          "resultId": "75dca97b-579d-4257-8acc-f477c050e30c",
+          "sequence": 29,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_operations_monthly",
+          "candidateIdempotencyKey": "model-import-candidate:a3b888553afcfd4fb8bd7fe47510a4501425b18c026c033b63ce9a43bbc616f5",
+          "candidateRequestHash": "9a8841ec857ebfddb3ebc26ec9073ff74e714d1f53c98e95aad1b132227e8cf3",
+          "status": "UPDATED",
+          "modelSpecId": "53363f3e-b3ef-3a5b-9fec-9ebec79bc484",
+          "revision": 2,
+          "modelChecksum": "046ca65519394f1c78df4d6f131fe671c5e370af9dd1b1462c598373049a4ffc",
+          "implementationRevision": 1,
+          "implementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.480828Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_dws_project_operations_monthly",
+            "acceptedExternalChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "046ca65519394f1c78df4d6f131fe671c5e370af9dd1b1462c598373049a4ffc"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "b0f80b3e356c9f4c26dde7264b39002cba5a787053eb7b72b9b57d7b93a2e4c3",
+            "implementationRevision": 1,
+            "implementationChecksum": "08cb56149693235f1841d16260fa2ebea0ae51d385ee0e51ad597cc583506d42"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_flower_order"
+          ]
+        },
+        {
+          "resultId": "abde6b37-7a85-4de6-b424-fc7a2fa9b4d0",
+          "sequence": 30,
+          "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_operations_overview",
+          "candidateIdempotencyKey": "model-import-candidate:97fe5007a2d1621109ad67a9610b6ee3e2c1209d83eb3296fc9fb6f539bcad03",
+          "candidateRequestHash": "2e1969ddb26849c404ac5e0e22bf3d0be01fccdc0db0e618aa0a272236f2404b",
+          "status": "UPDATED",
+          "modelSpecId": "03a95428-a157-3968-9531-9a8fc19c0ad0",
+          "revision": 2,
+          "modelChecksum": "376282772381cc901d6bab0e2344bb38fe029a93a7e74b7a3f522620c22eed21",
+          "implementationRevision": 1,
+          "implementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+          "artifactCount": 4,
+          "issues": [],
+          "recordedAt": "2026-09-13T11:48:06.521693Z",
+          "appliedAction": "UPDATE",
+          "projectKey": "prs_flower_v2",
+          "mergeCheckpoint": {
+            "tenantId": "default",
+            "projectKey": "prs_flower_v2",
+            "dbtUniqueId": "model.prs_flower_v2.prs_v2_ads_operations_overview",
+            "acceptedExternalChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+            "acceptedImplementationRevision": 1,
+            "acceptedImplementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f",
+            "mappedModelSpecRevision": 2,
+            "mappedModelSpecEtag": "376282772381cc901d6bab0e2344bb38fe029a93a7e74b7a3f522620c22eed21"
+          },
+          "preAttemptPins": {
+            "modelRevision": 1,
+            "modelChecksum": "1761f0c8c21569227316128fe3133e020d47cd08dab768de880262cf90fb1a23",
+            "implementationRevision": 1,
+            "implementationChecksum": "665123130939e42cd85f0241ac73b8cc7a08f74a45611a0ec27fee147fd3ce1f"
+          },
+          "dependencyUniqueIds": [
+            "model.prs_flower_v2.prs_v2_dwd_project",
+            "model.prs_flower_v2.prs_v2_dws_project_operations_monthly"
+          ]
+        }
+      ]
+    }
+  }
+}

@@ -1,0 +1,240 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-03a-model-spec-v2-columns" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="modeling_warehouse_plan"/>
+            <tableExists tableName="catalog_domain"/>
+        </preConditions>
+        <comment>Expand the existing ModelSpec ledger for the objectless canonical v2 contract.</comment>
+
+        <dropNotNullConstraint tableName="modeling_model_spec" columnName="object_id" columnDataType="${uuidType}"/>
+        <dropNotNullConstraint tableName="modeling_model_spec" columnName="process_id" columnDataType="varchar(128)"/>
+
+        <addColumn tableName="modeling_model_spec">
+            <column name="contract_version" type="int" defaultValueNumeric="1"><constraints nullable="false"/></column>
+            <column name="domain_id" type="${uuidType}"/>
+            <column name="business_activity_ref" type="varchar(256)"/>
+            <column name="description" type="text"/>
+            <column name="consumption_scenario" type="text"/>
+            <column name="fact_shape" type="varchar(32)"/>
+            <column name="grain_json" type="jsonb"/>
+            <column name="time_semantics" type="jsonb"/>
+            <column name="fields" type="jsonb"/>
+            <column name="source_refs" type="jsonb"/>
+            <column name="depends_on" type="jsonb"/>
+            <column name="dimension_refs" type="jsonb"/>
+            <column name="metric_refs" type="jsonb"/>
+            <column name="standard_bindings" type="jsonb"/>
+            <column name="generation_strategy" type="jsonb"/>
+            <column name="legacy_refs" type="jsonb"/>
+            <column name="current_checksum" type="varchar(64)"/>
+            <column name="idempotency_key" type="varchar(128)"/>
+            <column name="idempotency_request_hash" type="varchar(64)"/>
+            <column name="idempotency_response_snapshot" type="jsonb"/>
+        </addColumn>
+
+        <addColumn tableName="modeling_model_spec_revision">
+            <column name="tenant_id" type="varchar(128)"/>
+            <column name="contract_version" type="int" defaultValueNumeric="1"><constraints nullable="false"/></column>
+            <column name="snapshot_json" type="jsonb"/>
+            <column name="created_by" type="varchar(128)"/>
+        </addColumn>
+        <sql><![CDATA[
+            UPDATE modeling_model_spec_revision r
+               SET tenant_id = s.tenant_id
+              FROM modeling_model_spec s
+             WHERE s.id = r.model_spec_id
+               AND r.tenant_id IS NULL;
+        ]]></sql>
+        <addNotNullConstraint tableName="modeling_model_spec_revision" columnName="tenant_id" columnDataType="varchar(128)"/>
+        <dropNotNullConstraint tableName="modeling_model_spec_revision" columnName="spec_json" columnDataType="text"/>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM modeling_model_spec WHERE contract_version = 2)
+                       OR EXISTS (SELECT 1 FROM modeling_model_spec_revision WHERE contract_version = 2) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_V2_DATA_EXISTS';
+                    END IF;
+                    IF EXISTS (
+                        SELECT 1 FROM modeling_model_spec
+                         WHERE object_id IS NULL OR process_id IS NULL
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_LEGACY_MODEL_IDENTITY_IS_NULL';
+                    END IF;
+                    IF EXISTS (SELECT 1 FROM modeling_model_spec_revision WHERE spec_json IS NULL) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_LEGACY_REVISION_PAYLOAD_IS_NULL';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <addNotNullConstraint tableName="modeling_model_spec_revision" columnName="spec_json" columnDataType="text"/>
+            <dropColumn tableName="modeling_model_spec_revision" columnName="created_by"/>
+            <dropColumn tableName="modeling_model_spec_revision" columnName="snapshot_json"/>
+            <dropColumn tableName="modeling_model_spec_revision" columnName="contract_version"/>
+            <dropColumn tableName="modeling_model_spec_revision" columnName="tenant_id"/>
+            <dropColumn tableName="modeling_model_spec" columnName="idempotency_response_snapshot"/>
+            <dropColumn tableName="modeling_model_spec" columnName="idempotency_request_hash"/>
+            <dropColumn tableName="modeling_model_spec" columnName="idempotency_key"/>
+            <dropColumn tableName="modeling_model_spec" columnName="current_checksum"/>
+            <dropColumn tableName="modeling_model_spec" columnName="legacy_refs"/>
+            <dropColumn tableName="modeling_model_spec" columnName="generation_strategy"/>
+            <dropColumn tableName="modeling_model_spec" columnName="standard_bindings"/>
+            <dropColumn tableName="modeling_model_spec" columnName="metric_refs"/>
+            <dropColumn tableName="modeling_model_spec" columnName="dimension_refs"/>
+            <dropColumn tableName="modeling_model_spec" columnName="depends_on"/>
+            <dropColumn tableName="modeling_model_spec" columnName="source_refs"/>
+            <dropColumn tableName="modeling_model_spec" columnName="fields"/>
+            <dropColumn tableName="modeling_model_spec" columnName="time_semantics"/>
+            <dropColumn tableName="modeling_model_spec" columnName="grain_json"/>
+            <dropColumn tableName="modeling_model_spec" columnName="fact_shape"/>
+            <dropColumn tableName="modeling_model_spec" columnName="consumption_scenario"/>
+            <dropColumn tableName="modeling_model_spec" columnName="description"/>
+            <dropColumn tableName="modeling_model_spec" columnName="business_activity_ref"/>
+            <dropColumn tableName="modeling_model_spec" columnName="domain_id"/>
+            <dropColumn tableName="modeling_model_spec" columnName="contract_version"/>
+            <addNotNullConstraint tableName="modeling_model_spec" columnName="process_id" columnDataType="varchar(128)"/>
+            <addNotNullConstraint tableName="modeling_model_spec" columnName="object_id" columnDataType="${uuidType}"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260719-03b-model-spec-v2-constraints" author="codex" dbms="postgresql">
+        <addUniqueConstraint
+            tableName="modeling_model_spec"
+            columnNames="tenant_id, id"
+            constraintName="uk_model_spec_tenant_id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="tenant_id, plan_id"
+            constraintName="fk_model_spec_v2_tenant_plan"
+            referencedTableName="modeling_warehouse_plan"
+            referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="domain_id"
+            constraintName="fk_model_spec_v2_domain"
+            referencedTableName="catalog_domain"
+            referencedColumnNames="id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_revision"
+            baseColumnNames="tenant_id, model_spec_id"
+            constraintName="fk_model_spec_revision_tenant_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, id"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_contract_version
+                CHECK (contract_version IN (1, 2));
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_identity
+                CHECK (
+                    contract_version <> 2 OR (
+                        object_id IS NULL AND process_id IS NULL
+                        AND plan_id IS NOT NULL AND domain_id IS NOT NULL
+                        AND status IN ('DRAFT', 'DESIGNING', 'VALIDATING', 'READY_TO_PUBLISH', 'PUBLISHED', 'ARCHIVED')
+                        AND current_checksum ~ '^[0-9a-f]{64}$'
+                        AND idempotency_key IS NOT NULL AND btrim(idempotency_key) <> ''
+                        AND idempotency_request_hash ~ '^[0-9a-f]{64}$'
+                        AND idempotency_response_snapshot IS NOT NULL
+                        AND jsonb_typeof(idempotency_response_snapshot) = 'object'
+                    )
+                );
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_type_context
+                CHECK (
+                    contract_version <> 2 OR (
+                        (model_type = 'FACT' OR business_activity_ref IS NULL)
+                        AND (
+                            (model_type = 'APPLICATION' AND consumption_scenario IS NOT NULL AND btrim(consumption_scenario) <> '')
+                            OR (model_type <> 'APPLICATION' AND consumption_scenario IS NULL)
+                        )
+                        AND (fact_shape IS NULL OR fact_shape IN ('TRANSACTION', 'PERIODIC_SNAPSHOT', 'ACCUMULATING_SNAPSHOT'))
+                    )
+                );
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_json_shapes
+                CHECK (
+                    contract_version <> 2 OR (
+                        (grain_json IS NULL OR jsonb_typeof(grain_json) = 'object')
+                        AND (time_semantics IS NULL OR jsonb_typeof(time_semantics) = 'object')
+                        AND (fields IS NULL OR jsonb_typeof(fields) = 'array')
+                        AND (source_refs IS NULL OR jsonb_typeof(source_refs) = 'array')
+                        AND (depends_on IS NULL OR jsonb_typeof(depends_on) = 'array')
+                        AND (dimension_refs IS NULL OR jsonb_typeof(dimension_refs) = 'array')
+                        AND (metric_refs IS NULL OR jsonb_typeof(metric_refs) = 'array')
+                        AND (standard_bindings IS NULL OR jsonb_typeof(standard_bindings) = 'array')
+                        AND (generation_strategy IS NULL OR jsonb_typeof(generation_strategy) = 'object')
+                        AND (legacy_refs IS NULL OR jsonb_typeof(legacy_refs) IN ('array', 'object'))
+                    )
+                );
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_contract_version
+                CHECK (contract_version IN (1, 2));
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_payload
+                CHECK (
+                    (contract_version = 1 AND spec_json IS NOT NULL)
+                    OR (
+                        contract_version = 2
+                        AND snapshot_json IS NOT NULL
+                        AND jsonb_typeof(snapshot_json) = 'object'
+                        AND content_checksum ~ '^[0-9a-f]{64}$'
+                    )
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT IF EXISTS ck_model_spec_revision_payload;
+                ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT IF EXISTS ck_model_spec_revision_contract_version;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_v2_json_shapes;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_v2_type_context;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_v2_identity;
+                ALTER TABLE modeling_model_spec DROP CONSTRAINT IF EXISTS ck_model_spec_contract_version;
+            ]]></sql>
+            <dropForeignKeyConstraint baseTableName="modeling_model_spec_revision" constraintName="fk_model_spec_revision_tenant_spec"/>
+            <dropForeignKeyConstraint baseTableName="modeling_model_spec" constraintName="fk_model_spec_v2_domain"/>
+            <dropForeignKeyConstraint baseTableName="modeling_model_spec" constraintName="fk_model_spec_v2_tenant_plan"/>
+            <dropUniqueConstraint tableName="modeling_model_spec" constraintName="uk_model_spec_tenant_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260719-03c-model-spec-v2-indexes" author="codex" dbms="postgresql">
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            CREATE UNIQUE INDEX uk_model_spec_v2_idempotency
+                ON modeling_model_spec (tenant_id, idempotency_key)
+                WHERE contract_version = 2 AND idempotency_key IS NOT NULL;
+            CREATE UNIQUE INDEX uk_model_spec_v2_plan_name
+                ON modeling_model_spec (tenant_id, plan_id, lower(name))
+                WHERE contract_version = 2;
+            CREATE INDEX idx_model_spec_v2_plan
+                ON modeling_model_spec (tenant_id, plan_id, model_type, status)
+                WHERE contract_version = 2;
+            CREATE INDEX idx_model_spec_v2_domain
+                ON modeling_model_spec (tenant_id, domain_id, model_type)
+                WHERE contract_version = 2;
+            CREATE INDEX idx_model_spec_v2_activity
+                ON modeling_model_spec (tenant_id, business_activity_ref)
+                WHERE contract_version = 2 AND business_activity_ref IS NOT NULL;
+            CREATE INDEX idx_model_spec_revision_tenant
+                ON modeling_model_spec_revision (tenant_id, model_spec_id, revision DESC);
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                DROP INDEX IF EXISTS idx_model_spec_revision_tenant;
+                DROP INDEX IF EXISTS idx_model_spec_v2_activity;
+                DROP INDEX IF EXISTS idx_model_spec_v2_domain;
+                DROP INDEX IF EXISTS idx_model_spec_v2_plan;
+                DROP INDEX IF EXISTS uk_model_spec_v2_plan_name;
+                DROP INDEX IF EXISTS uk_model_spec_v2_idempotency;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

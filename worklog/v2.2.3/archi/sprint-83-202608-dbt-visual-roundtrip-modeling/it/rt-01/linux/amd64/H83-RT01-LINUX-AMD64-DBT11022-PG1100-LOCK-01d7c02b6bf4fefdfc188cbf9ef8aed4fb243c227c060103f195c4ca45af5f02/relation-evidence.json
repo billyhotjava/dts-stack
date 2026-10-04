@@ -1,0 +1,16 @@
+{
+  "postgresqlServerVersion": "17.6 (Debian 17.6-2.pgdg13+1)",
+  "schema": "dts_rt01",
+  "relations": [
+    {"model":"stg_rt01_orders","relationKind":"VIEW","materialization":"view","rowCount":3,"status":"VERIFIED"},
+    {"model":"fct_rt01_orders","relationKind":"TABLE","materialization":"table","rowCount":3,"status":"VERIFIED"},
+    {"model":"inc_rt01_order_totals","relationKind":"TABLE","materialization":"incremental","rowCount":3,"status":"VERIFIED"}
+  ],
+  "deterministicRows": [
+    {"orderId":1001,"customerCode":"C001","amount":"12.50"},
+    {"orderId":1002,"customerCode":"C001","amount":"7.25"},
+    {"orderId":1003,"customerCode":"C002","amount":"30.00"}
+  ],
+  "containsConnectionString": false,
+  "containsCredentials": false
+}

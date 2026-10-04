@@ -1,0 +1,170 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
+import { Button, Card, Tag } from "antd";
+import { actionColumn, appendDetailAction, CompactTable, RecordDetailDrawer } from "@/components/table";
+import type { ColumnsType } from "antd/es/table";
+import {} from "@ant-design/icons";
+import { toast } from "sonner";
+import { PageHeader } from "@/components/page-header";
+import { useMenuStore } from "@/store/menuStore";
+import { useUserRoles } from "@/store/userStore";
+import { analyticsApi, type SemanticPromoteResult, type SemanticVirtualDataset } from "../../api/analyticsApi";
+import { ErrorNotice } from "../../components/ErrorNotice";
+import { getEffectiveLocale, type Locale } from "../../i18n";
+import { canPromoteSemanticModel, hasSemanticModelingMenuAccess } from "./semanticAccess";
+
+type LoadState<T> = { state: "loading" } | { state: "loaded"; value: T } | { state: "error"; error: unknown };
+
+function formatDateTime(value?: string): string {
+	if (!value) return "-";
+	const date = new Date(value);
+	return Number.isNaN(date.getTime())
+		? value
+		: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function baseModelOf(item: SemanticVirtualDataset): string {
+	return String(item.base_model || ((item.state as Record<string, unknown> | undefined)?.base ?? "-"));
+}
+
+export default function SemanticVirtualDatasetsPage() {
+	const locale: Locale = useMemo(() => getEffectiveLocale(), []);
+	const menus = useMenuStore((state) => state.menus);
+	const roles = useUserRoles();
+	const canModel = useMemo(() => hasSemanticModelingMenuAccess(menus), [menus]);
+	const canPromote = canPromoteSemanticModel(roles || []);
+	const [state, setState] = useState<LoadState<SemanticVirtualDataset[]>>({ state: "loading" });
+	const [promoteState, setPromoteState] = useState<LoadState<SemanticPromoteResult> | null>(null);
+	const [detailRow, setDetailRow] = useState<SemanticVirtualDataset | null>(null);
+
+	const load = useCallback(() => {
+		setState({ state: "loading" });
+		analyticsApi
+			.listSemanticVirtualDatasets({ owner: "me" })
+			.then((value) => setState({ state: "loaded", value }))
+			.catch((error) => setState({ state: "error", error }));
+	}, []);
+
+	useEffect(() => {
+		load();
+	}, [load]);
+
+	const baseColumns: ColumnsType<SemanticVirtualDataset> = [
+		{
+			title: "名称",
+			dataIndex: "name",
+			sorter: (a, b) => (a.name || "").localeCompare(b.name || ""),
+			key: "name",
+			render: (_value, record) => (
+				<div className="flex flex-col">
+					<Link to={`/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`}>
+						{record.name || `VDS #${record.id}`}
+					</Link>
+					<span className="text-xs text-secondary">{record.description || "未填写描述"}</span>
+				</div>
+			),
+		},
+		{
+			title: "基础模型",
+			key: "base",
+			width: 180,
+			render: (_value, record) => baseModelOf(record),
+		},
+		{
+			title: "更新时间",
+			dataIndex: "updated_at",
+			key: "updated_at",
+			width: 180,
+			render: (value) => formatDateTime(value),
+		},
+		{
+			title: "状态",
+			key: "status",
+			width: 120,
+			render: (_value, record) => <Tag color="blue">{record.archived ? "已归档" : "已共享"}</Tag>,
+		},
+		actionColumn<SemanticVirtualDataset>(
+			(record) => [
+				{
+					key: "edit",
+					label: "编辑",
+					href: `/bi/virtual-datasets/${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+				{
+					key: "new-card",
+					label: "生成卡片",
+					hidden: !canModel,
+					href: `/bi/card/new?vds=${encodeURIComponent(String(record.id ?? ""))}`,
+				},
+				{
+					key: "promote",
+					label: "提升",
+					hidden: !canPromote || record.id == null,
+					confirm: "生成提升到 dbt 的草案？",
+					onClick: async () => {
+						try {
+							setPromoteState({ state: "loading" });
+							const value = await analyticsApi.promoteSemanticVirtualDataset(record.id as number);
+							setPromoteState({ state: "loaded", value });
+							toast.success("已生成提升草案");
+						} catch (error) {
+							setPromoteState({ state: "error", error });
+							toast.error(error instanceof Error ? error.message : "提升失败");
+						}
+					},
+				},
+			],
+			{ width: 320 },
+		),
+	];
+
+	const columns = useMemo(
+		() => appendDetailAction(baseColumns, (row) => setDetailRow(row)),
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+		[canModel, canPromote],
+	);
+
+	return (
+		<div className="space-y-4">
+			<PageHeader
+				title="虚拟数据集"
+				actions={
+					canModel ? (
+						<Link to="/bi/virtual-datasets/new">
+							<Button type="primary">新建虚拟数据集</Button>
+						</Link>
+					) : undefined
+				}
+			/>
+
+			{state.state === "error" && <ErrorNotice locale={locale} error={state.error} />}
+			{promoteState?.state === "error" && <ErrorNotice locale={locale} error={promoteState.error} />}
+
+			<Card title="我的虚拟数据集">
+				<CompactTable<SemanticVirtualDataset>
+					rowKey={(record) => String(record.id ?? Math.random())}
+					loading={state.state === "loading"}
+					columns={columns}
+					dataSource={state.state === "loaded" ? state.value : []}
+					pagination={state.state === "loaded" && state.value.length > 10 ? undefined : false}
+				/>
+			</Card>
+			<RecordDetailDrawer<SemanticVirtualDataset>
+				open={detailRow !== null}
+				onClose={() => setDetailRow(null)}
+				record={detailRow}
+				columns={baseColumns}
+				title="虚拟数据集详情"
+			/>
+
+			{promoteState?.state === "loaded" && (
+				<Card title="最新提升草案">
+					<div className="mb-2 text-sm text-secondary">模型名</div>
+					<div className="mb-4 font-medium">{promoteState.value.model_name || "-"}</div>
+					<div className="mb-2 text-sm text-secondary">SQL</div>
+					<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>{String(promoteState.value.sql ?? "")}</pre>
+				</Card>
+			)}
+		</div>
+	);
+}

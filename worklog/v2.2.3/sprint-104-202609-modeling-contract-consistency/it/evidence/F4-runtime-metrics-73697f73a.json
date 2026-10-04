@@ -1,0 +1,12 @@
+{
+  "since": "2026-09-08T10:51:25Z",
+  "requests": 36,
+  "statuses": {
+    "200": 36
+  },
+  "minSeconds": 0.053140408,
+  "p50Seconds": 0.139297723,
+  "p95Seconds": 0.521798779,
+  "maxSeconds": 0.522391905,
+  "measurement": "Traefik Duration; browser entry, refresh, second page, return first page and model detail; not a fixed 10-concurrent load test"
+}

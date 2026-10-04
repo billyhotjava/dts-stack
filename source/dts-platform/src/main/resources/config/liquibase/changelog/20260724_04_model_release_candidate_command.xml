@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-04-model-release-candidate-command" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_release_candidate"/>
+        </preConditions>
+        <comment>Create append-only release-candidate command audit and tenant-scoped idempotency receipts.</comment>
+
+        <createTable tableName="modeling_model_release_candidate_command">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="tenant_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="candidate_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="plan_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="candidate_version" type="int"><constraints nullable="false"/></column>
+            <column name="event_type" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="from_status" type="varchar(32)"/>
+            <column name="to_status" type="varchar(32)"><constraints nullable="false"/></column>
+            <column name="actor_id" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="occurred_at" type="timestamptz"><constraints nullable="false"/></column>
+            <column name="reason" type="text"><constraints nullable="false"/></column>
+            <column name="idempotency_key" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="request_hash" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="response_snapshot" type="jsonb"><constraints nullable="false"/></column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_command"
+            columnNames="tenant_id, id"
+            constraintName="uk_model_release_candidate_command_tenant_id"/>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_command"
+            columnNames="tenant_id, idempotency_key"
+            constraintName="uk_model_release_candidate_command_idempotency"/>
+        <addUniqueConstraint
+            tableName="modeling_model_release_candidate_command"
+            columnNames="tenant_id, candidate_id, candidate_version"
+            constraintName="uk_model_release_candidate_command_version"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_release_candidate_command"
+            baseColumnNames="tenant_id, candidate_id, plan_id"
+            constraintName="fk_model_release_candidate_command_candidate"
+            referencedTableName="modeling_model_release_candidate"
+            referencedColumnNames="tenant_id, id, plan_id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate_command
+                ADD CONSTRAINT ck_model_release_candidate_command_payload
+                CHECK (
+                    candidate_version > 0
+                    AND event_type IN ('CREATED', 'SCOPE_REPLACED', 'STATUS_CHANGED', 'STALE_DETECTED')
+                    AND to_status IN (
+                        'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                        'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                        'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK', 'STALE'
+                    )
+                    AND (
+                        from_status IS NULL
+                        OR from_status IN (
+                            'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                            'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                            'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK', 'STALE'
+                        )
+                    )
+                    AND ((event_type = 'CREATED' AND from_status IS NULL)
+                        OR (event_type <> 'CREATED' AND from_status IS NOT NULL))
+                    AND btrim(actor_id) <> ''
+                    AND actor_id = btrim(actor_id)
+                    AND btrim(reason) <> ''
+                    AND octet_length(reason) <= 4096
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_key = btrim(idempotency_key)
+                    AND request_hash ~ '^[0-9a-f]{64}$'
+                    AND jsonb_typeof(response_snapshot) = 'object'
+                    AND octet_length(response_snapshot::text) <= 1048576
+                );
+        ]]></sql>
+
+        <createIndex
+            tableName="modeling_model_release_candidate_command"
+            indexName="idx_model_release_candidate_command_history">
+            <column name="tenant_id"/>
+            <column name="candidate_id"/>
+            <column name="candidate_version"/>
+            <column name="occurred_at"/>
+        </createIndex>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE OR REPLACE FUNCTION modeling_reject_release_candidate_command_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $function$
+            BEGIN
+                RAISE EXCEPTION 'MODEL_RELEASE_CANDIDATE_COMMAND_APPEND_ONLY'
+                    USING ERRCODE = '55000';
+            END;
+            $function$;
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE TRIGGER trg_model_release_candidate_command_append_only
+            BEFORE UPDATE OR DELETE ON modeling_model_release_candidate_command
+            FOR EACH ROW
+            EXECUTE FUNCTION modeling_reject_release_candidate_command_mutation();
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE TRIGGER trg_model_release_candidate_command_no_truncate
+            BEFORE TRUNCATE ON modeling_model_release_candidate_command
+            FOR EACH STATEMENT
+            EXECUTE FUNCTION modeling_reject_release_candidate_command_mutation();
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    LOCK TABLE modeling_model_release_candidate_command IN ACCESS EXCLUSIVE MODE;
+                    IF EXISTS (SELECT 1 FROM modeling_model_release_candidate_command) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_RELEASE_CANDIDATE_COMMAND_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_model_release_candidate_command"/>
+            <sql>
+                DROP FUNCTION IF EXISTS modeling_reject_release_candidate_command_mutation()
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260727-11-dbt-runtime-profile-lease" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_pipeline_run"/>
+            <not>
+                <tableExists tableName="modeling_dbt_runtime_profile_lease"/>
+            </not>
+        </preConditions>
+        <comment>
+            Persist only non-sensitive lifecycle metadata for one-time tmpfs dbt profile leases.
+        </comment>
+
+        <createTable tableName="modeling_dbt_runtime_profile_lease">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" primaryKeyName="pk_modeling_dbt_runtime_profile_lease" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pipeline_run_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dag_run_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="environment" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_target_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="credential_version_ref" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="issued_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expires_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="consumed_at" type="${datetimeType}"/>
+            <column name="released_at" type="${datetimeType}"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_dbt_runtime_profile_lease"
+            baseColumnNames="pipeline_run_id"
+            constraintName="fk_dbt_profile_lease_pipeline_run"
+            referencedTableName="modeling_pipeline_run"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_dbt_runtime_profile_lease
+                ADD CONSTRAINT ck_dbt_runtime_profile_lease
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND tenant_id = btrim(tenant_id)
+                    AND btrim(dag_run_id) <> ''
+                    AND dag_run_id = btrim(dag_run_id)
+                    AND btrim(environment) <> ''
+                    AND environment = btrim(environment)
+                    AND btrim(execution_target_key) <> ''
+                    AND execution_target_key = btrim(execution_target_key)
+                    AND btrim(target_name) <> ''
+                    AND target_name = btrim(target_name)
+                    AND credential_version_ref ~ '^sha256:[0-9a-f]{64}$'
+                    AND status IN ('ISSUED', 'CONSUMED', 'RELEASED', 'EXPIRED')
+                    AND expires_at > issued_at
+                    AND (
+                        (status = 'ISSUED' AND consumed_at IS NULL AND released_at IS NULL)
+                        OR (status = 'CONSUMED' AND consumed_at IS NOT NULL AND released_at IS NULL)
+                        OR (status IN ('RELEASED', 'EXPIRED') AND released_at IS NOT NULL)
+                    )
+                );
+
+            CREATE INDEX idx_dbt_profile_lease_active_expiry
+                ON modeling_dbt_runtime_profile_lease (expires_at, id)
+                WHERE status IN ('ISSUED', 'CONSUMED');
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_dbt_runtime_profile_lease
+                         WHERE status IN ('ISSUED', 'CONSUMED')
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_ACTIVE_DBT_PROFILE_LEASE_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_dbt_runtime_profile_lease"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

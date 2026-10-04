@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260210-01-employee-menu-scope-cleanup" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="portal_menu_visibility"/>
+                <tableExists tableName="portal_menu"/>
+                <columnExists tableName="portal_menu_visibility" columnName="role_code"/>
+                <columnExists tableName="portal_menu_visibility" columnName="menu_id"/>
+                <columnExists tableName="portal_menu" columnName="id"/>
+                <columnExists tableName="portal_menu" columnName="name"/>
+            </and>
+        </preConditions>
+        <comment>
+            Keep EMPLOYEE menu visibility limited to workbench and visualization entries.
+            Remove stale historical bindings that exceed the minimal default scope.
+        </comment>
+        <sql dbms="postgresql">
+            DELETE FROM portal_menu_visibility pmv
+            USING portal_menu pm
+            WHERE pmv.menu_id = pm.id
+              AND UPPER(pmv.role_code) IN ('EMPLOYEE', 'ROLE_EMPLOYEE')
+              AND pm.name NOT IN (
+                'sys.nav.portal.workbenchOverview',
+                'sys.nav.portal.workbenchTodo',
+                'sys.nav.portal.workbenchFavorites',
+                'sys.nav.portal.visualReports',
+                'sys.nav.portal.visualSelfService'
+              );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260501-03-drop-lineage-pair-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <uniqueConstraintExists tableName="catalog_dataset_lineage" constraintName="uk_catalog_dataset_lineage_pair"/>
+        </preConditions>
+        <dropUniqueConstraint tableName="catalog_dataset_lineage" constraintName="uk_catalog_dataset_lineage_pair"/>
+    </changeSet>
+
+    <changeSet id="20260501-04-add-lineage-relation-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <uniqueConstraintExists tableName="catalog_dataset_lineage" constraintName="uk_catalog_dataset_lineage_relation"/>
+            </not>
+        </preConditions>
+        <addUniqueConstraint
+            tableName="catalog_dataset_lineage"
+            columnNames="upstream_dataset_id,downstream_dataset_id,relation_type"
+            constraintName="uk_catalog_dataset_lineage_relation"/>
+    </changeSet>
+
+    <changeSet id="20260501-05-backfill-lineage-declared-status" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="catalog_dataset_lineage" columnName="verification_status"/>
+        </preConditions>
+        <update tableName="catalog_dataset_lineage">
+            <column name="verification_status" value="DECLARED"/>
+            <where>verification_status IS NULL OR verification_status = ''</where>
+        </update>
+    </changeSet>
+</databaseChangeLog>

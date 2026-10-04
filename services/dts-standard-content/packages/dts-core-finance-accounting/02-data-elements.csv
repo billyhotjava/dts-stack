@@ -1,0 +1,17 @@
+field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level
+会计期间,accounting_period,VARCHAR,7,,,N,财务会计,会计核算所属期间；推荐YYYY-MM格式,,,,N,INTERNAL
+凭证编号,accounting_voucher_no,VARCHAR,64,,,N,财务会计,会计信息系统内连续且可追溯的会计凭证编号,,,,N,INTERNAL
+凭证日期,accounting_voucher_date,DATE,,,,N,财务会计,会计凭证记载的业务日期,,,,N,INTERNAL
+会计科目编码,account_code,VARCHAR,64,,,N,财务会计,单位会计科目分类体系中的稳定科目编码,,,,N,INTERNAL
+会计科目名称,account_name,VARCHAR,256,,,N,财务会计,会计科目编码对应的科目名称,,,,N,INTERNAL
+会计要素代码,accounting_element_code,VARCHAR,32,,,N,财务会计,企业会计要素分类代码,,ACCOUNTING_ELEMENT_DTS,,N,INTERNAL
+借贷方向代码,debit_credit_direction,VARCHAR,8,,,N,财务会计,会计分录借方或贷方方向代码,,DEBIT_CREDIT_DIRECTION_DTS,,N,INTERNAL
+币种代码,currency_code,CHAR,3,,,N,财务会计,表示货币的三字符代码；本包起步值集仅含CNY,,CURRENCY_GBT12406_STARTER,CNY,N,INTERNAL
+原币金额,original_currency_amount,DECIMAL,,20,6,Y,财务会计,交易原始币种下的金额,,,,N,CONFIDENTIAL
+本位币金额,functional_currency_amount,DECIMAL,,20,2,N,财务会计,按单位记账本位币计量的金额,,,,N,CONFIDENTIAL
+借方金额,debit_amount,DECIMAL,,20,2,Y,财务会计,会计分录借方记录的本位币金额,,,,N,CONFIDENTIAL
+贷方金额,credit_amount,DECIMAL,,20,2,Y,财务会计,会计分录贷方记录的本位币金额,,,,N,CONFIDENTIAL
+调整后预算金额,budget_amount_adjusted,DECIMAL,,20,2,Y,预算管理,预算调整后可执行金额,,,,N,CONFIDENTIAL
+预付账款金额,prepaid_amount,DECIMAL,,20,2,Y,预算管理,尚未完成验收或报销的预付款金额,,,,N,CONFIDENTIAL
+账面成本金额,book_cost_amount,DECIMAL,,20,2,Y,预算管理,已按会计政策确认的账面成本金额,,,,N,CONFIDENTIAL
+应付账款金额,payable_amount,DECIMAL,,20,2,Y,预算管理,已形成付款义务但尚未支付的金额,,,,N,CONFIDENTIAL

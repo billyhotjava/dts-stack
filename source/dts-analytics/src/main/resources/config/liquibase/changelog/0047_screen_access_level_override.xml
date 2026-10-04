@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        大屏密级越级共享：在 analytics_screen_access 上加 level_override。
+        - 用于标记 owner 给 grantee 授予的"越级查看"权限：当 caller 的人员密级低于
+          screen.classification 时，仅对 levelOverride=true 的 VIEWER grant 放行。
+        - 默认 false，对历史数据不构成行为变化（已有 grant 维持非越级语义）。
+        - 仅 VIEWER 类 grant 有越级语义，OWNER/MANAGER 本就豁免密级，业务层强制 false。
+    -->
+    <changeSet id="0047-screen-access-level-override" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="analytics_screen_access"/>
+                <not>
+                    <columnExists tableName="analytics_screen_access" columnName="level_override"/>
+                </not>
+            </and>
+        </preConditions>
+        <addColumn tableName="analytics_screen_access">
+            <column name="level_override" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="analytics_screen_access" columnName="level_override"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS Quality Gate"
+  short_description: "Choose validation checks for DTS changes"
+  default_prompt: "Use $dts-quality-gate to choose and run the right checks for this DTS change."

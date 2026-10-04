@@ -1,0 +1,514 @@
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+ENV_BASE=".env"
+
+MODE="images"  # images | local
+WITH_WEBAPP_DEFAULT=1
+WITH_ANALYTICS_DEV=0
+WITH_ANALYTICS=0
+FORCE_AIRFLOW_BUILD=0
+
+usage(){
+  echo "Usage: $0 [--mode images|local] [--no-webapp] [--analytics] [--analytics-dev] [--force-airflow-build]"
+}
+
+registry_reachable() {
+  if command -v getent >/dev/null 2>&1; then
+    getent hosts registry.npmjs.org >/dev/null 2>&1 && return 0
+  fi
+  if command -v nslookup >/dev/null 2>&1; then
+    nslookup registry.npmjs.org >/dev/null 2>&1 && return 0
+  fi
+  return 1
+}
+
+checksum_file() {
+  local p="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$p" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$p" | awk '{print $1}'
+  else
+    cksum "$p" | awk '{print $1}'
+  fi
+}
+
+# Load image versions from imgversion.conf into env (non-destructive)
+load_img_versions_dev(){
+  local conf="imgversion.conf"
+  [[ -f "$conf" ]] || return 0
+  while IFS='=' read -r k v; do
+    # Skip blanks/comments
+    [[ -z "${k// }" || "${k#\#}" != "$k" ]] && continue
+    v="$(echo "$v" | sed -E 's/^\s+|\s+$//g')"
+    # Only export if not already set in environment
+    eval "__cur=\${$k-}"
+    if [[ -z "${__cur}" ]]; then
+      export "$k=$v"
+    fi
+  done < <(grep -E '^[[:space:]]*([A-Z0-9_]+)[[:space:]]*=' "$conf" || true)
+}
+
+# Detect optional services via imgversion.conf toggles
+determine_enabled_services(){
+  local conf="imgversion.conf"
+  ENABLE_MINIO="false"
+  ENABLE_NESSIE="false"
+  if [[ -f "$conf" ]]; then
+    if rg -n "^[[:space:]]*IMAGE_MINIO[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_MINIO[[:space:]]*=' "$conf"; then
+      ENABLE_MINIO="true"
+    fi
+    if rg -n "^[[:space:]]*IMAGE_NESSIE[[:space:]]*=" "$conf" >/dev/null 2>&1 || grep -Eq '^[[:space:]]*IMAGE_NESSIE[[:space:]]*=' "$conf"; then
+      ENABLE_NESSIE="true"
+    fi
+  fi
+  export ENABLE_MINIO ENABLE_NESSIE
+}
+
+clean_maven_targets(){
+  for module in dts-admin dts-platform dts-common dts-ingestion; do
+    local module_target="source/${module}/target"
+    if [[ -d "${module_target}" ]]; then
+      echo "[dev-up] Removing stale build output: ${module_target}"
+      rm -rf "${module_target}"
+    fi
+  done
+}
+
+clean_node_modules(){
+  for webapp in dts-platform-webapp dts-admin-webapp; do
+    local webapp_dir="source/${webapp}"
+    if [[ -d "${webapp_dir}" ]]; then
+      echo "[dev-up] Cleaning Node.js artifacts in: ${webapp_dir}"
+      # Remove node_modules
+      if [[ -d "${webapp_dir}/node_modules" ]]; then
+        rm -rf "${webapp_dir}/node_modules"
+      fi
+      # Remove pnpm artifacts
+      if [[ -d "${webapp_dir}/.pnpm" ]]; then
+        rm -rf "${webapp_dir}/.pnpm"
+      fi
+      # Remove pnpm store cache
+      if [[ -d "${webapp_dir}/node_modules/.pnpm" ]]; then
+        rm -rf "${webapp_dir}/node_modules/.pnpm"
+      fi
+      # Remove build outputs
+      if [[ -d "${webapp_dir}/dist" ]]; then
+        rm -rf "${webapp_dir}/dist"
+      fi
+      if [[ -d "${webapp_dir}/build" ]]; then
+        rm -rf "${webapp_dir}/build"
+      fi
+      # Remove Vite cache
+      if [[ -d "${webapp_dir}/node_modules/.vite" ]]; then
+        rm -rf "${webapp_dir}/node_modules/.vite"
+      fi
+    fi
+  done
+}
+
+while (($#)); do
+  case "$1" in
+    --mode)
+      shift; MODE="${1:-images}";;
+    --no-webapp)
+      WITH_WEBAPP_DEFAULT=0;;
+    --analytics-dev)
+      WITH_ANALYTICS_DEV=1;;
+    --analytics)
+      WITH_ANALYTICS=1;;
+    --force-airflow-build)
+      FORCE_AIRFLOW_BUILD=1;;
+    -h|--help)
+      usage; exit 0;;
+    *)
+      echo "[dev-up] Unknown arg: $1" >&2; usage; exit 1;;
+  esac
+  shift
+done
+
+# Local dev default: start all self-owned apps (incl. analytics) unless explicitly disabled.
+if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "0" && "${WITH_ANALYTICS_DEV}" == "0" ]]; then
+  WITH_ANALYTICS_DEV=1
+fi
+
+# Skip webapp containers only when explicitly requested (USE_LOCAL_WEBAPP=1 or SKIP_WEBAPP=1).
+# If you want auto-detection, set AUTO_LOCAL_WEBAPP=1 to enable the registry check below.
+USE_LOCAL_WEBAPP="${USE_LOCAL_WEBAPP:-0}"
+AUTO_LOCAL_WEBAPP="${AUTO_LOCAL_WEBAPP:-0}"
+if [[ "${USE_LOCAL_WEBAPP}" == "1" ]]; then
+  SKIP_WEBAPP=1
+fi
+if [[ "${AUTO_LOCAL_WEBAPP}" == "1" && "${USE_LOCAL_WEBAPP}" != "1" && "$MODE" == "local" && "${WITH_WEBAPP_DEFAULT}" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  if ! registry_reachable && command -v pnpm >/dev/null 2>&1; then
+    USE_LOCAL_WEBAPP=1
+    SKIP_WEBAPP=1
+    echo "[dev-up] npm registry unreachable; skipping webapp containers and using local pnpm."
+  fi
+fi
+
+# In local mode we always run analytics from source (like dts-admin/dts-platform).
+if [[ "$MODE" == "local" && "${WITH_ANALYTICS}" == "1" ]]; then
+  WITH_ANALYTICS="0"
+  WITH_ANALYTICS_DEV="1"
+fi
+
+# Default behavior: skip webapp build in images mode (use local mode or --no-webapp)
+if [[ "$MODE" == "images" && -z "${WITH_WEBAPP+x}" ]]; then
+  WITH_WEBAPP_DEFAULT=0
+fi
+
+if [[ ! -f "$ENV_BASE" ]]; then
+  echo "[dev-up] ERROR: ${ENV_BASE} not found. Please run './init.sh' first to generate the core stack env." >&2
+  exit 1
+fi
+
+if docker compose version >/dev/null 2>&1; then
+  compose_base=(docker compose)
+elif command -v docker-compose >/dev/null 2>&1; then
+  compose_base=(docker-compose)
+else
+  echo "[dev-up] ERROR: docker compose not found" >&2
+  exit 1
+fi
+
+# Guardrail: dev-up must never write to the repo `.env`.
+# Use a runtime copy for Compose to avoid any accidental writes by child processes.
+ENV_RUNTIME="$(mktemp -t dts-stack-env.runtime.XXXXXX)"
+cp "$ENV_BASE" "$ENV_RUNTIME"
+ENV_BASE_SHA="$(checksum_file "$ENV_BASE")"
+
+cleanup_env_runtime() {
+  rm -f "$ENV_RUNTIME" 2>/dev/null || true
+  if [[ -f "$ENV_BASE" ]]; then
+    local after_sha
+    after_sha="$(checksum_file "$ENV_BASE" || true)"
+    if [[ -n "$ENV_BASE_SHA" && -n "$after_sha" && "$after_sha" != "$ENV_BASE_SHA" ]]; then
+      echo "[dev-up] WARNING: ${ENV_BASE} changed during run (dev-up does not modify it). Check other processes that may write to ${ENV_BASE}." >&2
+    fi
+  fi
+}
+trap cleanup_env_runtime EXIT INT TERM HUP
+
+compose_cmd=("${compose_base[@]}")
+if "${compose_base[@]}" --help 2>/dev/null | grep -q -- '--env-file'; then
+  compose_cmd+=("--env-file" "$ENV_RUNTIME")
+else
+  echo "[dev-up] NOTE: compose does not support --env-file; falling back to default .env loading (still read-only)." >&2
+fi
+
+wait_for_service_healthy() {
+  local svc="$1"
+  local max_wait="${2:-60}"
+  local waited=0
+  local cid=""
+  cid="$("${compose_cmd[@]}" "${compose_files[@]}" ps -q "${svc}" 2>/dev/null | head -n 1 || true)"
+  if [[ -z "${cid}" ]]; then
+    return 1
+  fi
+  while (( waited < max_wait )); do
+    local status
+    status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${cid}" 2>/dev/null || echo none)"
+    if [[ "${status}" == "healthy" ]]; then
+      return 0
+    fi
+    if [[ "${status}" == "none" ]]; then
+      return 0
+    fi
+    sleep 2
+    waited=$(( waited + 2 ))
+  done
+  return 1
+}
+
+# Load env file into current shell without shell-evaluating placeholder values such as
+# "<secrets:...>" from bootstrap-generated .env files.
+load_env_runtime_exports() {
+  local env_file="$1"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    [[ -z "${line//[[:space:]]/}" ]] && continue
+    [[ "$line" =~ ^[[:space:]]*# ]] && continue
+    [[ "$line" == *"="* ]] || continue
+
+    local key="${line%%=*}"
+    local value="${line#*=}"
+
+    key="$(printf '%s' "$key" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+    value="${value%$'\r'}"
+    if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
+      value="${BASH_REMATCH[1]}"
+    fi
+
+    if [[ -z "$key" ]]; then
+      continue
+    fi
+
+    export "${key}=${value}"
+  done < "$env_file"
+}
+
+# Load env file into current shell so compose gets complete variables (read-only copy)
+load_env_runtime_exports "$ENV_RUNTIME"
+
+# Auto-detect current host IP and override the (possibly stale) HOST_GATEWAY_IP from .env.
+# This avoids "Connect timed out" errors when the host IP changes after init.sh was run.
+_detect_host_ip(){
+  if command -v ip >/dev/null 2>&1; then
+    local ip4
+    ip4=$(ip -4 route get 1.1.1.1 2>/dev/null | awk '/src/ {for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}') || true
+    if [[ -n "${ip4:-}" && "${ip4}" != 127.* ]]; then printf '%s' "$ip4"; return 0; fi
+  fi
+  if command -v hostname >/dev/null 2>&1; then
+    local first
+    first=$(hostname -I 2>/dev/null | awk '{for(i=1;i<=NF;i++) if($i ~ /^[0-9.]+$/ && $i !~ /^127\./){print $i; exit}}') || true
+    if [[ -n "${first:-}" ]]; then printf '%s' "$first"; return 0; fi
+  fi
+  printf '%s' "${HOST_GATEWAY_IP:-172.17.0.1}"
+}
+_fresh_ip="$(_detect_host_ip)"
+if [[ -n "${_fresh_ip}" && "${_fresh_ip}" != "${HOST_GATEWAY_IP:-}" ]]; then
+  echo "[dev-up] HOST_GATEWAY_IP refreshed: ${HOST_GATEWAY_IP:-<unset>} -> ${_fresh_ip}"
+  export HOST_GATEWAY_IP="${_fresh_ip}"
+  export DOCKER_HOST_GATEWAY_IP="${_fresh_ip}"
+fi
+unset _fresh_ip
+
+# Ensure source/logs does not get recreated; logs live at repo root.
+if [[ -d "source/logs" ]]; then
+  rm -rf "source/logs"
+fi
+
+# Ensure local bind-mount directories exist (avoid Docker creating them as root).
+mkdir -p logs/dts-admin logs/dts-platform logs/dts-analytics logs/dts-ingestion
+
+# Expose host-side dbt workspace path so the platform backend (running inside container) can
+# translate scoped-project paths to the host view Airflow needs for `docker -v HOST:CONTAINER`.
+# The container mounts services/dts-dbt -> /opt/dts/dbt; Airflow runs on the host and must bind
+# the same physical directory, i.e. the services/dts-dbt absolute path derived from SCRIPT_DIR.
+export DTS_DBT_HOST_PROJECT_DIR="${DTS_DBT_HOST_PROJECT_DIR:-${SCRIPT_DIR}/services/dts-dbt}"
+# compose 文件不再做嵌套 fallback，避免老 docker-compose 把
+# `${DTS_DBT_HOST_PROJECT_DIR:-${STACK_ROOT:-}/services/dts-dbt}` 解析坏。
+# 显式 export 确保旧环境也能拿到正确的宿主机路径。
+export STACK_ROOT="${STACK_ROOT:-${SCRIPT_DIR}}"
+
+# Load optional image versions into current env (does not modify files)
+load_img_versions_dev
+
+# Build the OpenMetadata-enabled Airflow image when used in dev.
+build_airflow_om_image() {
+  local tag="${IMAGE_AIRFLOW:-}"
+  if [[ -z "${tag}" ]]; then
+    return
+  fi
+  if [[ "${tag}" != dts-airflow-om:* && "${tag}" != dts-airflow-om ]]; then
+    return
+  fi
+  if [[ "${FORCE_AIRFLOW_BUILD}" != "1" ]] && docker image inspect "${tag}" >/dev/null 2>&1; then
+    echo "[dev-up] Using existing ${tag} (dts-airflow-om)."
+    return
+  fi
+  if [[ ! -f "${SCRIPT_DIR}/source/dts-airflow-om/Dockerfile" ]]; then
+    return
+  fi
+  echo "[dev-up] Building ${tag} (dts-airflow-om) ..."
+  IMAGE_TAG="${tag}" \
+  PIP_INDEX_URL="${PIP_INDEX_URL:-}" \
+  PIP_TRUSTED_HOST="${PIP_TRUSTED_HOST:-}" \
+    "${SCRIPT_DIR}/builds/airflow/build-image.sh"
+}
+
+# Decide optional services
+determine_enabled_services
+
+# Fill missing optional PG triplets to avoid compose interpolation warnings
+set -a
+: "${PG_DB_DTADMIN:=dts_admin}"
+: "${PG_USER_DTADMIN:=dts_admin}"
+: "${PG_PWD_DTADMIN:=dts_admin}"
+: "${PG_DB_ANALYTICS:=dts_analytics}"
+: "${PG_USER_ANALYTICS:=dts_analytics}"
+: "${PG_PWD_ANALYTICS:=dts_analytics}"
+set +a
+
+if [[ "$MODE" == "local" ]]; then
+  compose_files=(-f docker-compose.dev.yml)
+else
+  compose_files=(-f docker-compose-app.yml)
+fi
+
+# Ensure required builder image defaults for local dev
+if [[ -z "${IMAGE_MAVEN:-}" ]]; then
+  IMAGE_MAVEN="maven:3.9.9-eclipse-temurin-21"
+fi
+export IMAGE_MAVEN
+
+# Fill MINIO-derived vars only when MinIO is enabled
+if [[ "${ENABLE_MINIO}" == "true" ]]; then
+  : "${S3_REGION:=cn-local-1}"
+  : "${BASE_DOMAIN:=dts.local}"
+  if [[ -z "${HOST_MINIO:-}" ]]; then HOST_MINIO="minio.${BASE_DOMAIN}"; fi
+  if [[ -z "${MINIO_REGION_NAME:-}" ]]; then MINIO_REGION_NAME="${S3_REGION}"; fi
+  if [[ -z "${MINIO_SERVER_URL:-}" ]]; then MINIO_SERVER_URL="https://${HOST_MINIO}"; fi
+  if [[ -z "${MINIO_BROWSER_REDIRECT_URL:-}" ]]; then MINIO_BROWSER_REDIRECT_URL="https://${HOST_MINIO}"; fi
+  export MINIO_REGION_NAME MINIO_SERVER_URL MINIO_BROWSER_REDIRECT_URL
+fi
+
+# Ensure Postgres from core stack is running and healthy
+echo "[dev-up] Ensuring Postgres (dts-pg) is running ..."
+pg_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-pg || true)
+if [[ -z "${pg_cid}" ]]; then
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d dts-pg
+  pg_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-pg || true)
+fi
+
+echo "[dev-up] Waiting for dts-pg to become healthy ..."
+if [[ -n "${pg_cid}" ]]; then
+  for i in {1..5}; do
+    status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "${pg_cid}" 2>/dev/null || echo none)
+    if [[ "${status}" == "healthy" ]]; then
+      echo "[dev-up] dts-pg is healthy."
+      break
+    fi
+    if [[ "${status}" == "none" ]]; then
+      # No healthcheck configured (unlikely). Short grace period then continue.
+      sleep 3
+      break
+    fi
+    sleep 2
+    [[ $i -eq 5 ]] && echo "[dev-up] WARNING: dts-pg not healthy yet, continuing..." >&2
+  done
+fi
+
+# Ensure required roles/databases exist (idempotent). Important after a fresh PG volume; otherwise
+# apps may start before their DB users are created and fail with password errors.
+echo "[dev-up] Ensuring Postgres roles/databases (idempotent) ..."
+exports=""
+quote_sh() { printf "'%s'" "$(printf '%s' "${1:-}" | sed "s/'/'\\\"'\\\"'/g")"; }
+while IFS='=' read -r k v; do
+  case "${k}" in
+    PG_DB_*|PG_USER_*|PG_PWD_*)
+      exports+="export ${k}=$(quote_sh "${v}");"
+      ;;
+  esac
+done < <(env)
+
+if [[ -n "${pg_cid}" ]]; then
+  if docker exec -i "${pg_cid}" bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null 2>&1; then
+    echo "[dev-up] Postgres roles/databases ensured."
+  else
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-pg bash -lc "${exports} bash /docker-entrypoint-initdb.d/99-ensure-users-runtime.sh" >/dev/null || \
+      echo "[dev-up] WARNING: Failed to run ensure script for Postgres (continuing)." >&2
+  fi
+else
+  echo "[dev-up] WARNING: cannot locate dts-pg container id; skip ensure users/databases." >&2
+fi
+
+if [[ "$MODE" == "local" ]]; then
+  echo "[dev-up] Ensuring Traefik (dts-proxy) and Keycloak are running ..."
+  proxy_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-proxy || true)
+  kc_cid=$("${compose_cmd[@]}" "${compose_files[@]}" ps -q dts-keycloak || true)
+  if [[ -z "${proxy_cid}" || -z "${kc_cid}" ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d dts-proxy dts-keycloak
+  fi
+fi
+
+build_airflow_om_image
+
+services=(dts-admin dts-platform dts-ingestion)
+
+# Metadata/ELT stack for dev mode
+services+=(dts-elasticsearch dts-openmetadata dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer dts-dbt)
+
+WITH_WEBAPP="${WITH_WEBAPP:-$WITH_WEBAPP_DEFAULT}"
+if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+  services+=(dts-admin-webapp dts-platform-webapp)
+else
+  echo "[dev-up] Webapp containers skipped (start frontend via pnpm locally)."
+fi
+
+if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+  services+=(dts-analytics)
+  # dts-analytics-webapp-modern removed — analytics UI is now embedded in platform-webapp.
+fi
+
+# Ensure Airflow is up before OpenMetadata.
+airflow_services=(dts-airflow-init dts-airflow-webserver dts-airflow-scheduler dts-airflow-triggerer)
+openmetadata_services=(dts-openmetadata)
+
+# Only rebuild our dev services; keep shared infra intact.
+dev_services=(dts-admin dts-platform dts-ingestion)
+if [[ "${WITH_ANALYTICS}" == "1" || "${WITH_ANALYTICS_DEV}" == "1" ]]; then
+  dev_services+=(dts-analytics)
+fi
+other_services=()
+for svc in "${services[@]}"; do
+  skip=0
+  for dev_svc in "${dev_services[@]}"; do
+    if [[ "${svc}" == "${dev_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  for af_svc in "${airflow_services[@]}"; do
+    if [[ "${svc}" == "${af_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  for om_svc in "${openmetadata_services[@]}"; do
+    if [[ "${svc}" == "${om_svc}" ]]; then
+      skip=1
+      break
+    fi
+  done
+  if [[ "${skip}" -eq 0 ]]; then
+    other_services+=("${svc}")
+  fi
+done
+
+if [[ "$MODE" == "local" ]]; then
+  echo "[dev-up] Starting local-dev services (bind mounts + live reload) ..."
+  # Keep shared services stable; only force-recreate our dev containers.
+  if [[ "${#other_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d "${other_services[@]}"
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${airflow_services[@]}" >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[dev-up] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${openmetadata_services[@]}" >/dev/null 2>&1 || true
+  if [[ "${#dev_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d --force-recreate "${dev_services[@]}"
+  fi
+  if [[ "$WITH_WEBAPP" != "0" && "${SKIP_WEBAPP:-0}" != "1" ]]; then
+    echo "[dev-up] Patching Vite env handling (best-effort) ..."
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-admin-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
+    "${compose_cmd[@]}" "${compose_files[@]}" exec -T dts-platform-webapp sh -lc "sh /patches/patch-vite-env.sh || true" || true
+  fi
+else
+  echo "[dev-up] Starting source dev services with build ..."
+  clean_maven_targets
+  clean_node_modules
+  if [[ "${#other_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d "${other_services[@]}"
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${airflow_services[@]}" >/dev/null 2>&1 || true
+  if ! wait_for_service_healthy dts-airflow-webserver 90; then
+    echo "[dev-up] WARNING: dts-airflow-webserver not healthy yet; continuing." >&2
+  fi
+  "${compose_cmd[@]}" "${compose_files[@]}" up -d "${openmetadata_services[@]}" >/dev/null 2>&1 || true
+  if [[ "${#dev_services[@]}" -gt 0 ]]; then
+    "${compose_cmd[@]}" "${compose_files[@]}" up -d --build "${dev_services[@]}"
+  fi
+fi
+
+if [[ "${USE_LOCAL_WEBAPP}" == "1" ]]; then
+  echo "[dev-up] Start frontend locally (use existing pnpm):"
+  echo "  (cd source/dts-admin-webapp && VITE_API_PROXY_TARGET=http://localhost:18081 PORT=3001 pnpm dev -- --host 0.0.0.0 --port 3001 --strictPort --open=false)"
+  echo "  (cd source/dts-platform-webapp && VITE_API_PROXY_TARGET=http://localhost:18082 VITE_ADMIN_PROXY_TARGET=http://localhost:18081 VITE_ADMIN_API_BASE_URL=/admin/api PORT=5173 pnpm dev -- --host 0.0.0.0 --port 5173 --strictPort --open=false)"
+fi
+
+echo "[dev-up] Done. Stop dev services with: ./dev-stop.sh [--mode images|local]"

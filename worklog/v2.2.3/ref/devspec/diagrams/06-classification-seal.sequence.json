@@ -1,0 +1,167 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "分类分级链：封存、兼容投影与传播",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [
+      1080,
+      620
+    ]
+  },
+  "participants": [
+    {
+      "id": "entry",
+      "type": "backend",
+      "label": "分类入口",
+      "sublabel": "Resource"
+    },
+    {
+      "id": "svc",
+      "type": "backend",
+      "label": "分类服务",
+      "sublabel": "Service"
+    },
+    {
+      "id": "store",
+      "type": "database",
+      "label": "快照与事件",
+      "sublabel": "canonical 事实"
+    },
+    {
+      "id": "dsproj",
+      "type": "backend",
+      "label": "数据集投影",
+      "sublabel": "Dataset 投影"
+    },
+    {
+      "id": "cproj",
+      "type": "backend",
+      "label": "消费方投影",
+      "sublabel": "Consumer 投影"
+    },
+    {
+      "id": "gproj",
+      "type": "backend",
+      "label": "授权投影",
+      "sublabel": "Grant 投影"
+    },
+    {
+      "id": "job",
+      "type": "backend",
+      "label": "传播任务",
+      "sublabel": "5s 轮询"
+    },
+    {
+      "id": "consumer",
+      "type": "backend",
+      "label": "消费方服务",
+      "sublabel": "Consumer 服务"
+    }
+  ],
+  "segments": [
+    {
+      "from": 246,
+      "to": 510,
+      "label": "封存、投影与传播"
+    }
+  ],
+  "messages": [
+    {
+      "id": "m-seal",
+      "from": "entry",
+      "to": "svc",
+      "y": 168,
+      "label": "seal / sealOrRaise（只升不降）",
+      "variant": "emphasis"
+    },
+    {
+      "id": "m-store",
+      "from": "svc",
+      "to": "store",
+      "y": 196,
+      "label": "写分类快照 + 事件"
+    },
+    {
+      "id": "m-ds",
+      "from": "svc",
+      "to": "dsproj",
+      "y": 224,
+      "label": "project(snapshot)"
+    },
+    {
+      "id": "m-cp",
+      "from": "svc",
+      "to": "cproj",
+      "y": 256,
+      "label": "project(snapshot)"
+    },
+    {
+      "id": "m-gp",
+      "from": "svc",
+      "to": "gproj",
+      "y": 284,
+      "label": "project(snapshot)"
+    },
+    {
+      "id": "m-enqueue",
+      "from": "svc",
+      "to": "job",
+      "y": 312,
+      "label": "enqueueForUpstream"
+    },
+    {
+      "id": "m-pending",
+      "from": "job",
+      "to": "consumer",
+      "y": 340,
+      "label": "processPending → 消费方重算"
+    },
+    {
+      "id": "m-read",
+      "from": "consumer",
+      "to": "store",
+      "y": 368,
+      "label": "读取快照与上游依赖"
+    },
+    {
+      "id": "m-write",
+      "from": "consumer",
+      "to": "store",
+      "y": 396,
+      "label": "写消费方密级",
+      "variant": "return"
+    },
+    {
+      "id": "m-back",
+      "from": "svc",
+      "to": "entry",
+      "y": 424,
+      "label": "快照结果（解释见 explain）",
+      "variant": "return"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "投影约定",
+      "items": [
+        "Projection 接口多实现，List 注入逐一投影",
+        "单向兼容桥：实现必须幂等，legacy 值不得回灌",
+        "数据集/消费方/授权三张 legacy 兼容投影"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "传播任务支持 replay 重放失败项",
+        "分类迁移支持 dry-run/批量/回滚/写冻结",
+        "匿名分享的密级校验另见 S10DC-87 决策"
+      ]
+    }
+  ]
+}

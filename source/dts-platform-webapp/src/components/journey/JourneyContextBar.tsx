@@ -1,0 +1,128 @@
+import { Button, Card, Space, Tag, Typography } from "antd";
+import { useRouter } from "@/routes/hooks";
+import { cn } from "@/utils";
+import {
+	JOURNEY_CONTEXT_PARAM_KEYS,
+	JOURNEY_CONTEXT_PARAM_LABELS,
+	buildJourneyParamClearUrl,
+	resolveJourneyBarMode,
+	type DataProductJourneyStageKey,
+	type JourneyContextParamKey,
+} from "./journeyContext";
+import { toArtifactValidationMap, type ArtifactValidationMap, type ArtifactValidationResult } from "./journeyArtifactValidation";
+import { resolveDataProductJourneyStageState } from "./journeyStageState";
+import { useDataProductJourneyContext } from "./useDataProductJourneyContext";
+
+const { Text } = Typography;
+
+type JourneyContextBarProps = {
+	stage: DataProductJourneyStageKey;
+	className?: string;
+	// 页面可注入 artifact 校验结果：invalid 的上下文对象红标并提供清除入口。
+	validations?: ArtifactValidationMap | ArtifactValidationResult[];
+};
+
+const STATUS_LABELS: Record<string, string> = {
+	not_started: "未开始",
+	blocked: "有缺口",
+	ready: "可开始",
+	in_progress: "进行中",
+	done: "已就绪",
+};
+
+const STATUS_COLORS: Record<string, string> = {
+	not_started: "default",
+	blocked: "orange",
+	ready: "blue",
+	in_progress: "geekblue",
+	done: "green",
+};
+
+export function JourneyContextBar({ stage, className, validations }: JourneyContextBarProps) {
+	const router = useRouter();
+	const context = useDataProductJourneyContext(stage);
+	const stageState = resolveDataProductJourneyStageState(stage, context.params, validations);
+	const validationMap = Array.isArray(validations) ? toArtifactValidationMap(validations) : (validations ?? {});
+	const invalidKeys = new Set(
+		Object.values(validationMap)
+			.filter((item) => item?.status === "invalid")
+			.map((item) => item.key),
+	);
+	const findParamKey = (label: string): JourneyContextParamKey | undefined =>
+		JOURNEY_CONTEXT_PARAM_KEYS.find((key) => JOURNEY_CONTEXT_PARAM_LABELS[key] === label);
+	const clearParam = (key: JourneyContextParamKey) => {
+		router.push(buildJourneyParamClearUrl(stageState.route, context.params as Record<string, string>, key));
+	};
+	const barMode = resolveJourneyBarMode(context.enabled);
+
+	if (barMode === "hidden") return null;
+
+	return (
+		<Card
+			size="small"
+			className={cn("border-dashed", className)}
+			data-testid="data-product-journey-context-bar"
+		>
+			<div className="flex flex-wrap items-center justify-between gap-3">
+				<Space wrap size={[8, 8]}>
+					<Tag color="blue">端到端旅程</Tag>
+					<Text type="secondary">当前阶段</Text>
+					<Text strong>{context.stageLabel}</Text>
+					<Tag color={STATUS_COLORS[stageState.status]}>{STATUS_LABELS[stageState.status]}</Tag>
+					{stageState.status === "done" && stageState.verification === "unverified" ? (
+						<Tag color="gold" data-testid="journey-context-unverified">
+							待确认
+						</Tag>
+					) : null}
+					<Text type="secondary">来源对象</Text>
+					{context.contextLabels.length > 0 ? (
+						context.contextLabels.map((item) => {
+							const paramKey = findParamKey(item.label);
+							const invalid = paramKey ? invalidKeys.has(paramKey) : false;
+							return (
+								<Tag
+									key={`${item.label}-${item.value}`}
+									color={invalid ? "red" : undefined}
+									data-testid={invalid ? "journey-context-invalid-param" : undefined}
+									closable={invalid}
+									onClose={(event) => {
+										event.preventDefault();
+										if (paramKey) clearParam(paramKey);
+									}}
+								>
+									{item.label}: {item.value}
+									{invalid ? "（无效）" : ""}
+								</Tag>
+							);
+						})
+					) : (
+						<Tag>待选择</Tag>
+					)}
+					<Text type="secondary">{stageState.gap}</Text>
+					{stageState.blocker ? <Tag color="orange">{stageState.blocker.reason}</Tag> : null}
+				</Space>
+				<Space wrap>
+					<Button
+						data-testid="data-product-journey-return"
+						onClick={() => router.push(context.returnUrl)}
+					>
+						返回工作台
+					</Button>
+					<Button
+						data-testid="data-product-journey-evidence"
+						onClick={() => router.push(context.evidenceUrl)}
+					>
+						查看证据
+					</Button>
+					<Button
+						type="primary"
+						data-testid="data-product-journey-next"
+						onClick={() => router.push(stageState.nextAction.url || context.nextUrl)}
+					>
+						继续下一步
+					</Button>
+				</Space>
+			</div>
+		</Card>
+	);
+}

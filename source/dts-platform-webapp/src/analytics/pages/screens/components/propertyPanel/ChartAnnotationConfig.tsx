@@ -1,0 +1,111 @@
+import { Plus, Trash2 } from 'lucide-react';
+import type {
+    ChartMarkArea,
+    ChartMarkLine,
+    ScreenComponent,
+    SeriesConditionalColor,
+} from '../../types';
+import { ColorPickerInput, toRgbaColor } from './ColorPickerInput';
+
+/** Chart annotation config: markLines, markAreas, conditionalColors */
+export function ChartAnnotationConfig({ component, onChange }: {
+    component: ScreenComponent;
+    onChange: (key: string, value: unknown) => void;
+}) {
+    const { config } = component;
+    const markLines = (config.markLines as ChartMarkLine[]) ?? [];
+    const markAreas = (config.markAreas as ChartMarkArea[]) ?? [];
+    const conditionalColors = (config.conditionalColors as SeriesConditionalColor[]) ?? [];
+
+    const addMarkLine = () => {
+        if (markLines.length >= 5) return;
+        onChange('markLines', [...markLines, { type: 'value' as const, value: 0, name: '', color: '#ff6b6b', lineStyle: 'dashed' as const, axis: 'y' as const }]);
+    };
+    const updateMarkLine = (idx: number, patch: Partial<ChartMarkLine>) => {
+        onChange('markLines', markLines.map((ml, i) => i === idx ? { ...ml, ...patch } : ml));
+    };
+    const removeMarkLine = (idx: number) => {
+        onChange('markLines', markLines.filter((_, i) => i !== idx));
+    };
+    const addMarkArea = () => {
+        if (markAreas.length >= 3) return;
+        onChange('markAreas', [...markAreas, { from: 0, to: 100, name: '', color: 'rgba(255,107,107,0.15)', axis: 'y' as const }]);
+    };
+    const updateMarkArea = (idx: number, patch: Partial<ChartMarkArea>) => {
+        onChange('markAreas', markAreas.map((ma, i) => i === idx ? { ...ma, ...patch } : ma));
+    };
+    const removeMarkArea = (idx: number) => {
+        onChange('markAreas', markAreas.filter((_, i) => i !== idx));
+    };
+    const addConditionalColor = () => {
+        if (conditionalColors.length >= 5) return;
+        onChange('conditionalColors', [...conditionalColors, { operator: '>' as const, value: 0, color: '#ef4444' }]);
+    };
+    const updateConditionalColor = (idx: number, patch: Partial<SeriesConditionalColor>) => {
+        onChange('conditionalColors', conditionalColors.map((cc, i) => i === idx ? { ...cc, ...patch } : cc));
+    };
+    const removeConditionalColor = (idx: number) => {
+        onChange('conditionalColors', conditionalColors.filter((_, i) => i !== idx));
+    };
+
+    return (
+        <div style={{ display: 'grid', gap: 8 }}>
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 600 }}>辅助线 ({markLines.length}/5)</div>
+            {markLines.map((ml, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
+                    <select className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} value={ml.type}
+                        onChange={(e) => updateMarkLine(idx, { type: e.target.value as ChartMarkLine['type'] })}>
+                        <option value="value">固定值</option><option value="average">平均</option>
+                        <option value="min">最小</option><option value="max">最大</option>
+                    </select>
+                    {ml.type === 'value' ? (
+                        <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} value={ml.value ?? 0}
+                            onChange={(e) => updateMarkLine(idx, { value: Number(e.target.value) })} />
+                    ) : <span />}
+                    <input type="text" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} placeholder="标签" value={ml.name ?? ''} onChange={(e) => updateMarkLine(idx, { name: e.target.value })} />
+                    <ColorPickerInput value={ml.color ?? '#ff6b6b'} fallback="#ff6b6b" onChange={(value) => updateMarkLine(idx, { color: value })} ariaLabel="辅助线颜色" />
+                    <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '3px 8px' }} onClick={() => removeMarkLine(idx)} title="删除辅助线" aria-label="删除辅助线"><Trash2 size={13} aria-hidden="true" /></button>
+                </div>
+            ))}
+            {markLines.length < 5 && (
+                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkLine} style={{ justifySelf: 'start', gap: 6 }}><Plus size={13} aria-hidden="true" />辅助线</button>
+            )}
+
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 600, marginTop: 8 }}>标记区域 ({markAreas.length}/3)</div>
+            {markAreas.map((ma, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 60px 60px auto', gap: 4, alignItems: 'center' }}>
+                    <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} placeholder="起始" value={ma.from} onChange={(e) => updateMarkArea(idx, { from: Number(e.target.value) })} />
+                    <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} placeholder="结束" value={ma.to} onChange={(e) => updateMarkArea(idx, { to: Number(e.target.value) })} />
+                    <input type="text" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} placeholder="标签" value={ma.name ?? ''} onChange={(e) => updateMarkArea(idx, { name: e.target.value })} />
+                    <ColorPickerInput value={ma.color ?? '#ff6b6b'} fallback="#ff6b6b" onChange={(value) => updateMarkArea(idx, { color: toRgbaColor(value, 0.15) })} ariaLabel="标记区域颜色" />
+                    <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '3px 8px' }} onClick={() => removeMarkArea(idx)} title="删除标记区域" aria-label="删除标记区域"><Trash2 size={13} aria-hidden="true" /></button>
+                </div>
+            ))}
+            {markAreas.length < 3 && (
+                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addMarkArea} style={{ justifySelf: 'start', gap: 6 }}><Plus size={13} aria-hidden="true" />标记区域</button>
+            )}
+
+            <div style={{ fontSize: 13, color: 'var(--color-text-secondary)', fontWeight: 600, marginTop: 8 }}>条件着色 ({conditionalColors.length}/5)</div>
+            {conditionalColors.map((cc, idx) => (
+                <div key={idx} style={{ display: 'grid', gridTemplateColumns: 'auto 60px 60px 40px auto', gap: 4, alignItems: 'center' }}>
+                    <select className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} value={cc.operator}
+                        onChange={(e) => updateConditionalColor(idx, { operator: e.target.value as SeriesConditionalColor['operator'] })}>
+                        <option value=">">{'>'}</option><option value=">=">{'>='}</option><option value="<">{'<'}</option>
+                        <option value="<=">{'<='}</option><option value="==">{'=='}</option><option value="between">区间</option>
+                    </select>
+                    <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} value={cc.value}
+                        onChange={(e) => updateConditionalColor(idx, { value: Number(e.target.value) })} />
+                    {cc.operator === 'between' ? (
+                        <input type="number" className="property-input flex-1 px-2.5 py-1.5 border border-border-default rounded bg-surface-card text-text-primary text-xs focus:outline-none focus:border-brand" style={{ padding: '4px 6px' }} placeholder="上限" value={cc.valueTo ?? 0}
+                            onChange={(e) => updateConditionalColor(idx, { valueTo: Number(e.target.value) })} />
+                    ) : <span />}
+                    <ColorPickerInput value={cc.color} fallback="#ef4444" onChange={(value) => updateConditionalColor(idx, { color: value })} ariaLabel="条件颜色" />
+                    <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" style={{ padding: '3px 8px' }} onClick={() => removeConditionalColor(idx)} title="删除条件着色" aria-label="删除条件着色"><Trash2 size={13} aria-hidden="true" /></button>
+                </div>
+            ))}
+            {conditionalColors.length < 5 && (
+                <button type="button" className="property-btn-small inline-flex items-center justify-center px-2 py-1 min-h-7 border border-border-default rounded bg-surface-card text-text-primary text-xs cursor-pointer transition-all duration-200 hover:border-brand hover:bg-brand/10 disabled:opacity-45 disabled:cursor-not-allowed" onClick={addConditionalColor} style={{ justifySelf: 'start', gap: 6 }}><Plus size={13} aria-hidden="true" />条件着色</button>
+            )}
+        </div>
+    );
+}

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260822-01-ingestion-quality-workflow-link" author="xiezm">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="ingestion_execution"/>
+            <not><columnExists tableName="ingestion_execution" columnName="quality_workflow_id"/></not>
+        </preConditions>
+        <comment>Keep the workflow identity created by post-ingestion quality automation.</comment>
+
+        <addColumn tableName="ingestion_execution">
+            <column name="quality_workflow_id" type="varchar(200)"/>
+            <column name="quality_workflow_status" type="varchar(32)"/>
+            <column name="quality_workflow_attempt_count" type="int4" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quality_workflow_next_retry_at" type="timestamp"/>
+            <column name="quality_workflow_error" type="varchar(1000)"/>
+        </addColumn>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_quality_workflow">
+            <column name="quality_workflow_id"/>
+        </createIndex>
+        <createIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_quality_retry">
+            <column name="quality_workflow_status"/>
+            <column name="quality_workflow_next_retry_at"/>
+        </createIndex>
+        <sql dbms="postgresql">
+            ALTER TABLE ingestion_execution
+            ADD CONSTRAINT ck_ingestion_execution_quality_attempt_count
+            CHECK (quality_workflow_attempt_count BETWEEN 0 AND 3)
+        </sql>
+
+        <rollback>
+            <sql dbms="postgresql">
+                ALTER TABLE ingestion_execution
+                DROP CONSTRAINT IF EXISTS ck_ingestion_execution_quality_attempt_count
+            </sql>
+            <dropIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_quality_retry"/>
+            <dropIndex tableName="ingestion_execution" indexName="idx_ingestion_execution_quality_workflow"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_workflow_error"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_workflow_next_retry_at"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_workflow_attempt_count"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_workflow_status"/>
+            <dropColumn tableName="ingestion_execution" columnName="quality_workflow_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

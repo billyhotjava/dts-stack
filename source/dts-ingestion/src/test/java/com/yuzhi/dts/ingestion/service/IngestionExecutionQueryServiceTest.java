@@ -1,0 +1,210 @@
+package com.yuzhi.dts.ingestion.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.yuzhi.dts.ingestion.domain.IngestionExecution;
+import com.yuzhi.dts.ingestion.domain.IngestionSchemaSnapshot;
+import com.yuzhi.dts.ingestion.domain.IngestionTask;
+import com.yuzhi.dts.ingestion.repository.IngestionExecutionRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionSchemaSnapshotRepository;
+import com.yuzhi.dts.ingestion.repository.IngestionTaskRepository;
+import com.yuzhi.dts.ingestion.service.etl.AirflowAdapter;
+import com.yuzhi.dts.ingestion.service.etl.AirflowClient;
+import com.yuzhi.dts.ingestion.service.etl.AirflowDagService;
+import com.yuzhi.dts.ingestion.service.etl.StagingTableService;
+import java.util.Map;
+import java.util.List;
+import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+@ExtendWith(MockitoExtension.class)
+class IngestionExecutionQueryServiceTest {
+
+    @Mock
+    private IngestionTaskRepository taskRepository;
+
+    @Mock
+    private IngestionExecutionRepository executionRepository;
+
+    @Mock
+    private IngestionSchemaSnapshotRepository schemaSnapshotRepository;
+
+    @Mock
+    private AirflowAdapter airflowAdapter;
+
+    @Mock
+    private AirflowClient airflowClient;
+
+    @Mock
+    private AirflowDagService airflowDagService;
+
+    @Mock
+    private StagingTableService stagingTableService;
+
+    private IngestionExecutionQueryService queryService;
+
+    @BeforeEach
+    void setup() {
+        queryService = new IngestionExecutionQueryService(
+            taskRepository,
+            executionRepository,
+            schemaSnapshotRepository,
+            airflowAdapter,
+            airflowClient,
+            airflowDagService,
+            stagingTableService
+        );
+    }
+
+    @Test
+    void shouldReturnStableFallbackWhenAirflowIsDisabled() {
+        IngestionTask task = new IngestionTask();
+        task.setId(1L);
+        task.setAirflowEnabled(true);
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(9L);
+        execution.setTask(task);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(executionRepository.findById(9L)).thenReturn(Optional.of(execution));
+        when(airflowAdapter.isEnabled()).thenReturn(false);
+
+        Map<String, Object> result = queryService.fetchExecutionLog(1L, 9L, null, null, null);
+
+        assertThat(result)
+            .containsEntry("taskId", 1L)
+            .containsEntry("executionId", 9L)
+            .containsEntry("message", "Airflow 未启用，暂无日志");
+    }
+
+    @Test
+    void shouldFetchLogsFromExecutionDagInsteadOfCurrentTaskDag() {
+        IngestionTask task = new IngestionTask();
+        task.setId(3L);
+        task.setAirflowEnabled(true);
+        task.setAirflowDagId("task_task_dtstest1_manual_task_3");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(19L);
+        execution.setTask(task);
+        execution.setExecutionId("manual__2026-08-04T01:21:25.574140+00:00");
+        execution.setAirflowDagId("ingestion_revision_5_execution_19_task_3");
+
+        when(taskRepository.findById(3L)).thenReturn(Optional.of(task));
+        when(executionRepository.findById(19L)).thenReturn(Optional.of(execution));
+        when(airflowAdapter.isEnabled()).thenReturn(true);
+        when(airflowDagService.resolveTaskIdForTask(task)).thenReturn("addax_run");
+        when(
+            airflowClient.listTaskInstances(
+                "ingestion_revision_5_execution_19_task_3",
+                "manual__2026-08-04T01:21:25.574140+00:00"
+            )
+        ).thenReturn(Optional.of(List.of(Map.of(
+            "task_id",
+            "addax_orders",
+            "state",
+            "success",
+            "try_number",
+            1
+        ))));
+        when(
+            airflowClient.getTaskLog(
+                "ingestion_revision_5_execution_19_task_3",
+                "manual__2026-08-04T01:21:25.574140+00:00",
+                "addax_orders",
+                1
+            )
+        ).thenReturn(Optional.of("addax execution completed"));
+
+        Map<String, Object> result = queryService.fetchExecutionLog(3L, 19L, 1, null, "single");
+
+        assertThat(result)
+            .containsEntry("dagId", "ingestion_revision_5_execution_19_task_3")
+            .containsEntry("taskInstanceId", "addax_orders")
+            .containsEntry("log", "addax execution completed");
+        verify(
+            airflowClient,
+            never()
+        ).getTaskLog(
+            "task_task_dtstest1_manual_task_3",
+            "manual__2026-08-04T01:21:25.574140+00:00",
+            "addax_orders",
+            1
+        );
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void shouldTraceExecutionByBatchId() {
+        IngestionTask task = new IngestionTask();
+        task.setId(7L);
+        task.setName("erp-customer");
+        task.setSourceType("rdbmsreader");
+        task.setSyncMode("full_refresh");
+        task.setStatus("active");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(15L);
+        execution.setTask(task);
+        execution.setBatchId("batch-task-7-abc");
+        execution.setExecutionId("manual-run");
+        execution.setStatus("success");
+        IngestionSchemaSnapshot snapshot = new IngestionSchemaSnapshot();
+        snapshot.setId(20L);
+        snapshot.setSourceSystem("ERP");
+        snapshot.setSourceTable("CUSTOMER");
+        snapshot.setOdsTable("ods_customer");
+        snapshot.setSchemaFingerprint("abc");
+
+        when(executionRepository.findByBatchId("batch-task-7-abc")).thenReturn(Optional.of(execution));
+        when(schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(15L)).thenReturn(List.of(snapshot));
+
+        Map<String, Object> result = queryService.traceExecution("batch-task-7-abc", null);
+
+        assertThat(result)
+            .containsEntry("batchId", "batch-task-7-abc")
+            .containsEntry("executionId", 15L)
+            .containsEntry("airflowRunId", "manual-run");
+        Map<String, Object> taskPayload = (Map<String, Object>) result.get("task");
+        assertThat(taskPayload).containsEntry("id", 7L).containsEntry("name", "erp-customer");
+        List<Map<String, Object>> sources = (List<Map<String, Object>>) result.get("sources");
+        assertThat(sources).hasSize(1);
+        assertThat(sources.get(0)).containsEntry("sourceSystem", "ERP").containsEntry("odsTable", "ods_customer");
+    }
+
+    @Test
+    void shouldIncludeBadRowSummaryWhenTaskHasStagingTable() {
+        IngestionTask task = new IngestionTask();
+        task.setId(8L);
+        task.setName("file-import");
+        task.setSourceType("excelreader");
+        task.setStagingTableName("tmp_ingestion_1234567890abcdef1234567890abcdef");
+        IngestionExecution execution = new IngestionExecution();
+        execution.setId(16L);
+        execution.setTask(task);
+        execution.setBatchId("batch-task-8-abc");
+        execution.setExecutionId("manual-file-run");
+        execution.setStatus("success");
+        StagingTableService.StagingErrorSummary summary = new StagingTableService.StagingErrorSummary(
+            3,
+            1,
+            2,
+            List.of(new StagingTableService.RuleErrorSummary("[内置]空行检测", 2)),
+            List.of(Map.of("_row_num", 2, "_status", "ERROR"))
+        );
+
+        when(executionRepository.findByBatchId("batch-task-8-abc")).thenReturn(Optional.of(execution));
+        when(schemaSnapshotRepository.findByExecution_IdOrderByCreatedDateDesc(16L)).thenReturn(List.of());
+        when(schemaSnapshotRepository.findByTask_IdOrderByCreatedDateDesc(8L)).thenReturn(List.of());
+        when(stagingTableService.summarizeErrors("tmp_ingestion_1234567890abcdef1234567890abcdef", 20)).thenReturn(summary);
+
+        Map<String, Object> result = queryService.traceExecution("batch-task-8-abc", null);
+
+        assertThat(result.get("badRows")).isEqualTo(summary);
+    }
+}

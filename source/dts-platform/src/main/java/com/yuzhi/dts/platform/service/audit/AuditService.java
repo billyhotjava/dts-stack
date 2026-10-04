@@ -1,0 +1,931 @@
+package com.yuzhi.dts.platform.service.audit;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.yuzhi.dts.common.audit.AuditActionCatalog;
+import com.yuzhi.dts.common.audit.AuditActionDefinition;
+import com.yuzhi.dts.common.audit.AuditStage;
+import com.yuzhi.dts.common.net.IpAddressUtils;
+import com.yuzhi.dts.platform.security.SecurityUtils;
+import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import com.yuzhi.dts.platform.security.session.PortalSessionRegistry;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+
+@Service
+public class AuditService {
+    private static final Logger log = LoggerFactory.getLogger(AuditService.class);
+
+    private static final boolean AUDIT_CONTEXT_PRESENT;
+    private static final Class<?> AUDIT_CONTEXT_CLASS;
+
+    static {
+        boolean present;
+        Class<?> ctxClass = null;
+        try {
+            ctxClass = Class.forName("com.yuzhi.dts.platform.service.audit.AuditRequestContext");
+            present = true;
+        } catch (ClassNotFoundException | NoClassDefFoundError ex) {
+            present = false;
+        }
+        AUDIT_CONTEXT_PRESENT = present;
+        AUDIT_CONTEXT_CLASS = ctxClass;
+    }
+
+    private static final Set<String> ACTOR_HINT_KEYS = Set.of(
+        "username",
+        "user",
+        "operator",
+        "operatorName",
+        "operatorId",
+        "account",
+        "principal",
+        "actor",
+        "login",
+        "owner",
+        "requester"
+    );
+
+    private static final Set<String> MACHINE_ACTOR_VALUES = Set.of(
+        "system",
+        "liquibase",
+        "postgresql",
+        "success",
+        "failed",
+        "execute"
+    );
+
+
+    private final ObjectProvider<AuditForwarderService> auditForwarderServiceProvider;
+    private final AuditActionCatalog actionCatalog;
+    private final PortalSessionRegistry portalSessionRegistry;
+    private final ObjectMapper objectMapper;
+    private final OperationTypeNormalizer operationTypeNormalizer;
+    private final PkiContextEnricher pkiContextEnricher;
+
+    public AuditService(
+        ObjectProvider<AuditForwarderService> auditForwarderServiceProvider,
+        AuditActionCatalog actionCatalog,
+        PortalSessionRegistry portalSessionRegistry,
+        ObjectMapper objectMapper,
+        OperationTypeNormalizer operationTypeNormalizer,
+        PkiContextEnricher pkiContextEnricher
+    ) {
+        this.auditForwarderServiceProvider = auditForwarderServiceProvider;
+        this.actionCatalog = actionCatalog;
+        this.portalSessionRegistry = portalSessionRegistry;
+        this.objectMapper = objectMapper;
+        this.operationTypeNormalizer = operationTypeNormalizer;
+        this.pkiContextEnricher = pkiContextEnricher;
+    }
+
+    public void auditAction(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        auditActionInternal(null, actionCode, stage, resourceId, payload);
+    }
+
+    /**
+     * Writes compliance-sensitive audit evidence and returns its durable outbox receipt.
+     * Unlike {@link #auditAction(String, AuditStage, String, Object)}, this method fails closed.
+     */
+    public UUID auditActionStrict(String actionCode, AuditStage stage, String resourceId, Object payload) {
+        return auditActionInternal(null, actionCode, stage, resourceId, payload, true);
+    }
+
+    /**
+     * Writes an audit event for a trusted platform machine actor.
+     *
+     * <p>The caller supplies a stable event identity and occurrence time so retries produce the
+     * same outbox event. Only the scheduler and Airflow aliases accepted by
+     * {@link AuditForwarderService#normalizeTrustedMachineActor(String)} may use this path.</p>
+     */
+    public void auditActionAs(
+        String machineActor,
+        String eventIdentity,
+        Instant occurredAt,
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        Object payload
+    ) {
+        String safeActor = AuditForwarderService.normalizeTrustedMachineActor(machineActor);
+        String safeEventIdentity = AuditForwarderService.requireMachineEventIdentity(eventIdentity);
+        if (occurredAt == null) {
+            throw new IllegalArgumentException("occurredAt is required for machine audit events");
+        }
+        auditActionInternal(
+            new MachineAuditIdentity(safeActor, safeEventIdentity, occurredAt),
+            actionCode,
+            stage,
+            resourceId,
+            payload
+        );
+    }
+
+    /** Writes deterministic machine audit evidence and fails the caller when it cannot be persisted. */
+    public UUID auditActionAsStrict(
+        String machineActor,
+        String eventIdentity,
+        Instant occurredAt,
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        Object payload
+    ) {
+        String safeActor = AuditForwarderService.normalizeTrustedMachineActor(machineActor);
+        String safeEventIdentity = AuditForwarderService.requireMachineEventIdentity(eventIdentity);
+        if (occurredAt == null) {
+            throw new IllegalArgumentException("occurredAt is required for machine audit events");
+        }
+        if (!StringUtils.hasText(actionCode)) {
+            throw new IllegalArgumentException("actionCode is required for strict machine audit events");
+        }
+        return auditActionInternal(
+            new MachineAuditIdentity(safeActor, safeEventIdentity, occurredAt),
+            actionCode,
+            stage,
+            resourceId,
+            payload,
+            true
+        );
+    }
+
+    private void auditActionInternal(
+        MachineAuditIdentity machineIdentity,
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        Object payload
+    ) {
+        auditActionInternal(machineIdentity, actionCode, stage, resourceId, payload, false);
+    }
+
+    private UUID auditActionInternal(
+        MachineAuditIdentity machineIdentity,
+        String actionCode,
+        AuditStage stage,
+        String resourceId,
+        Object payload,
+        boolean strict
+    ) {
+        if (!StringUtils.hasText(actionCode)) {
+            log.warn("auditAction invoked without action code; falling back to general audit");
+            if (machineIdentity == null) {
+                if (strict) {
+                    return recordStrict(actionCode, "general", "general", resourceId, "SUCCESS", payload, null);
+                }
+                record(actionCode, "general", "general", resourceId, "SUCCESS", payload, null);
+            } else {
+                submitMachineAudit(
+                    machineIdentity,
+                    actionCode,
+                    "general",
+                    "general",
+                    resourceId,
+                    "SUCCESS",
+                    payload,
+                    null
+                );
+            }
+            return null;
+        }
+        AuditStage effectiveStage = stage == null ? AuditStage.SUCCESS : stage;
+        AuditActionDefinition definition = actionCatalog
+            .findByCode(actionCode)
+            .orElseGet(() -> {
+                log.warn("Unknown audit action code {}, using fallback metadata", actionCode);
+                return new AuditActionDefinition(
+                    actionCode.trim().toUpperCase(),
+                    actionCode,
+                    "general",
+                    "General",
+                    "general",
+                    "通用动作",
+                    false,
+                    null
+                );
+            });
+        if (!definition.isStageSupported(effectiveStage)) {
+            log.debug(
+                "Audit action {} does not declare stage {}; proceeding for backward compatibility",
+                definition.getCode(),
+                effectiveStage
+            );
+        }
+
+        String module = definition.getModuleKey();
+        String actionDisplay = definition.getDisplay();
+        String resourceType = definition.getEntryKey();
+        String result = switch (effectiveStage) {
+            case BEGIN -> "PENDING";
+            case SUCCESS -> "SUCCESS";
+            case FAIL -> "FAILED";
+        };
+
+        Map<String, Object> tags = new HashMap<>();
+        tags.put("actionCode", definition.getCode());
+        tags.put("stage", effectiveStage.name());
+        tags.put("moduleKey", definition.getModuleKey());
+        tags.put("moduleTitle", definition.getModuleTitle());
+        tags.put("entryKey", definition.getEntryKey());
+        tags.put("entryTitle", definition.getEntryTitle());
+        tags.put("supportsFlow", definition.isSupportsFlow());
+
+        if (machineIdentity == null) {
+            if (strict) {
+                return recordStrict(actionDisplay, module, resourceType, resourceId, result, payload, tags);
+            }
+            record(actionDisplay, module, resourceType, resourceId, result, payload, tags);
+        } else if (strict) {
+            return submitMachineAuditStrict(
+                machineIdentity,
+                actionDisplay,
+                module,
+                resourceType,
+                resourceId,
+                result,
+                payload,
+                tags
+            );
+        } else {
+            submitMachineAudit(machineIdentity, actionDisplay, module, resourceType, resourceId, result, payload, tags);
+        }
+        return null;
+    }
+
+    /**
+     * Internal writer used by {@link #auditAction(String, AuditStage, String, Object)}.
+     * Package-private — outside callers must use {@code auditAction}.
+     */
+    void record(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAudit(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags
+        );
+    }
+
+    private UUID recordStrict(
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        return submitAuditInternal(
+            SecurityUtils.getCurrentUserLogin().orElse("anonymous"),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags,
+            false,
+            null,
+            true
+        );
+    }
+
+    // Explicit-actor variant used for events occurring before SecurityContext is populated (e.g., login)
+    public void recordAs(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAuditInternal(actor, action, module, resourceType, resourceId, result, payload, extraTags, false);
+    }
+
+    private void submitAudit(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAuditInternal(actor, action, module, resourceType, resourceId, result, payload, extraTags, false);
+    }
+
+    private void submitAuditInternal(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags,
+        boolean auxiliary
+    ) {
+        submitAuditInternal(actor, action, module, resourceType, resourceId, result, payload, extraTags, auxiliary, null);
+    }
+
+    private void submitMachineAudit(
+        MachineAuditIdentity machineIdentity,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        submitAuditInternal(
+            machineIdentity.actor(),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags,
+            false,
+            machineIdentity
+        );
+    }
+
+    private UUID submitMachineAuditStrict(
+        MachineAuditIdentity machineIdentity,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags
+    ) {
+        return submitAuditInternal(
+            machineIdentity.actor(),
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags,
+            false,
+            machineIdentity,
+            true
+        );
+    }
+
+    private void submitAuditInternal(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags,
+        boolean auxiliary,
+        MachineAuditIdentity machineIdentity
+    ) {
+        submitAuditInternal(
+            actor,
+            action,
+            module,
+            resourceType,
+            resourceId,
+            result,
+            payload,
+            extraTags,
+            auxiliary,
+            machineIdentity,
+            false
+        );
+    }
+
+    private UUID submitAuditInternal(
+        String actor,
+        String action,
+        String module,
+        String resourceType,
+        String resourceId,
+        String result,
+        Object payload,
+        Map<String, Object> extraTags,
+        boolean auxiliary,
+        MachineAuditIdentity machineIdentity,
+        boolean strict
+    ) {
+        Map<String, Object> payloadMap = toPayloadMap(payload);
+        String safeActor = machineIdentity == null
+            ? (strict ? sanitizeActorString(actor) : resolveActor(actor, payloadMap))
+            : machineIdentity.actor();
+        if (safeActor == null) {
+            if (strict) {
+                throw new IllegalStateException("Authenticated audit actor is required");
+            }
+            if (log.isDebugEnabled()) {
+                log.debug(
+                    "Skip audit record without resolved actor action={} module={} resourceId={}",
+                    action,
+                    module,
+                    resourceId
+                );
+            }
+            return null;
+        }
+        Map<String, Object> effectiveExtraTags = extraTags != null ? new java.util.LinkedHashMap<>(extraTags) : null;
+        boolean disableDefaultResourceFallback = auxiliary;
+        AuditStage stage = resolveStageFromResult(result, null);
+
+        result = normalizeResultForStage(stage, result);
+        String logAction = action;
+        log.info(
+            "AUDIT actor={} action={} module={} resourceType={} resourceId={} result={}",
+            safeActor,
+            logAction,
+            module,
+            resourceType,
+            resourceId,
+            result
+        );
+        AuditForwarderService.PendingAuditEvent event = new AuditForwarderService.PendingAuditEvent();
+        event.occurredAt = machineIdentity == null ? Instant.now() : machineIdentity.occurredAt();
+        event.actor = safeActor;
+        event.actorRole = machineIdentity == null ? resolvePrimaryAuthority() : "MACHINE";
+        event.module = StringUtils.hasText(module) ? module : "general";
+        event.action = StringUtils.hasText(action) ? action : "READ";
+        event.resourceType = resourceType;
+        event.resourceId = resourceId;
+        event.result = StringUtils.hasText(result) ? result : "SUCCESS";
+
+        if (!payloadMap.isEmpty()) {
+            event.payload = payloadMap;
+        } else {
+            event.payload = payload;
+        }
+        if (machineIdentity == null) {
+            String actorDisplayName = strict
+                ? resolveAuthenticatedActorName(safeActor)
+                : resolveActorName(payloadMap, safeActor);
+            if (StringUtils.hasText(actorDisplayName)) {
+                payloadMap.putIfAbsent("actorName", actorDisplayName);
+                event.actorName = actorDisplayName;
+            }
+        }
+        if (effectiveExtraTags != null && !effectiveExtraTags.isEmpty()) {
+            event.extraTags = serializeTags(effectiveExtraTags);
+        }
+
+        String summary = extractText(payloadMap, "summary");
+        String targetName = extractText(payloadMap, "targetName");
+        if (StringUtils.hasText(targetName)) {
+            event.resourceName = targetName;
+        } else {
+            String resourceName = extractText(payloadMap, "resourceName");
+            if (StringUtils.hasText(resourceName)) {
+                event.resourceName = resourceName;
+            }
+        }
+        if (!StringUtils.hasText(summary)) {
+            if (StringUtils.hasText(event.action) && StringUtils.hasText(event.resourceName)) {
+                summary = event.action + "：" + event.resourceName;
+            } else if (StringUtils.hasText(event.action)) {
+                summary = event.action;
+            }
+        }
+        event.summary = summary;
+        event.operationType = operationTypeNormalizer.deriveOperationType(event.action, payloadMap);
+
+        Map<String, Object> attributes = extractNestedAttributes(payloadMap);
+        if (!attributes.isEmpty()) {
+            event.attributes = attributes;
+        }
+        if (effectiveExtraTags != null && !effectiveExtraTags.isEmpty()) {
+            event.metadata = new java.util.LinkedHashMap<>(effectiveExtraTags);
+        }
+        event.auxiliary = auxiliary;
+        if (disableDefaultResourceFallback) {
+            event.disableDefaultResourceFallback = true;
+        }
+
+        // Populate client/network context. Strict audit fails closed; best-effort records the gap explicitly.
+        if (machineIdentity == null) {
+            try {
+                ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+                if (attrs != null && attrs.getRequest() != null) {
+                    var req = attrs.getRequest();
+                    event.clientIp = resolveAuditClientIp(payloadMap, req);
+                    event.clientAgent = req.getHeader("User-Agent");
+                    event.requestUri = req.getRequestURI();
+                    event.httpMethod = req.getMethod();
+                    pkiContextEnricher.enrichWithPkiContext(req, payloadMap, effectiveExtraTags);
+                    payloadMap.putIfAbsent("contextEnrichmentStatus", "SUCCESS");
+                } else {
+                    payloadMap.putIfAbsent("contextEnrichmentStatus", "SKIPPED_NO_REQUEST_CONTEXT");
+                }
+            } catch (RuntimeException enrichmentFailure) {
+                if (strict) {
+                    throw new AuditContextEnrichmentException(enrichmentFailure);
+                }
+                payloadMap.put("contextEnrichmentStatus", "FAILED");
+                payloadMap.put("contextEnrichmentErrorCode", "AUDIT_CONTEXT_ENRICHMENT_FAILED");
+                log.warn(
+                    "event=audit_context_enrichment_failed action={} module={} errorCode=AUDIT_CONTEXT_ENRICHMENT_FAILED",
+                    event.action,
+                    event.module
+                );
+            }
+            if (!payloadMap.isEmpty()) {
+                event.payload = payloadMap;
+            }
+            if (effectiveExtraTags != null && !effectiveExtraTags.isEmpty()) {
+                event.metadata = new java.util.LinkedHashMap<>(effectiveExtraTags);
+            }
+        }
+        markDomainAuditSafe();
+        AuditForwarderService svc = auditForwarderServiceProvider.getIfAvailable();
+        if (svc != null) {
+            if (machineIdentity == null) {
+                if (strict) {
+                    return svc.recordStrict(event);
+                }
+                svc.record(event);
+            } else if (strict) {
+                return svc.recordTrustedMachineStrict(event, machineIdentity.eventIdentity());
+            } else {
+                svc.recordTrustedMachine(event, machineIdentity.eventIdentity());
+            }
+        } else {
+            if (strict) {
+                throw new IllegalStateException("AuditForwarderService is not available");
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("AuditForwarderService not available; skipping audit record action={} module={} resourceId={}", action, module, resourceId);
+            }
+        }
+        return null;
+    }
+
+    static final class AuditContextEnrichmentException extends IllegalStateException {
+        private AuditContextEnrichmentException(RuntimeException cause) {
+            super("AUDIT_CONTEXT_ENRICHMENT_FAILED", cause);
+        }
+    }
+
+    private String resolveActor(String actor, Map<String, Object> payloadMap) {
+        String primary = sanitizeActorString(actor);
+        if (primary != null) {
+            return primary;
+        }
+        String fromPayload = extractActorFromPayload(payloadMap);
+        if (fromPayload != null) {
+            return fromPayload;
+        }
+        String login = SecurityUtils.getCurrentUserLogin().orElse(null);
+        String sanitizedLogin = sanitizeActorString(login);
+        if (sanitizedLogin != null) {
+            return sanitizedLogin;
+        }
+        return sanitizeActorString(SecurityUtils.getCurrentUserId().orElse(null));
+    }
+
+    private String extractActorFromPayload(Map<String, Object> payloadMap) {
+        if (payloadMap == null || payloadMap.isEmpty()) {
+            return null;
+        }
+        return extractActorFromPayloadInternal(
+            payloadMap,
+            Collections.newSetFromMap(new IdentityHashMap<>())
+        );
+    }
+
+    private String extractActorFromPayloadInternal(Object source, Set<Object> visited) {
+        if (source == null) {
+            return null;
+        }
+        if (source instanceof String s) {
+            return null;
+        }
+        if (source instanceof Map<?, ?> map) {
+            if (!visited.add(map)) {
+                return null;
+            }
+            for (String key : ACTOR_HINT_KEYS) {
+                if (map.containsKey(key)) {
+                    String candidate = extractActorHintValue(map.get(key), visited);
+                    if (candidate != null) {
+                        return candidate;
+                    }
+                }
+            }
+            for (Object value : map.values()) {
+                if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>) && (value == null || !value.getClass().isArray())) {
+                    continue;
+                }
+                String candidate = extractActorFromPayloadInternal(value, visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        if (source instanceof Collection<?> collection) {
+            if (!visited.add(collection)) {
+                return null;
+            }
+            for (Object value : collection) {
+                String candidate = extractActorFromPayloadInternal(value, visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        if (source.getClass().isArray()) {
+            int length = Array.getLength(source);
+            for (int i = 0; i < length; i++) {
+                Object value = Array.get(source, i);
+                if (!(value instanceof Map<?, ?>) && !(value instanceof Collection<?>) && (value == null || !value.getClass().isArray())) {
+                    continue;
+                }
+                String candidate = extractActorFromPayloadInternal(value, visited);
+                if (candidate != null) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    private String extractActorHintValue(Object value, Set<Object> visited) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String s) {
+            return sanitizeActorString(s);
+        }
+        if (value instanceof Number || value instanceof Boolean || value instanceof Character) {
+            return sanitizeActorString(String.valueOf(value));
+        }
+        return extractActorFromPayloadInternal(value, visited);
+    }
+
+    private String sanitizeActorString(String candidate) {
+        if (candidate == null) {
+            return null;
+        }
+        String text = candidate.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        if (text.startsWith("Bearer ")) {
+            text = text.substring(7).trim();
+        }
+        String lower = text.toLowerCase(Locale.ROOT);
+        if (lower.equals("anonymous") || lower.equals("anonymoususer") || lower.equals("unknown")) {
+            return null;
+        }
+        if (isMachineActor(lower)) {
+            return null;
+        }
+        return text;
+    }
+
+    private boolean isMachineActor(String normalized) {
+        if (!StringUtils.hasText(normalized)) {
+            return true;
+        }
+        String lower = normalized.trim().toLowerCase(Locale.ROOT);
+        if (MACHINE_ACTOR_VALUES.contains(lower)) {
+            return true;
+        }
+        if (lower.startsWith("service:") || lower.startsWith("_system:") || lower.startsWith("dts-")) {
+            return true;
+        }
+        if (lower.contains("liquibase")) {
+            return true;
+        }
+        return lower.chars().allMatch(Character::isDigit);
+    }
+
+    private Map<String, Object> toPayloadMap(Object payload) {
+        if (payload instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    copy.put(String.valueOf(k), v);
+                }
+            });
+            return copy;
+        }
+        return new java.util.LinkedHashMap<>();
+    }
+
+    private Map<String, Object> extractNestedAttributes(Map<String, Object> payload) {
+        if (payload == null || payload.isEmpty()) {
+            return java.util.Collections.emptyMap();
+        }
+        Object attributes = payload.get("attributes");
+        if (attributes instanceof Map<?, ?> map) {
+            Map<String, Object> copy = new java.util.LinkedHashMap<>();
+            map.forEach((k, v) -> {
+                if (k != null) {
+                    copy.put(String.valueOf(k), v);
+                }
+            });
+            return copy;
+        }
+        return java.util.Collections.emptyMap();
+    }
+
+    private String extractText(Map<String, Object> map, String key) {
+        if (map == null || map.isEmpty()) {
+            return null;
+        }
+        Object value = map.get(key);
+        if (value == null) {
+            return null;
+        }
+        String text = String.valueOf(value).trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    private String resolveAuditClientIp(Map<String, Object> payloadMap, HttpServletRequest request) {
+        String requestIp = pkiContextEnricher.resolveClientIp(request);
+        String payloadIp = IpAddressUtils.resolveClientIp(
+            extractText(payloadMap, "clientIp"),
+            extractText(payloadMap, "pkiLoginClientIp"),
+            extractText(payloadMap, "ip")
+        );
+        if (isContainerAddress(requestIp) && StringUtils.hasText(payloadIp)) {
+            return payloadIp;
+        }
+        return StringUtils.hasText(requestIp) ? requestIp : payloadIp;
+    }
+
+    private boolean isContainerAddress(String ip) {
+        if (!StringUtils.hasText(ip)) {
+            return false;
+        }
+        String normalized = ip.trim();
+        if (normalized.equals("127.0.0.1") || normalized.equals("::1") || normalized.equals("0:0:0:0:0:0:0:1")) {
+            return true;
+        }
+        String[] parts = normalized.split("\\.");
+        if (parts.length != 4) {
+            return false;
+        }
+        try {
+            int first = Integer.parseInt(parts[0]);
+            int second = Integer.parseInt(parts[1]);
+            return first == 172 && second >= 16 && second <= 31;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+    }
+
+
+
+    private AuditStage resolveStageFromResult(String result, AuditStage defaultStage) {
+        String normalized = result == null ? "" : result.trim().toUpperCase(Locale.ROOT);
+        if ("FAILED".equals(normalized) || "FAIL".equals(normalized) || "ERROR".equals(normalized) || "DENY".equals(normalized) || "DENIED".equals(normalized)) {
+            return AuditStage.FAIL;
+        }
+        if ("PENDING".equals(normalized) || "BEGIN".equals(normalized)) {
+            return AuditStage.BEGIN;
+        }
+        if (defaultStage != null) {
+            return defaultStage;
+        }
+        return AuditStage.SUCCESS;
+    }
+
+    private String normalizeResultForStage(AuditStage stage, String original) {
+        String normalized = original == null ? "" : original.trim().toUpperCase(Locale.ROOT);
+        return switch (stage) {
+            case FAIL -> "FAILED";
+            case BEGIN -> "PENDING";
+            case SUCCESS -> {
+                if (!StringUtils.hasText(normalized)) {
+                    yield "SUCCESS";
+                }
+                if (isCanonicalResult(normalized)) {
+                    yield normalized;
+                }
+                log.warn("Unrecognised audit result '{}' for stage SUCCESS — falling back to UNKNOWN", original);
+                yield "UNKNOWN";
+            }
+        };
+    }
+
+    private static boolean isCanonicalResult(String normalized) {
+        return switch (normalized) {
+            case "SUCCESS", "SUCCEEDED", "OK", "PASS", "FAIL", "FAILED", "ERROR", "DENY", "DENIED",
+                "PENDING", "PROCESSING", "IN_PROGRESS", "UNKNOWN" -> true;
+            default -> false;
+        };
+    }
+
+
+    private String resolveActorName(Map<String, Object> payload, String actorId) {
+        String fromPayload = extractText(payload, "actorName");
+        if (StringUtils.hasText(fromPayload)) {
+            return fromPayload;
+        }
+        return resolveAuthenticatedActorName(actorId);
+    }
+
+    private String resolveAuthenticatedActorName(String actorId) {
+        String fromSecurity = SecurityUtils.getCurrentUserDisplayName().orElse(null);
+        if (StringUtils.hasText(fromSecurity)) {
+            return fromSecurity;
+        }
+        if (StringUtils.hasText(actorId)) {
+            return portalSessionRegistry.resolveDisplayName(actorId).orElse(null);
+        }
+        return null;
+    }
+
+
+
+
+    private String serializeTags(Map<String, Object> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return null;
+        }
+        try {
+            return objectMapper.writeValueAsString(tags);
+        } catch (JsonProcessingException ex) {
+            log.warn("Failed to serialize audit extra tags", ex);
+            return null;
+        }
+    }
+
+    private void markDomainAuditSafe() {
+        if (!AUDIT_CONTEXT_PRESENT) {
+            return;
+        }
+        try {
+            if (AUDIT_CONTEXT_CLASS != null) {
+                AUDIT_CONTEXT_CLASS.getMethod("markDomainAudit").invoke(null);
+            }
+        } catch (ReflectiveOperationException | NoClassDefFoundError ex) {
+            // tolerate missing context helper at runtime
+            if (log.isDebugEnabled()) {
+                log.debug("AuditRequestContext not available: {}", ex.getMessage());
+            }
+        }
+    }
+
+    private String resolvePrimaryAuthority() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null) {
+            return null;
+        }
+        Optional<? extends GrantedAuthority> authority = authentication.getAuthorities().stream().findFirst();
+        return authority.map(GrantedAuthority::getAuthority).orElse(null);
+    }
+
+    private record MachineAuditIdentity(String actor, String eventIdentity, Instant occurredAt) {}
+
+}

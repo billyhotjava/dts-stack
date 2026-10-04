@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+
+    <changeSet id="20260623-01-drop-person-import-record-keycloak-id-unique" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="person_import_record"/>
+            <columnExists tableName="person_import_record" columnName="keycloak_user_id"/>
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*)
+                FROM information_schema.table_constraints
+                WHERE table_name = 'person_import_record'
+                  AND constraint_name = 'uk_person_record_kc_id'
+            </sqlCheck>
+        </preConditions>
+        <comment>person_import_record is import history; repeated imports may legitimately reference the same Keycloak user.</comment>
+        <dropUniqueConstraint
+            tableName="person_import_record"
+            constraintName="uk_person_record_kc_id"/>
+        <rollback>
+            <addUniqueConstraint
+                tableName="person_import_record"
+                columnNames="keycloak_user_id"
+                constraintName="uk_person_record_kc_id"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260623-02-create-person-import-record-keycloak-id-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="person_import_record"/>
+            <columnExists tableName="person_import_record" columnName="keycloak_user_id"/>
+            <not>
+                <indexExists tableName="person_import_record" indexName="idx_person_record_kc_id"/>
+            </not>
+        </preConditions>
+        <comment>Keep lookup performance after removing the unique constraint from keycloak_user_id.</comment>
+        <createIndex tableName="person_import_record" indexName="idx_person_record_kc_id">
+            <column name="keycloak_user_id"/>
+        </createIndex>
+        <rollback>
+            <dropIndex tableName="person_import_record" indexName="idx_person_record_kc_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

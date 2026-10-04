@@ -1,0 +1,300 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260810-01-data-architecture-navigation-expand" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <tableExists tableName="portal_menu_visibility"/>
+            <sequenceExists sequenceName="portal_menu_visibility_seq"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="parent_id"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+        <comment>
+            将平台全局架构字典收敛到“数据架构”一级导航，复用现有规划 command boundary；
+            新入口继承原数据建模可见角色，旧规划字典节点仅软下线，由前端保留兼容重定向。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                actor CONSTANT VARCHAR := 'sprint87-data-architecture-navigation';
+                architecture_id BIGINT;
+                modeling_id BIGINT;
+                target_menu_id BIGINT;
+                architecture_sort INTEGER;
+                architecture_was_active BOOLEAN := FALSE;
+                target_was_active BOOLEAN;
+                item JSONB;
+            BEGIN
+                PERFORM pg_advisory_xact_lock(hashtextextended('dts:portal-menu:data-architecture:20260810-01', 0));
+
+                SELECT id
+                  INTO modeling_id
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND parent_id IS NULL
+                   AND (
+                       name = 'sys.nav.portal.studioDataModeling'
+                       OR metadata::jsonb ->> 'key' = 'modeling'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.studioDataModeling'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id, deleted = FALSE
+                  INTO architecture_id, architecture_was_active
+                  FROM portal_menu
+                 WHERE parent_id IS NULL
+                   AND (
+                       name = 'sys.nav.portal.dataArchitecture'
+                       OR metadata::jsonb ->> 'key' = 'data-architecture'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.dataArchitecture'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                IF architecture_was_active THEN
+                    SELECT COALESCE(sort_order, 0) INTO architecture_sort FROM portal_menu WHERE id = architecture_id;
+                ELSIF modeling_id IS NOT NULL THEN
+                    SELECT COALESCE(sort_order, 0) INTO architecture_sort FROM portal_menu WHERE id = modeling_id;
+                ELSE
+                    SELECT COALESCE(MAX(sort_order), 0) + 1
+                      INTO architecture_sort
+                      FROM portal_menu
+                     WHERE parent_id IS NULL AND deleted = FALSE;
+                END IF;
+
+                IF NOT architecture_was_active THEN
+                    UPDATE portal_menu
+                       SET sort_order = sort_order + 1,
+                           last_modified_by = actor || '-order',
+                           last_modified_date = now()
+                     WHERE parent_id IS NULL
+                       AND deleted = FALSE
+                       AND id IS DISTINCT FROM architecture_id
+                       AND sort_order >= architecture_sort;
+                END IF;
+
+                IF architecture_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.dataArchitecture', 'data-architecture', NULL, architecture_sort,
+                        jsonb_build_object(
+                            'key', 'data-architecture', 'sectionKey', 'data-architecture',
+                            'titleKey', 'sys.nav.portal.dataArchitecture', 'title', '数据架构',
+                            'icon', 'solar:structure-bold-duotone'
+                        )::TEXT,
+                        NULL, 'solar:structure-bold-duotone', 'GENERAL', FALSE,
+                        actor, now(), actor || '-created', now()
+                    ) RETURNING id INTO architecture_id;
+                ELSE
+                    UPDATE portal_menu
+                       SET name = 'sys.nav.portal.dataArchitecture',
+                           path = 'data-architecture',
+                           component = NULL,
+                           sort_order = architecture_sort,
+                           metadata = jsonb_build_object(
+                               'key', 'data-architecture', 'sectionKey', 'data-architecture',
+                               'titleKey', 'sys.nav.portal.dataArchitecture', 'title', '数据架构',
+                               'icon', 'solar:structure-bold-duotone'
+                           )::TEXT,
+                           icon = 'solar:structure-bold-duotone',
+                           security_level = 'GENERAL',
+                           deleted = FALSE,
+                           last_modified_by = CASE
+                               WHEN architecture_was_active THEN actor || '-aligned'
+                               ELSE actor || '-created'
+                           END,
+                           last_modified_date = now()
+                     WHERE id = architecture_id;
+                END IF;
+
+                INSERT INTO portal_menu_visibility (
+                    id, menu_id, role_code, permission_code, data_level,
+                    created_by, created_date, last_modified_by, last_modified_date
+                )
+                SELECT nextval('portal_menu_visibility_seq'), architecture_id, source.role_code,
+                       source.permission_code, source.data_level, actor, now(), actor, now()
+                  FROM (
+                      SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                        FROM portal_menu_visibility visibility
+                        JOIN portal_menu source_menu ON source_menu.id = visibility.menu_id
+                       WHERE visibility.menu_id = modeling_id
+                          OR source_menu.name IN (
+                              'sys.nav.portal.planningBusinessCategories',
+                              'sys.nav.portal.planningLayers',
+                              'sys.nav.portal.planningDomains',
+                              'sys.nav.portal.planningProcesses',
+                              'sys.nav.portal.planningMarts',
+                              'sys.nav.portal.planningSubjects'
+                          )
+                  ) source
+                 WHERE NOT EXISTS (
+                       SELECT 1
+                         FROM portal_menu_visibility target
+                        WHERE target.menu_id = architecture_id
+                          AND target.role_code = source.role_code
+                          AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                          AND target.data_level IS NOT DISTINCT FROM source.data_level
+                 );
+
+                FOR item IN
+                    SELECT value
+                      FROM jsonb_array_elements(
+                        '[
+                          {"name":"sys.nav.portal.architectureBusinessDomains","key":"architecture-business-domains","path":"data-architecture/business-domains","title":"业务分类与数据域","icon":"solar:globus-bold-duotone","link":"/data-architecture?view=business-domains","sort":1},
+                          {"name":"sys.nav.portal.architectureProcesses","key":"architecture-processes","path":"data-architecture/processes","title":"业务过程","icon":"solar:diagram-up-bold-duotone","link":"/data-architecture?view=processes","sort":2},
+                          {"name":"sys.nav.portal.architectureLayers","key":"architecture-layers","path":"data-architecture/layers","title":"数仓分层","icon":"solar:layers-bold-duotone","link":"/data-architecture?view=layers","sort":3},
+                          {"name":"sys.nav.portal.architectureMarts","key":"architecture-marts","path":"data-architecture/marts","title":"数据集市","icon":"solar:database-bold-duotone","link":"/data-architecture?view=marts","sort":4},
+                          {"name":"sys.nav.portal.architectureSubjects","key":"architecture-subjects","path":"data-architecture/subjects","title":"主题域","icon":"solar:folder-with-files-bold-duotone","link":"/data-architecture?view=subjects","sort":5}
+                        ]'::jsonb
+                      )
+                LOOP
+                    target_menu_id := NULL;
+                    target_was_active := FALSE;
+                    SELECT id, deleted = FALSE
+                      INTO target_menu_id, target_was_active
+                      FROM portal_menu
+                     WHERE parent_id = architecture_id
+                       AND (
+                           name = item ->> 'name'
+                           OR metadata::jsonb ->> 'key' = item ->> 'key'
+                           OR metadata::jsonb ->> 'titleKey' = item ->> 'name'
+                       )
+                     ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            item ->> 'name', item ->> 'path', NULL, (item ->> 'sort')::INTEGER,
+                            jsonb_build_object(
+                                'key', item ->> 'key', 'sectionKey', 'data-architecture',
+                                'entryKey', item ->> 'key', 'titleKey', item ->> 'name',
+                                'title', item ->> 'title', 'icon', item ->> 'icon',
+                                'externalLink', item ->> 'link'
+                            )::TEXT,
+                            architecture_id, item ->> 'icon', 'GENERAL', FALSE,
+                            actor, now(), actor || '-created', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        UPDATE portal_menu
+                           SET name = item ->> 'name',
+                               path = item ->> 'path',
+                               component = NULL,
+                               sort_order = (item ->> 'sort')::INTEGER,
+                               metadata = jsonb_build_object(
+                                   'key', item ->> 'key', 'sectionKey', 'data-architecture',
+                                   'entryKey', item ->> 'key', 'titleKey', item ->> 'name',
+                                   'title', item ->> 'title', 'icon', item ->> 'icon',
+                                   'externalLink', item ->> 'link'
+                               )::TEXT,
+                               icon = item ->> 'icon',
+                               security_level = 'GENERAL',
+                               deleted = FALSE,
+                               last_modified_by = CASE
+                                   WHEN target_was_active THEN actor || '-aligned'
+                                   ELSE actor || '-created'
+                               END,
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    INSERT INTO portal_menu_visibility (
+                        id, menu_id, role_code, permission_code, data_level,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    )
+                    SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                           source.permission_code, source.data_level, actor, now(), actor, now()
+                      FROM portal_menu_visibility source
+                     WHERE source.menu_id = architecture_id
+                       AND NOT EXISTS (
+                           SELECT 1
+                             FROM portal_menu_visibility target
+                            WHERE target.menu_id = target_menu_id
+                              AND target.role_code = source.role_code
+                              AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                              AND target.data_level IS NOT DISTINCT FROM source.data_level
+                       );
+                END LOOP;
+
+                WITH RECURSIVE retired_ids AS (
+                    SELECT id
+                      FROM portal_menu
+                     WHERE deleted = FALSE
+                       AND name IN (
+                           'sys.nav.portal.planningBusinessCategories',
+                           'sys.nav.portal.planningLayers',
+                           'sys.nav.portal.planningDomains',
+                           'sys.nav.portal.planningProcesses',
+                           'sys.nav.portal.planningMarts',
+                           'sys.nav.portal.planningSubjects'
+                       )
+                    UNION
+                    SELECT child.id
+                      FROM portal_menu child
+                      JOIN retired_ids parent ON child.parent_id = parent.id
+                     WHERE child.deleted = FALSE
+                )
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = actor || '-retired',
+                       last_modified_date = now()
+                 WHERE id IN (SELECT id FROM retired_ids);
+            END $do$;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    actor CONSTANT VARCHAR := 'sprint87-data-architecture-navigation';
+                    architecture_id BIGINT;
+                BEGIN
+                    SELECT id
+                      INTO architecture_id
+                      FROM portal_menu
+                     WHERE parent_id IS NULL
+                       AND (
+                           name = 'sys.nav.portal.dataArchitecture'
+                           OR metadata::jsonb ->> 'key' = 'data-architecture'
+                       )
+                     ORDER BY id
+                     LIMIT 1;
+
+                    DELETE FROM portal_menu_visibility
+                     WHERE created_by = actor
+                       AND (
+                           menu_id = architecture_id
+                           OR menu_id IN (SELECT id FROM portal_menu WHERE parent_id = architecture_id)
+                       );
+
+                    UPDATE portal_menu
+                       SET deleted = TRUE,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE (id = architecture_id OR parent_id = architecture_id)
+                       AND (created_by = actor OR last_modified_by = actor || '-created');
+
+                    UPDATE portal_menu
+                       SET deleted = FALSE,
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE last_modified_by = actor || '-retired';
+
+                    UPDATE portal_menu
+                       SET sort_order = GREATEST(sort_order - 1, 0),
+                           last_modified_by = actor || '-rollback',
+                           last_modified_date = now()
+                     WHERE last_modified_by = actor || '-order';
+                END $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

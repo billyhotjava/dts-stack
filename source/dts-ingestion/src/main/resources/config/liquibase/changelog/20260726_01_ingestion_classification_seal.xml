@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260726-01-ingestion-classification-seal" author="codex">
+        <addColumn tableName="ingestion_task">
+            <column name="classification_seal" type="jsonb"/>
+            <column name="field_classifications" type="jsonb"/>
+        </addColumn>
+        <createIndex indexName="idx_ingestion_task_classification_seal" tableName="ingestion_task">
+            <column name="classification_seal"/>
+        </createIndex>
+        <rollback>
+            <dropIndex indexName="idx_ingestion_task_classification_seal" tableName="ingestion_task"/>
+            <dropColumn tableName="ingestion_task" columnName="field_classifications"/>
+            <dropColumn tableName="ingestion_task" columnName="classification_seal"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,143 @@
+import apiClient from "../apiClient";
+
+export type WorkbenchOverview = {
+	generatedAt?: string;
+	myAssets?: number;
+	todayNewAssets?: number;
+};
+
+export type WorkbenchTodoItem = {
+	type: string;
+	title?: string;
+	status?: string;
+	createdAt?: string;
+	taskId?: string;
+	requestId?: string;
+	datasetId?: string;
+	message?: string;
+	requester?: string;
+};
+
+export type WorkbenchComponentDescriptor = {
+	key: string;
+	title: string;
+	description?: string | null;
+	enabled?: boolean;
+	disabledReason?: string | null;
+};
+
+export type WorkbenchPreferenceItem = {
+	key: string;
+	visible: boolean;
+	order: number;
+};
+
+export type WorkbenchPreferencesRequest = {
+	items: WorkbenchPreferenceItem[];
+};
+
+export type WorkbenchPreferencesResponse = {
+	version: number;
+	availableComponents: WorkbenchComponentDescriptor[];
+	items: WorkbenchPreferenceItem[];
+};
+
+/**
+ * Sprint-15 F1/T03 — Leader overview KPI block.
+ *
+ * `classification` values in `topReports` / `topAssets` are normalized to
+ * `"S1" | "S2" | "S3" | "S4"` by the backend (e.g. TOP_SECRET → S1).
+ *
+ * `domainMatrix` may contain synthetic buckets `"__OTHER__"` and
+ * `"__UNCATEGORIZED__"` which the UI renders differently.
+ */
+export interface LeaderOverviewKpis {
+	reportsTotal: number;
+	reportsNewInPeriod: number;
+	visitsInPeriod: number;
+	visitsMoM: number | null;
+	assetsTotal: number;
+	assetsNewInPeriod: number;
+	assetsS1: number;
+	assetsS1S2: number;
+	assetsS1Ratio: number | null;
+	/**
+	 * P0-5: when true, `assetsTotal` / `assetsS1` / `assetsS1S2` reflect the
+	 * institute-wide totals because the user-scoped asset access log is not
+	 * yet wired up. UI should disclose "机构合计" instead of "我的资产".
+	 */
+	assetScopeFallback?: boolean;
+}
+
+export interface LeaderOverviewTopReport {
+	id: string;
+	title: string;
+	visits: number;
+	bizDomain: string | null;
+	classification: string;
+	lastVisitedAt: string | null;
+	/** Sprint-17 hotfix — original BiReportLink.url for resolveBiLinkForOpen. */
+	url: string | null;
+	/** Sprint-17 hotfix — engine ("HETU"/"DTS_BI"/...) controls URL normalization. */
+	engine: string | null;
+}
+
+export interface LeaderOverviewTopAsset {
+	id: string;
+	name: string;
+	classification: string;
+	updatedAt: string;
+	bizDomain: string | null;
+}
+
+export interface LeaderOverviewDomainCell {
+	domain: string;
+	domainName: string;
+	visits: number;
+}
+
+export interface LeaderOverviewResponse {
+	generatedAt: string;
+	scope: "MINE" | "DEPT" | "ALL";
+	effectiveDeptCode: string | null;
+	timeRange: "MONTH" | "QUARTER" | "YEAR";
+	kpis: LeaderOverviewKpis;
+	topReports: LeaderOverviewTopReport[];
+	topAssets: LeaderOverviewTopAsset[];
+	domainMatrix: LeaderOverviewDomainCell[];
+}
+
+export interface LeaderOverviewParams {
+	scope: "MINE" | "DEPT" | "ALL";
+	deptCode?: string | null;
+	bizDomain?: string | null;
+	timeRange: "MONTH" | "QUARTER" | "YEAR";
+}
+
+export default {
+	overview: () => apiClient.get<WorkbenchOverview>({ url: "/workbench/overview" }),
+	todos: () => apiClient.get<WorkbenchTodoItem[]>({ url: "/workbench/todos" }),
+	preferences: () =>
+		apiClient.get<WorkbenchPreferencesResponse>({ url: "/workbench/preferences", _skipErrorToast: true } as any),
+	savePreferences: (payload: WorkbenchPreferencesRequest) =>
+		apiClient.put<WorkbenchPreferencesResponse>({
+			url: "/workbench/preferences",
+			data: payload,
+			_skipErrorToast: true,
+		} as any),
+	resetPreferences: () =>
+		apiClient.post<WorkbenchPreferencesResponse>({
+			url: "/workbench/preferences/reset",
+			_skipErrorToast: true,
+		} as any),
+	leaderOverview: (params: LeaderOverviewParams) =>
+		apiClient.get<LeaderOverviewResponse>({
+			url: "/workbench/leader-overview",
+			params: {
+				scope: params.scope,
+				deptCode: params.deptCode ?? undefined,
+				bizDomain: params.bizDomain ?? undefined,
+				timeRange: params.timeRange,
+			},
+		}),
+};

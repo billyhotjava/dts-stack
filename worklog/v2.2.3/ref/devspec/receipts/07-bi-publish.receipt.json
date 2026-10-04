@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/07-bi-publish.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/07-bi-publish.html",
+  "specification": {
+    "sha256": "8d7ada68ee503800c65af94060f2601aae1b7a1f507b4a49439e1f6aa9969c41",
+    "bytes": 3602
+  },
+  "artifact": {
+    "sha256": "c5244244b1e90ee103b9cd1b4d90644cd389f84dd74b2e85ca0e139b30924a5c",
+    "bytes": 712679
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

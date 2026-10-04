@@ -1,0 +1,24 @@
+Sprint-67 F4 route context audit — 2026-07-19
+
+Canonical write whitelist:
+- planId
+- domainId
+- modelSpecId
+- revision
+- modelType
+- returnTo (same-site path only)
+
+Compatibility reads:
+- planningId -> planId
+- modelId -> modelSpecId
+- objectId is lookup-only and is never copied to a canonical URL
+
+Retired write parameters:
+- objectId
+- processId
+- planningId
+- warehouseLayer
+- modelingMode
+- modelId
+
+businessModelingContext, modelingJourneyContext, warehousePlanningContext and the shared data-product journey now emit canonical keys only. Active page builders point to business classification, dimension catalog, model center, SQL/dbt, metric workbench, release view and operations.

@@ -1,0 +1,729 @@
+TAP version 13
+# Subtest: generic full-refresh grain schema permits no keys without weakening dimension or incremental keys
+ok 1 - generic full-refresh grain schema permits no keys without weakening dimension or incremental keys
+  ---
+  duration_ms: 52.355633
+  type: 'test'
+  ...
+# Subtest: canonical create and update accept the additive warehouse-layer selection
+not ok 2 - canonical create and update accept the additive warehouse-layer selection
+  ---
+  duration_ms: 3.009336
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:246:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:250:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: canonical create fields exclude client-owned and retired metadata
+ok 3 - canonical create fields exclude client-owned and retired metadata
+  ---
+  duration_ms: 0.163246
+  type: 'test'
+  ...
+# Subtest: interactive create accepts only the minimum draft identity and never accepts a client-owned layer
+ok 4 - interactive create accepts only the minimum draft identity and never accepts a client-owned layer
+  ---
+  duration_ms: 0.527332
+  type: 'test'
+  ...
+# Subtest: canonical update is a full replacement without create-only or retired metadata
+not ok 5 - canonical update is a full replacement without create-only or retired metadata
+  ---
+  duration_ms: 0.487071
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:296:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:299:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: canonical dimension update keeps SCD and hierarchy but moves code and reuse scope to the definition
+ok 6 - canonical dimension update keeps SCD and hierarchy but moves code and reuse scope to the definition
+  ---
+  duration_ms: 0.474486
+  type: 'test'
+  ...
+# Subtest: canonical CAS token produces the backend strong ETag exactly
+ok 7 - canonical CAS token produces the backend strong ETag exactly
+  ---
+  duration_ms: 0.160218
+  type: 'test'
+  ...
+# Subtest: all four model types satisfy their deterministic save boundary
+not ok 8 - all four model types satisfy their deterministic save boundary
+  ---
+  duration_ms: 0.652978
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:342:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    FACT
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:344:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: all four model categories reject target layers outside their fixed output layer
+ok 9 - all four model categories reject target layers outside their fixed output layer
+  ---
+  duration_ms: 0.730356
+  type: 'test'
+  ...
+# Subtest: upstream model candidates follow the four-category dependency matrix
+ok 10 - upstream model candidates follow the four-category dependency matrix
+  ---
+  duration_ms: 0.308577
+  type: 'test'
+  ...
+# Subtest: analysis dimensions accept canonical DWD dimension models only
+ok 11 - analysis dimensions accept canonical DWD dimension models only
+  ---
+  duration_ms: 0.150999
+  type: 'test'
+  ...
+# Subtest: reference targets require an exact canonical unpolluted revision and the owner relationship matrix
+ok 12 - reference targets require an exact canonical unpolluted revision and the owner relationship matrix
+  ---
+  duration_ms: 0.469208
+  type: 'test'
+  ...
+# Subtest: exact pinned reference rejects historical targets whose physical inputs use derived layers
+ok 13 - exact pinned reference rejects historical targets whose physical inputs use derived layers
+  ---
+  duration_ms: 0.213176
+  type: 'test'
+  ...
+# Subtest: persisted fields hidden by the current model type are type-boundary mismatches
+ok 14 - persisted fields hidden by the current model type are type-boundary mismatches
+  ---
+  duration_ms: 0.245429
+  type: 'test'
+  ...
+# Subtest: direct physical inputs are limited to ODS, STG or DWD
+not ok 15 - direct physical inputs are limited to ODS, STG or DWD
+  ---
+  duration_ms: 0.54627
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:521:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    FACT
+    + actual - expected
+    
+      [
+        {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId'
+    +   },
+    +   {
+          code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED',
+          field: 'sourceRefs'
+        }
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0:
+      code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED'
+      field: 'sourceRefs'
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+    1:
+      code: 'MODEL_SPEC_UPSTREAM_LAYER_NOT_ALLOWED'
+      field: 'sourceRefs'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:528:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: generation strategy is dimension-only input
+ok 16 - generation strategy is dimension-only input
+  ---
+  duration_ms: 0.4028
+  type: 'test'
+  ...
+# Subtest: all model input kinds follow the same four-table type boundary as the backend
+ok 17 - all model input kinds follow the same four-table type boundary as the backend
+  ---
+  duration_ms: 1.128035
+  type: 'test'
+  ...
+# Subtest: all four model types accept their minimal request with unrelated collections absent
+not ok 18 - all four model types accept their minimal request with unrelated collections absent
+  ---
+  duration_ms: 0.511956
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:600:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    FACT
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:602:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: dimension draft requires grain and a KEY but not a source or generation strategy
+ok 19 - dimension draft requires grain and a KEY but not a source or generation strategy
+  ---
+  duration_ms: 0.316711
+  type: 'test'
+  ...
+# Subtest: legacy v2 dimension definition and key mapping remain backward compatible
+ok 20 - legacy v2 dimension definition and key mapping remain backward compatible
+  ---
+  duration_ms: 0.238323
+  type: 'test'
+  ...
+# Subtest: dimension profile remains optional but legacy code and reuse fields are read-only
+ok 21 - dimension profile remains optional but legacy code and reuse fields are read-only
+  ---
+  duration_ms: 0.503878
+  type: 'test'
+  ...
+# Subtest: FACT draft requires grain but may defer both physical sources and upstream models
+not ok 22 - FACT draft requires grain but may defer both physical sources and upstream models
+  ---
+  duration_ms: 0.353675
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:676:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:680:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: standard bindings must resolve to declared fields
+not ok 23 - standard bindings must resolve to declared fields
+  ---
+  duration_ms: 0.389767
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:683:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+        'MODEL_SPEC_STANDARD_BINDING_INVALID'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'MODEL_SPEC_STANDARD_BINDING_INVALID'
+  actual:
+    0: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+    1: 'MODEL_SPEC_STANDARD_BINDING_INVALID'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:689:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: a field accepts only one standard binding
+not ok 24 - a field accepts only one standard binding
+  ---
+  duration_ms: 0.300784
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:695:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+        'MODEL_SPEC_STANDARD_BINDING_INVALID'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'MODEL_SPEC_STANDARD_BINDING_INVALID'
+  actual:
+    0: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+    1: 'MODEL_SPEC_STANDARD_BINDING_INVALID'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:702:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: APPLICATION requires a consumption scenario and other model types reject one
+not ok 25 - APPLICATION requires a consumption scenario and other model types reject one
+  ---
+  duration_ms: 0.464381
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:708:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+      [
+    +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+        'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED'
+  actual:
+    0: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+    1: 'MODEL_SPEC_CONSUMPTION_SCENARIO_NOT_ALLOWED'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:715:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: editable APPLICATION updates defer missing stable context to later stage gates
+not ok 26 - editable APPLICATION updates defer missing stable context to later stage gates
+  ---
+  duration_ms: 0.350536
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:731:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_DATA_MART_REQUIRED',
+    +     field: 'dataMartId',
+    +     message: 'APPLICATION requires a data mart',
+    +     severity: 'ERROR'
+    +   },
+    +   {
+    +     code: 'MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED',
+    +     field: 'subjectDomainId',
+    +     message: 'APPLICATION requires a subject domain',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_DATA_MART_REQUIRED'
+      field: 'dataMartId'
+      severity: 'ERROR'
+      message: 'APPLICATION requires a data mart'
+    1:
+      code: 'MODEL_SPEC_SUBJECT_DOMAIN_REQUIRED'
+      field: 'subjectDomainId'
+      severity: 'ERROR'
+      message: 'APPLICATION requires a subject domain'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:733:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: only FACT accepts optional business activity
+not ok 27 - only FACT accepts optional business activity
+  ---
+  duration_ms: 0.762131
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:738:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:753:9)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: retired and unknown fields are rejected
+ok 28 - retired and unknown fields are rejected
+  ---
+  duration_ms: 0.226678
+  type: 'test'
+  ...
+# Subtest: required field codes stay explicit and backend-compatible
+ok 29 - required field codes stay explicit and backend-compatible
+  ---
+  duration_ms: 0.226473
+  type: 'test'
+  ...
+# Subtest: shared fixtures keep Java and TypeScript validation issue codes aligned
+not ok 30 - shared fixtures keep Java and TypeScript validation issue codes aligned
+  ---
+  duration_ms: 72.665886
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:785:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    duplicate-field-name
+    + actual - expected
+    
+      [
+    +   'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+        'MODEL_SPEC_FIELD_INVALID'
+      ]
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+    0: 'MODEL_SPEC_FIELD_INVALID'
+  actual:
+    0: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+    1: 'MODEL_SPEC_FIELD_INVALID'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:814:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: nested references reject incomplete ids and non-positive versions
+ok 31 - nested references reject incomplete ids and non-positive versions
+  ---
+  duration_ms: 0.393028
+  type: 'test'
+  ...
+# Subtest: JSON Schema accepts canonical view and rejects client-only or unknown view fields
+ok 32 - JSON Schema accepts canonical view and rejects client-only or unknown view fields
+  ---
+  duration_ms: 91.039863
+  type: 'test'
+  ...
+# Subtest: JSON Schema update payload is a strict full replacement without create-only or legacy fields
+ok 33 - JSON Schema update payload is a strict full replacement without create-only or legacy fields
+  ---
+  duration_ms: 59.697869
+  type: 'test'
+  ...
+# Subtest: JSON Schema directly accepts the generic wire fixture including explicit null optionals
+ok 34 - JSON Schema directly accepts the generic wire fixture including explicit null optionals
+  ---
+  duration_ms: 57.883825
+  type: 'test'
+  ...
+# Subtest: JSON Schema declares executable trim-aware uniqueness for fields and sources
+ok 35 - JSON Schema declares executable trim-aware uniqueness for fields and sources
+  ---
+  duration_ms: 0.534836
+  type: 'test'
+  ...
+# Subtest: model views are a strict contract-version and compatibility-mode discriminated union
+not ok 36 - model views are a strict contract-version and compatibility-mode discriminated union
+  ---
+  duration_ms: 77.736191
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:982:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    APPLICATION legacy: [{"instancePath":"","schemaPath":"#/additionalProperties","keyword":"additionalProperties","params":{"additionalProperty":"subjectDomainId"},"message":"must NOT have additional properties"}]
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1044:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: JSON Schema enforces all four model-type save boundaries
+not ok 37 - JSON Schema enforces all four model-type save boundaries
+  ---
+  duration_ms: 41.451473
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1051:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    APPLICATION: [{"instancePath":"","schemaPath":"#/additionalProperties","keyword":"additionalProperties","params":{"additionalProperty":"subjectDomainId"},"message":"must NOT have additional properties"}]
+    
+    false !== true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1067:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: editable stable context accepts only UUIDs and preserves model-type ownership
+not ok 38 - editable stable context accepts only UUIDs and preserves model-type ownership
+  ---
+  duration_ms: 0.443328
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1099:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+    
+    + [
+    +   {
+    +     code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED',
+    +     field: 'businessProcessId',
+    +     message: 'FACT requires a stable business process reference',
+    +     severity: 'ERROR'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      code: 'MODEL_SPEC_BUSINESS_PROCESS_REQUIRED'
+      field: 'businessProcessId'
+      severity: 'ERROR'
+      message: 'FACT requires a stable business process reference'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1106:10)
+    Test.runInAsyncScope (node:async_hooks:228:14)
+    Test.run (node:internal/test_runner/test:1118:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:787:18)
+    Test.postRun (node:internal/test_runner/test:1247:19)
+    Test.run (node:internal/test_runner/test:1175:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:787:7)
+  ...
+# Subtest: Schema admits stable context on all wire shapes without admitting malformed or foreign context
+not ok 39 - Schema admits stable context on all wire shapes without admitting malformed or foreign context
+  ---
+  duration_ms: 17.649529
+  type: 'test'
+  location: '/opt/prod/s10/v2.2.3/source/dts-platform-webapp/src/features/modeling/contracts/modelSpecV2Contract.test.ts:1118:1'
+  failureType: 'testCodeFailure'
+  error: "can't resolve reference sprint104#/$defs/interactiveCreateModelSpecRequest/properties/businessProcessId from id #"
+  code: 'ERR_TEST_FAILURE'
+  stack: |-
+    Object.code (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/vocabularies/core/ref.js:21:19)
+    keywordCode (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:464:13)
+    /opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:185:25
+    CodeGen.code (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/codegen/index.js:439:13)
+    CodeGen.block (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/codegen/index.js:568:18)
+    schemaKeywords (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:185:13)
+    typeAndKeywords (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:128:5)
+    /opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:70:9
+    CodeGen.code (/opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/codegen/index.js:439:13)
+    /opt/prod/s10/v2.2.3/.claude/worktrees/sprint-75-asset-map/source/dts-platform-webapp/node_modules/.pnpm/ajv@8.17.1/node_modules/ajv/dist/compile/validate/index.js:37:166
+  ...
+1..39
+# tests 39
+# suites 0
+# pass 23
+# fail 16
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 645.824894

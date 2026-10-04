@@ -1,0 +1,9 @@
+序号,Excel表头,ODS字段名,类型
+1,项目号,project_no,varchar
+2,预算编号,budget_no,varchar
+3,所属子课题,subtopic,varchar
+4,研究室,research_lab,varchar
+5,预算金额（调整后）,budget_amount_adjusted,varchar
+6,预付账款（未验收未报销、无发票）,prepaid_amount,varchar
+7,账面成本（已验收有发票）,book_cost_amount,varchar
+8,应付账款（有发票暂未付款）,payable_amount,varchar

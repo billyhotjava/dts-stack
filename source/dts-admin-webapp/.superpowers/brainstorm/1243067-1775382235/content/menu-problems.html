@@ -1,0 +1,122 @@
+<h2>菜单管理页面 — 问题分析</h2>
+<p class="subtitle">识别出 4 个主要体验问题，点击查看</p>
+
+<style>
+.problem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+.problem-card { border: 2px solid #e5e7eb; border-radius: 10px; overflow: hidden; cursor: pointer; transition: border-color .2s, box-shadow .2s; }
+.problem-card:hover { border-color: #6366f1; box-shadow: 0 4px 12px rgba(99,102,241,.15); }
+.problem-card.selected { border-color: #ef4444; background: #fef2f2; }
+.problem-header { background: #f9fafb; border-bottom: 1px solid #e5e7eb; padding: 10px 14px; font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: 8px; }
+.problem-header .badge { background: #ef4444; color: white; border-radius: 20px; padding: 1px 8px; font-size: 11px; }
+.problem-body { padding: 14px; font-size: 13px; }
+.mock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.mock-table th { background: #f3f4f6; padding: 6px 8px; text-align: left; color: #6b7280; font-weight: 500; }
+.mock-table td { padding: 6px 8px; border-top: 1px solid #f3f4f6; vertical-align: top; }
+.mock-table tr:hover td { background: #f9fafb; }
+.tag-green { display: inline-block; padding: 1px 6px; border-radius: 4px; border: 1px solid #bbf7d0; color: #059669; font-size: 11px; }
+.tag-gray { display: inline-block; padding: 1px 6px; border-radius: 4px; border: 1px solid #d1d5db; color: #6b7280; font-size: 11px; }
+.btn-small { display: inline-block; padding: 2px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; color: #374151; margin-bottom: 3px; }
+.btn-row { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.highlight-red { background: rgba(239,68,68,.15); border-radius: 4px; padding: 2px 4px; }
+.highlight-orange { background: rgba(249,115,22,.15); border-radius: 4px; padding: 2px 4px; }
+.arrow-row { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 12px; }
+.arrow-row .before { color: #ef4444; text-decoration: line-through; }
+.arrow-row .after { color: #059669; font-weight: 600; }
+.problem-desc { color: #374151; line-height: 1.6; margin-bottom: 10px; }
+.inline-badge { display: inline-flex; gap: 3px; }
+.inline-badge span { padding: 2px 7px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 11px; }
+</style>
+
+<div class="problem-grid">
+
+  <!-- Problem 1: ID prefix in names -->
+  <div class="problem-card" onclick="toggleSelect(this)" data-choice="p1">
+    <div class="problem-header"><span class="badge">问题 1</span> 菜单名称带 id 前缀</div>
+    <div class="problem-body">
+      <p class="problem-desc">名称列显示 <code>id1302-数据大屏</code>，id 前缀仅用于内部唯一性，不应暴露给用户。</p>
+      <table class="mock-table">
+        <tr><th>菜单名称</th></tr>
+        <tr><td><span class="highlight-red">id1301-</span>BI 分析</td></tr>
+        <tr><td>　<span class="highlight-red">id1302-</span>数据大屏</td></tr>
+        <tr><td>　<span class="highlight-red">id1303-</span>分析看板</td></tr>
+      </table>
+      <div class="arrow-row">
+        <span class="before">id1302-数据大屏</span> → <span class="after">数据大屏</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem 2: Buttons stacking -->
+  <div class="problem-card" onclick="toggleSelect(this)" data-choice="p2">
+    <div class="problem-header"><span class="badge">问题 2</span> 操作按钮竖向堆叠</div>
+    <div class="problem-body">
+      <p class="problem-desc">操作列有 2-4 个按钮，使用 flex-wrap 导致竖排，行高变为普通行的 2-3 倍。</p>
+      <table class="mock-table">
+        <tr><th style="text-align:right">操作</th></tr>
+        <tr>
+          <td>
+            <div class="btn-row">
+              <span class="btn-small highlight-orange">禁用菜单</span>
+              <span class="btn-small highlight-orange">配置角色</span>
+            </div>
+          </td>
+        </tr>
+        <tr>
+          <td>
+            <div class="btn-row">
+              <span class="btn-small highlight-orange">禁用菜单</span>
+              <span class="btn-small highlight-orange">配置角色</span>
+            </div>
+          </td>
+        </tr>
+      </table>
+      <div class="arrow-row" style="margin-top:8px">
+        竖排 2 行 → <span class="after">行内操作 + 更多下拉</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem 3: Full path column -->
+  <div class="problem-card" onclick="toggleSelect(this)" data-choice="p3">
+    <div class="problem-header"><span class="badge">问题 3</span> 完整路径列冗余且丑</div>
+    <div class="problem-body">
+      <p class="problem-desc">路径列复用了带 id 前缀的内部 name，且在树状视图中层级关系已清晰，路径列价值低。</p>
+      <table class="mock-table">
+        <tr><th>完整路径</th></tr>
+        <tr><td class="highlight-red">/id1301-BI分析/id1302-数据大屏</td></tr>
+        <tr><td class="highlight-red">/id1301-BI分析/id1303-分析看板</td></tr>
+      </table>
+      <div class="arrow-row">
+        带 id 前缀的路径 → <span class="after">缩为 tooltip 或隐藏</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Problem 4: Stats cards too large -->
+  <div class="problem-card" onclick="toggleSelect(this)" data-choice="p4">
+    <div class="problem-header"><span class="badge">问题 4</span> 统计卡片占空间过多</div>
+    <div class="problem-body">
+      <p class="problem-desc">3 个大卡片仅展示 3 个数字，视觉权重过高，占用了接近 1/4 屏幕高度。</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <div style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center;background:#fef2f2">
+          <div style="font-size:10px;color:#6b7280">菜单总数</div>
+          <div style="font-size:24px;font-weight:700">39</div>
+        </div>
+        <div style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center;background:#fef2f2">
+          <div style="font-size:10px;color:#6b7280">已启用</div>
+          <div style="font-size:24px;font-weight:700;color:#059669">39</div>
+        </div>
+        <div style="flex:1;border:1px solid #e5e7eb;border-radius:8px;padding:12px;text-align:center;background:#fef2f2">
+          <div style="font-size:10px;color:#6b7280">已禁用</div>
+          <div style="font-size:24px;font-weight:700;color:#ef4444">0</div>
+        </div>
+      </div>
+      <div class="arrow-row">
+        3 个大卡片 → <span class="after">页头内联小徽章</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<p style="font-size:13px;color:#6b7280;margin-top:4px">以上 4 个问题都在同一文件 <code>portal-menus.tsx</code> 中，可一次修复。点击感兴趣的问题，然后在终端告诉我哪些需要处理。</p>

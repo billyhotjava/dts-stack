@@ -1,0 +1,101 @@
+- generic [ref=e3]:
+  - generic [ref=e14]:
+    - banner [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]: D
+        - generic [ref=e18]: DTS
+        - generic [ref=e19]: ▸
+      - button "folder-open 销售准备项目 down" [ref=e20] [cursor=pointer]:
+        - img "folder-open" [ref=e21]:
+          - img [ref=e22]
+        - generic [ref=e24]: 销售准备项目
+        - img "down" [ref=e25]:
+          - img [ref=e26]
+      - button "search 搜索 ⌘K" [ref=e28] [cursor=pointer]:
+        - img "search" [ref=e29]:
+          - img [ref=e30]
+        - generic [ref=e32]: 搜索
+        - generic [ref=e33]: ⌘K
+      - img "bell" [ref=e34]:
+        - img [ref=e35]
+      - generic [ref=e37]:
+        - generic [ref=e39]: 崔
+        - generic [ref=e40]: 崔耀文
+    - generic [ref=e41]:
+      - navigation "主导航" [ref=e42]:
+        - link "appstore 项目门户" [ref=e43] [cursor=pointer]:
+          - /url: /portal
+          - img "appstore" [ref=e44]:
+            - img [ref=e45]
+          - generic [ref=e47]: 项目门户
+        - generic [ref=e48]: 黄金主线
+        - link "check 连接 完成" [ref=e49] [cursor=pointer]:
+          - /url: /connect
+          - img "check" [ref=e51]:
+            - img [ref=e52]
+          - generic [ref=e54]: 连接
+          - generic [ref=e55]: 完成
+        - link "集成 进行中" [ref=e56] [cursor=pointer]:
+          - /url: /integrate
+          - generic [ref=e60]: 集成
+          - generic [ref=e61]: 进行中
+        - link "3 资产 待开始" [ref=e62] [cursor=pointer]:
+          - /url: /assets
+          - generic [ref=e63]: "3"
+          - generic [ref=e64]: 资产
+          - generic [ref=e65]: 待开始
+        - link "4 指标 待开始" [ref=e66] [cursor=pointer]:
+          - /url: /metrics
+          - generic [ref=e67]: "4"
+          - generic [ref=e68]: 指标
+          - generic [ref=e69]: 待开始
+        - generic [ref=e71]: 平台
+        - link "api 数据服务" [ref=e72] [cursor=pointer]:
+          - /url: /platform/serve
+          - img "api" [ref=e74]:
+            - img [ref=e75]
+          - generic [ref=e77]: 数据服务
+        - link "safety-certificate 治理" [ref=e78] [cursor=pointer]:
+          - /url: /platform/govern
+          - img "safety-certificate" [ref=e80]:
+            - img [ref=e81]
+          - generic [ref=e83]: 治理
+        - link "lock 安全" [ref=e84] [cursor=pointer]:
+          - /url: /platform/security
+          - img "lock" [ref=e86]:
+            - img [ref=e87]
+          - generic [ref=e89]: 安全
+        - link "cloud-server 运维" [ref=e90] [cursor=pointer]:
+          - /url: /platform/ops
+          - img "cloud-server" [ref=e92]:
+            - img [ref=e93]
+          - generic [ref=e97]: 运维
+        - link "setting 设置" [ref=e98] [cursor=pointer]:
+          - /url: /platform/settings
+          - img "setting" [ref=e100]:
+            - img [ref=e101]
+          - generic [ref=e103]: 设置
+      - main [ref=e104]:
+        - generic [ref=e177]:
+          - generic [ref=e178]:
+            - generic [ref=e179]:
+              - generic [ref=e180]: 阶段 ②
+              - generic [ref=e181]: 集成 · 可视化 ELT
+              - generic [ref=e182]: 在画布上拖拽搭建转换，dbt 隐藏在底层自动生成。
+            - generic [ref=e184]: S3–S4 交付
+          - generic [ref=e185]:
+            - generic [ref=e186]:
+              - img "tool" [ref=e187]:
+                - img [ref=e188]
+              - generic [ref=e190]: 本区域将收编以下能力（S3–S4 实现）：
+            - generic [ref=e191]:
+              - generic [ref=e192]: 可视化 ELT 画布
+              - generic [ref=e194]: 节点配置抽屉
+              - generic [ref=e196]: 运行/调度/日志 dock
+              - generic [ref=e198]: 运行历史
+              - generic [ref=e200]: 画布⇄列表双视图
+              - generic [ref=e202]: SQL/脚本工作室（高级）
+  - button "reload 重置样例数据" [ref=e171] [cursor=pointer]:
+    - img "reload" [ref=e173]:
+      - img [ref=e174]
+    - generic [ref=e176]: 重置样例数据

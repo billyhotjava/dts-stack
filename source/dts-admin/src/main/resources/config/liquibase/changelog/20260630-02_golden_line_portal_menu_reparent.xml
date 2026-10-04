@@ -1,0 +1,538 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260630-02-golden-line-portal-menu-reparent" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+
+        <comment>
+            Reparent portal menus to the golden-line information architecture while preserving existing menu ids and role visibility bindings.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                workbench_id BIGINT;
+                data_foundation_id BIGINT;
+                resource_id BIGINT;
+                studio_id BIGINT;
+                metric_modeling_id BIGINT;
+                portal_id BIGINT;
+                consumption_id BIGINT;
+                governance_id BIGINT;
+                ops_id BIGINT;
+                services_id BIGINT;
+                bi_apps_id BIGINT;
+                bi_id BIGINT;
+                screens_id BIGINT;
+                standards_id BIGINT;
+            BEGIN
+                SELECT id INTO workbench_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name = 'sys.nav.portal.workbench' OR metadata LIKE '%"key":"workbench"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO data_foundation_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.dataFoundation' OR metadata LIKE '%"key":"data-foundation"%')
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                IF data_foundation_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.dataFoundation',
+                        'data-foundation',
+                        NULL,
+                        2,
+                        '{"key":"data-foundation","sectionKey":"data-foundation","titleKey":"sys.nav.portal.dataFoundation","title":"数据基础","icon":"solar:book-bookmark-bold-duotone"}',
+                        NULL,
+                        'solar:book-bookmark-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'system',
+                        now(),
+                        'system',
+                        now()
+                    )
+                    RETURNING id INTO data_foundation_id;
+                END IF;
+
+                SELECT id INTO resource_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name IN ('sys.nav.portal.resourceCenter', 'sys.nav.portal.dataIntegration') OR metadata LIKE '%"key":"resource"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO studio_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name = 'sys.nav.portal.studioCenter' OR metadata LIKE '%"key":"studio"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO metric_modeling_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (
+                      name = 'sys.nav.portal.studioMetricModeling'
+                      OR metadata LIKE '%"titleKey":"sys.nav.portal.studioMetricModeling"%'
+                      OR metadata LIKE '%"key":"metric-modeling"%'
+                  )
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                SELECT id INTO portal_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name = 'sys.nav.portal.dataPortal' OR metadata LIKE '%"key":"portal"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO consumption_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.dataConsumption' OR metadata LIKE '%"key":"consumption"%')
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                IF consumption_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.dataConsumption',
+                        'consumption',
+                        NULL,
+                        7,
+                        '{"key":"consumption","sectionKey":"consumption","titleKey":"sys.nav.portal.dataConsumption","title":"数据消费","icon":"solar:share-circle-bold-duotone"}',
+                        NULL,
+                        'solar:share-circle-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'system',
+                        now(),
+                        'system',
+                        now()
+                    )
+                    RETURNING id INTO consumption_id;
+                END IF;
+
+                SELECT id INTO governance_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name IN ('sys.nav.portal.governanceCenter', 'sys.nav.portal.governanceOperations') OR metadata LIKE '%"key":"governance"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO ops_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id IS NULL
+                  AND (name = 'sys.nav.portal.opsCenter' OR metadata LIKE '%"key":"ops"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO services_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.serviceCenter' OR metadata LIKE '%"key":"services"%')
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                SELECT id INTO bi_apps_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.businessIntelligenceApps' OR metadata LIKE '%"key":"bi-apps"%')
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                SELECT id INTO screens_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.biScreens' OR metadata LIKE '%"titleKey":"sys.nav.portal.biScreens"%')
+                ORDER BY CASE WHEN parent_id IS NULL THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    path = 'workbench',
+                    sort_order = 1,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = workbench_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    name = 'sys.nav.portal.dataFoundation',
+                    path = 'data-foundation',
+                    sort_order = 2,
+                    metadata = '{"key":"data-foundation","sectionKey":"data-foundation","titleKey":"sys.nav.portal.dataFoundation","title":"数据基础","icon":"solar:book-bookmark-bold-duotone"}',
+                    icon = 'solar:book-bookmark-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = data_foundation_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    name = 'sys.nav.portal.dataIntegration',
+                    path = 'resource',
+                    sort_order = 3,
+                    metadata = '{"key":"resource","sectionKey":"resource","titleKey":"sys.nav.portal.dataIntegration","title":"数据集成","icon":"solar:database-bold-duotone"}',
+                    icon = 'solar:database-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = resource_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    path = 'studio',
+                    sort_order = 4,
+                    metadata = '{"key":"studio","sectionKey":"studio","titleKey":"sys.nav.portal.studioCenter","title":"数据开发","icon":"solar:code-bold-duotone"}',
+                    icon = 'solar:code-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = studio_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    path = 'metric-modeling',
+                    sort_order = 5,
+                    metadata = '{"key":"metric-modeling","sectionKey":"metric-modeling","titleKey":"sys.nav.portal.studioMetricModeling","title":"指标建模","icon":"solar:graph-bold-duotone"}',
+                    icon = 'solar:graph-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = metric_modeling_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    path = 'portal',
+                    sort_order = 6,
+                    metadata = '{"key":"portal","sectionKey":"portal","titleKey":"sys.nav.portal.dataPortal","title":"数据资产","icon":"solar:book-bold-duotone"}',
+                    icon = 'solar:book-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = portal_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    name = 'sys.nav.portal.dataConsumption',
+                    path = 'consumption',
+                    sort_order = 7,
+                    metadata = '{"key":"consumption","sectionKey":"consumption","titleKey":"sys.nav.portal.dataConsumption","title":"数据消费","icon":"solar:share-circle-bold-duotone"}',
+                    icon = 'solar:share-circle-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = consumption_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    name = 'sys.nav.portal.governanceOperations',
+                    path = 'governance',
+                    sort_order = 8,
+                    metadata = '{"key":"governance","sectionKey":"governance","titleKey":"sys.nav.portal.governanceOperations","title":"治理运营","icon":"solar:shield-check-bold-duotone"}',
+                    icon = 'solar:shield-check-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = governance_id;
+
+                UPDATE portal_menu
+                SET parent_id = NULL,
+                    path = 'ops',
+                    sort_order = 9,
+                    metadata = '{"key":"ops","sectionKey":"ops","titleKey":"sys.nav.portal.opsCenter","title":"运维与监控","icon":"solar:settings-bold-duotone"}',
+                    icon = 'solar:settings-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = ops_id;
+
+                UPDATE portal_menu
+                SET parent_id = data_foundation_id,
+                    path = 'data-foundation/subjects',
+                    sort_order = 1,
+                    metadata = '{"key":"subjects","sectionKey":"data-foundation","entryKey":"subjects","titleKey":"sys.nav.portal.governanceSubjects","title":"主题域管理","icon":"solar:map-point-bold-duotone","externalLink":"/governance/subjects"}',
+                    icon = 'solar:map-point-bold-duotone',
+                    component = 'governance/subjects',
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceSubjects' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceSubjects"%');
+
+                UPDATE portal_menu
+                SET parent_id = data_foundation_id,
+                    path = 'data-foundation/standards',
+                    sort_order = 2,
+                    metadata = '{"key":"standards","sectionKey":"data-foundation","entryKey":"standards","titleKey":"sys.nav.portal.governanceStandards","title":"标准管理","icon":"solar:document-text-bold-duotone"}',
+                    icon = 'solar:document-text-bold-duotone',
+                    component = NULL,
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceStandards' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceStandards"%')
+                RETURNING id INTO standards_id;
+
+                IF standards_id IS NULL THEN
+                    SELECT id INTO standards_id
+                    FROM portal_menu
+                    WHERE deleted = FALSE
+                      AND path = 'data-foundation/standards'
+                    ORDER BY id
+                    LIMIT 1;
+                END IF;
+
+                UPDATE portal_menu
+                SET parent_id = standards_id,
+                    path = 'data-foundation/standards/glossary',
+                    sort_order = 1,
+                    metadata = '{"key":"glossary","sectionKey":"data-foundation","entryKey":"glossary","titleKey":"sys.nav.portal.governanceGlossary","title":"业务术语","icon":"solar:book-bold-duotone","externalLink":"/governance/standards/glossary"}',
+                    icon = 'solar:book-bold-duotone',
+                    component = 'governance/standards/glossary',
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceGlossary' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceGlossary"%');
+
+                UPDATE portal_menu
+                SET parent_id = standards_id,
+                    path = 'data-foundation/standards/elements',
+                    sort_order = 2,
+                    metadata = '{"key":"elements","sectionKey":"data-foundation","entryKey":"elements","titleKey":"sys.nav.portal.governanceElements","title":"数据元","icon":"solar:document-bold-duotone","externalLink":"/governance/standards/elements"}',
+                    icon = 'solar:document-bold-duotone',
+                    component = 'governance/standards/elements',
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceElements' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceElements"%');
+
+                UPDATE portal_menu
+                SET parent_id = standards_id,
+                    path = 'data-foundation/standards/reference',
+                    sort_order = 3,
+                    metadata = '{"key":"reference","sectionKey":"data-foundation","entryKey":"reference","titleKey":"sys.nav.portal.governanceReference","title":"公共码表","icon":"solar:database-bold-duotone","externalLink":"/governance/standards/reference"}',
+                    icon = 'solar:database-bold-duotone',
+                    component = 'governance/standards/reference',
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceReference' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceReference"%');
+
+                UPDATE portal_menu
+                SET parent_id = data_foundation_id,
+                    path = 'data-foundation/templates',
+                    sort_order = 3,
+                    metadata = '{"key":"templates","sectionKey":"data-foundation","entryKey":"templates","titleKey":"sys.nav.portal.governanceTemplates","title":"标准模板","icon":"solar:folder-with-files-bold-duotone","externalLink":"/governance/templates"}',
+                    icon = 'solar:folder-with-files-bold-duotone',
+                    component = 'governance/templates',
+                    deleted = FALSE,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.governanceTemplates' OR metadata LIKE '%"titleKey":"sys.nav.portal.governanceTemplates"%');
+
+                UPDATE portal_menu
+                SET parent_id = metric_modeling_id,
+                    path = 'metric-modeling/metric-workbench',
+                    sort_order = 1,
+                    metadata = '{"key":"metric-workbench","sectionKey":"metric-modeling","entryKey":"metric-workbench","titleKey":"sys.nav.portal.studioMetricWorkbench","title":"指标工作台","icon":"solar:layers-minimalistic-bold-duotone","externalLink":"/modeling/metric-workbench"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioMetricWorkbench' OR metadata LIKE '%"titleKey":"sys.nav.portal.studioMetricWorkbench"%');
+
+                UPDATE portal_menu
+                SET parent_id = metric_modeling_id,
+                    path = 'metric-modeling/objects',
+                    sort_order = 2,
+                    metadata = '{"key":"semantic-objects","sectionKey":"metric-modeling","entryKey":"semantic-objects","titleKey":"sys.nav.portal.studioSemanticObjects","title":"业务对象","icon":"solar:box-bold-duotone","externalLink":"/modeling/semantic/objects"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioSemanticObjects' OR metadata LIKE '%"titleKey":"sys.nav.portal.studioSemanticObjects"%');
+
+                UPDATE portal_menu
+                SET parent_id = metric_modeling_id,
+                    path = 'metric-modeling/metrics',
+                    sort_order = 3,
+                    metadata = '{"key":"semantic-metrics","sectionKey":"metric-modeling","entryKey":"semantic-metrics","titleKey":"sys.nav.portal.studioSemanticMetrics","title":"指标管理","icon":"solar:chart-bold-duotone","externalLink":"/modeling/semantic/metrics"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioSemanticMetrics' OR metadata LIKE '%"titleKey":"sys.nav.portal.studioSemanticMetrics"%');
+
+                UPDATE portal_menu
+                SET parent_id = metric_modeling_id,
+                    path = 'metric-modeling/models',
+                    sort_order = 4,
+                    metadata = '{"key":"semantic-models","sectionKey":"metric-modeling","entryKey":"semantic-models","titleKey":"sys.nav.portal.studioSemanticModels","title":"模型管理","icon":"solar:database-bold-duotone","externalLink":"/modeling/semantic/models"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioSemanticModels' OR metadata LIKE '%"titleKey":"sys.nav.portal.studioSemanticModels"%');
+
+                UPDATE portal_menu
+                SET parent_id = metric_modeling_id,
+                    path = 'metric-modeling/publish',
+                    sort_order = 5,
+                    metadata = '{"key":"semantic-publish","sectionKey":"metric-modeling","entryKey":"semantic-publish","titleKey":"sys.nav.portal.studioSemanticPublish","title":"发布审核","icon":"solar:rocket-bold-duotone","externalLink":"/modeling/semantic/publish"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioSemanticPublish' OR metadata LIKE '%"titleKey":"sys.nav.portal.studioSemanticPublish"%');
+
+                UPDATE portal_menu
+                SET parent_id = consumption_id,
+                    path = 'consumption/services',
+                    sort_order = 1,
+                    metadata = '{"key":"services","sectionKey":"consumption","entryKey":"services","titleKey":"sys.nav.portal.serviceCenter","title":"数据服务中心","icon":"solar:settings-minimalistic-bold-duotone"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = services_id;
+
+                UPDATE portal_menu
+                SET path = CASE name
+                        WHEN 'sys.nav.portal.serviceApi' THEN 'consumption/services/api'
+                        WHEN 'sys.nav.portal.serviceOutbound' THEN 'consumption/services/outbound'
+                        WHEN 'sys.nav.portal.serviceExchange' THEN 'consumption/services/exchange'
+                        ELSE path
+                    END,
+                    sort_order = CASE name
+                        WHEN 'sys.nav.portal.serviceApi' THEN 1
+                        WHEN 'sys.nav.portal.serviceOutbound' THEN 2
+                        WHEN 'sys.nav.portal.serviceExchange' THEN 3
+                        ELSE sort_order
+                    END,
+                    metadata = CASE name
+                        WHEN 'sys.nav.portal.serviceApi' THEN '{"key":"api","sectionKey":"consumption","entryKey":"api","titleKey":"sys.nav.portal.serviceApi","title":"数据 API 管理","icon":"solar:share-bold-duotone","externalLink":"/services/apis"}'
+                        WHEN 'sys.nav.portal.serviceOutbound' THEN '{"key":"outbound","sectionKey":"consumption","entryKey":"outbound","titleKey":"sys.nav.portal.serviceOutbound","title":"数据推送","icon":"solar:forward-bold-duotone","externalLink":"/services/products"}'
+                        WHEN 'sys.nav.portal.serviceExchange' THEN '{"key":"exchange","sectionKey":"consumption","entryKey":"exchange","titleKey":"sys.nav.portal.serviceExchange","title":"共享交换","icon":"solar:folder-open-bold-duotone","externalLink":"/services/tokens"}'
+                        ELSE metadata
+                    END,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND parent_id = services_id
+                  AND name IN ('sys.nav.portal.serviceApi', 'sys.nav.portal.serviceOutbound', 'sys.nav.portal.serviceExchange');
+
+                UPDATE portal_menu
+                SET parent_id = consumption_id,
+                    path = 'consumption/bi-apps',
+                    sort_order = 2,
+                    metadata = '{"key":"bi-apps","sectionKey":"consumption","entryKey":"bi-apps","titleKey":"sys.nav.portal.businessIntelligenceApps","title":"商业智能应用","icon":"solar:chart-2-bold-duotone"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = bi_apps_id;
+
+                SELECT id INTO bi_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND parent_id = bi_apps_id
+                  AND (name = 'sys.nav.portal.bi' OR metadata LIKE '%"key":"bi"%')
+                ORDER BY id
+                LIMIT 1;
+
+                UPDATE portal_menu
+                SET parent_id = bi_apps_id,
+                    path = 'consumption/bi-apps/bi',
+                    sort_order = 1,
+                    metadata = '{"key":"bi","sectionKey":"consumption","entryKey":"bi","titleKey":"sys.nav.portal.bi","title":"BI 分析","icon":"solar:widget-3-bold-duotone"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = bi_id;
+
+                UPDATE portal_menu
+                SET path = CASE name
+                        WHEN 'sys.nav.portal.biDashboards' THEN 'consumption/bi-apps/bi/dashboards'
+                        WHEN 'sys.nav.portal.biQuestions' THEN 'consumption/bi-apps/bi/questions'
+                        WHEN 'sys.nav.portal.biData' THEN 'consumption/bi-apps/bi/data'
+                        ELSE path
+                    END,
+                    sort_order = CASE name
+                        WHEN 'sys.nav.portal.biDashboards' THEN 1
+                        WHEN 'sys.nav.portal.biQuestions' THEN 2
+                        WHEN 'sys.nav.portal.biData' THEN 3
+                        ELSE sort_order
+                    END,
+                    metadata = CASE name
+                        WHEN 'sys.nav.portal.biDashboards' THEN '{"key":"dashboards","sectionKey":"consumption","entryKey":"dashboards","titleKey":"sys.nav.portal.biDashboards","title":"分析看板","icon":"solar:widget-3-bold-duotone","externalLink":"/bi/dashboards"}'
+                        WHEN 'sys.nav.portal.biQuestions' THEN '{"key":"questions","sectionKey":"consumption","entryKey":"questions","titleKey":"sys.nav.portal.biQuestions","title":"分析卡片","icon":"solar:clipboard-list-bold-duotone","externalLink":"/bi/questions"}'
+                        WHEN 'sys.nav.portal.biData' THEN '{"key":"data","sectionKey":"consumption","entryKey":"data","titleKey":"sys.nav.portal.biData","title":"BI 数据集","icon":"solar:database-bold-duotone","externalLink":"/bi/data"}'
+                        ELSE metadata
+                    END,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND parent_id = bi_id
+                  AND name IN ('sys.nav.portal.biDashboards', 'sys.nav.portal.biQuestions', 'sys.nav.portal.biData');
+
+                UPDATE portal_menu
+                SET parent_id = consumption_id,
+                    path = 'consumption/screens',
+                    sort_order = 3,
+                    metadata = '{"key":"screens","sectionKey":"consumption","entryKey":"screens","titleKey":"sys.nav.portal.biScreens","title":"数据大屏","icon":"solar:monitor-bold-duotone","externalLink":"/bi/screens"}',
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE id = screens_id;
+
+                UPDATE portal_menu
+                SET path = CASE name
+                        WHEN 'sys.nav.portal.governanceQualityRules' THEN 'governance/quality-rules'
+                        WHEN 'sys.nav.portal.governanceQualityReport' THEN 'governance/quality-report'
+                        WHEN 'sys.nav.portal.governanceClassification' THEN 'governance/classification'
+                        ELSE path
+                    END,
+                    sort_order = CASE name
+                        WHEN 'sys.nav.portal.governanceQualityRules' THEN 1
+                        WHEN 'sys.nav.portal.governanceQualityReport' THEN 2
+                        WHEN 'sys.nav.portal.governanceClassification' THEN 3
+                        ELSE sort_order
+                    END,
+                    metadata = CASE name
+                        WHEN 'sys.nav.portal.governanceQualityRules' THEN '{"key":"qualityRules","sectionKey":"governance","entryKey":"qualityRules","titleKey":"sys.nav.portal.governanceQualityRules","title":"质量管控","icon":"solar:checklist-bold-duotone","externalLink":"/governance/rules"}'
+                        WHEN 'sys.nav.portal.governanceQualityReport' THEN '{"key":"qualityReport","sectionKey":"governance","entryKey":"qualityReport","titleKey":"sys.nav.portal.governanceQualityReport","title":"质量报告","icon":"solar:chart-bold-duotone","externalLink":"/governance/quality"}'
+                        WHEN 'sys.nav.portal.governanceClassification' THEN '{"key":"classification","sectionKey":"governance","entryKey":"classification","titleKey":"sys.nav.portal.governanceClassification","title":"分级分类","icon":"solar:tag-bold-duotone","externalLink":"/security/data-security"}'
+                        ELSE metadata
+                    END,
+                    last_modified_by = 'system',
+                    last_modified_date = now()
+                WHERE deleted = FALSE
+                  AND parent_id = governance_id
+                  AND name IN ('sys.nav.portal.governanceQualityRules', 'sys.nav.portal.governanceQualityReport', 'sys.nav.portal.governanceClassification');
+            END;
+            $do$;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

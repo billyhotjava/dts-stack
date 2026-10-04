@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260725-01-catalog-tag-audit-catalog" author="codex">
+        <validCheckSum>9:5d5429c0a674ff45f1f5ffaec6c941aa</validCheckSum>
+        <validCheckSum>9:46a88431aa8961adb50e8d18510a9a5b</validCheckSum>
+        <comment>登记数据标签资源、模块、业务动作与 HTTP 审计映射，避免标签操作落入未分类</comment>
+        <sql splitStatements="false" stripComments="false"><![CDATA[
+            DO $catalog_tag_audit_guard$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                      FROM audit_resource_dictionary
+                     WHERE resource_key = 'catalog_tag'
+                ) THEN
+                    RAISE EXCEPTION 'catalog_tag audit resource already exists; refusing to overwrite pre-existing data';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM audit_module_catalog
+                     WHERE source_system = 'platform'
+                       AND module_key = 'catalog.tags'
+                ) THEN
+                    RAISE EXCEPTION 'catalog.tags audit module already exists; refusing to overwrite pre-existing data';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM audit_action_catalog
+                     WHERE source_system = 'platform'
+                       AND action_code IN (
+                           'CATALOG_TAG_CATEGORY_CREATE',
+                           'CATALOG_TAG_CATEGORY_UPDATE',
+                           'CATALOG_TAG_CATEGORY_DELETE',
+                           'CATALOG_TAG_CREATE',
+                           'CATALOG_TAG_UPDATE',
+                           'CATALOG_TAG_DELETE',
+                           'CATALOG_ASSET_TAG_CREATE',
+                           'CATALOG_ASSET_TAG_DELETE',
+                           'CATALOG_ASSET_TAG_BATCH_CREATE',
+                           'CATALOG_TAG_BUILTIN_INSTALL',
+                           'CATALOG_TAG_MIGRATION_DRY_RUN',
+                           'CATALOG_TAG_MIGRATION_EXECUTE',
+                           'CATALOG_TAG_MIGRATION_ROLLBACK'
+                       )
+                ) THEN
+                    RAISE EXCEPTION 'Sprint-71 catalog tag audit action already exists; refusing to overwrite pre-existing data';
+                END IF;
+
+                IF EXISTS (
+                    SELECT 1
+                      FROM audit_operation_mapping target
+                      JOIN (
+                          VALUES
+                              ('/api/catalog/tag-categories', 'POST'),
+                              ('/api/catalog/tag-categories/{id}', 'PUT'),
+                              ('/api/catalog/tag-categories/{id}', 'DELETE'),
+                              ('/api/catalog/tags', 'POST'),
+                              ('/api/catalog/tags/{id}', 'PUT'),
+                              ('/api/catalog/tags/{id}', 'DELETE'),
+                              ('/api/catalog/asset-tags', 'POST'),
+                              ('/api/catalog/asset-tags', 'DELETE'),
+                              ('/api/catalog/asset-tags/batch', 'POST'),
+                              ('/api/catalog/tags/builtin/install', 'POST'),
+                              ('/api/catalog/tag-migrations/dry-run', 'POST'),
+                              ('/api/catalog/tag-migrations/{batchId}/execute', 'POST'),
+                              ('/api/catalog/tag-migrations/{batchId}/rollback', 'POST')
+                      ) desired(url_pattern, http_method)
+                        ON target.url_pattern = desired.url_pattern
+                       AND target.http_method = desired.http_method
+                ) THEN
+                    RAISE EXCEPTION 'Sprint-71 catalog tag audit route already exists; refusing to overwrite pre-existing data';
+                END IF;
+            END
+            $catalog_tag_audit_guard$;
+        ]]></sql>
+        <sql splitStatements="true" stripComments="false"><![CDATA[
+            INSERT INTO audit_resource_dictionary (
+                resource_key, display_name, category, aliases, order_value, enabled, updated_at
+            )
+            VALUES (
+                'catalog_tag',
+                '数据标签',
+                '数据标签',
+                'catalog_tag,catalog_tag_category,catalog_asset_tag,catalog.tags,catalog.tag,catalog.tag-categories,catalog.asset-tags',
+                42,
+                TRUE,
+                CURRENT_TIMESTAMP
+            );
+
+            INSERT INTO audit_module_catalog (
+                source_system, module_key, module_name, parent_module_key, owner,
+                enabled, order_value, version, updated_at
+            )
+            VALUES (
+                'platform', 'catalog.tags', '数据标签', 'catalog', 'platform',
+                TRUE, 15, 'sprint-71', CURRENT_TIMESTAMP
+            );
+
+            WITH desired (
+                action_code, operation_name, operation_kind, resource_type
+            ) AS (
+                VALUES
+                    ('CATALOG_TAG_CATEGORY_CREATE', '创建标签分类', 'CREATE', 'catalog_tag_category'),
+                    ('CATALOG_TAG_CATEGORY_UPDATE', '修改标签分类', 'UPDATE', 'catalog_tag_category'),
+                    ('CATALOG_TAG_CATEGORY_DELETE', '删除标签分类', 'DELETE', 'catalog_tag_category'),
+                    ('CATALOG_TAG_CREATE', '创建数据标签', 'CREATE', 'catalog_tag'),
+                    ('CATALOG_TAG_UPDATE', '修改数据标签', 'UPDATE', 'catalog_tag'),
+                    ('CATALOG_TAG_DELETE', '删除数据标签', 'DELETE', 'catalog_tag'),
+                    ('CATALOG_ASSET_TAG_CREATE', '为资产添加标签', 'CREATE', 'catalog_asset_tag'),
+                    ('CATALOG_ASSET_TAG_DELETE', '移除资产标签', 'DELETE', 'catalog_asset_tag'),
+                    ('CATALOG_ASSET_TAG_BATCH_CREATE', '批量为资产添加标签', 'CREATE', 'catalog_asset_tag'),
+                    ('CATALOG_TAG_BUILTIN_INSTALL', '安装内置标签包', 'CREATE', 'catalog_tag'),
+                    ('CATALOG_TAG_MIGRATION_DRY_RUN', '预检存量标签迁移', 'READ', 'catalog_asset_tag'),
+                    ('CATALOG_TAG_MIGRATION_EXECUTE', '执行存量标签迁移', 'CREATE', 'catalog_asset_tag'),
+                    ('CATALOG_TAG_MIGRATION_ROLLBACK', '回滚存量标签迁移', 'DELETE', 'catalog_asset_tag')
+            )
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            )
+            SELECT
+                'platform',
+                desired.action_code,
+                'catalog.tags',
+                '数据标签',
+                desired.action_code,
+                desired.operation_name,
+                desired.operation_kind,
+                desired.resource_type,
+                FALSE,
+                TRUE,
+                'sprint-71',
+                CURRENT_TIMESTAMP
+              FROM desired;
+
+            WITH desired (
+                url_pattern, http_method, operation_type, description_template,
+                param_extractors, order_value
+            ) AS (
+                VALUES
+                    ('/api/catalog/tag-categories', 'POST', 'CREATE', '创建标签分类', '{}'::text, 25),
+                    ('/api/catalog/tag-categories/{id}', 'PUT', 'UPDATE', '修改标签分类（ID：{id|未知}）', '{"id":"path.id"}'::text, 29),
+                    ('/api/catalog/tag-categories/{id}', 'DELETE', 'DELETE', '删除标签分类（ID：{id|未知}）', '{"id":"path.id"}'::text, 29),
+                    ('/api/catalog/tags', 'POST', 'CREATE', '创建数据标签', '{}'::text, 25),
+                    ('/api/catalog/tags/{id}', 'PUT', 'UPDATE', '修改数据标签（ID：{id|未知}）', '{"id":"path.id"}'::text, 29),
+                    ('/api/catalog/tags/{id}', 'DELETE', 'DELETE', '删除数据标签（ID：{id|未知}）', '{"id":"path.id"}'::text, 29),
+                    ('/api/catalog/asset-tags', 'POST', 'CREATE', '为资产添加标签', '{"assetType":"details.assetType","assetKey":"details.assetKey"}'::text, 25),
+                    ('/api/catalog/asset-tags', 'DELETE', 'DELETE', '移除资产标签', '{"assetType":"details.assetType","assetKey":"details.assetKey"}'::text, 25),
+                    ('/api/catalog/asset-tags/batch', 'POST', 'CREATE', '批量为资产添加标签（资产数：{assetCount|未知}）', '{"assetCount":"details.assetCount"}'::text, 20),
+                    ('/api/catalog/tags/builtin/install', 'POST', 'CREATE', '安装内置标签包', '{}'::text, 20),
+                    ('/api/catalog/tag-migrations/dry-run', 'POST', 'READ', '预检存量标签迁移', '{}'::text, 20),
+                    ('/api/catalog/tag-migrations/{batchId}/execute', 'POST', 'CREATE', '执行存量标签迁移（批次：{batchId|未知}）', '{"batchId":"path.batchId"}'::text, 24),
+                    ('/api/catalog/tag-migrations/{batchId}/rollback', 'POST', 'DELETE', '回滚存量标签迁移（批次：{batchId|未知}）', '{"batchId":"path.batchId"}'::text, 24)
+            )
+            INSERT INTO audit_operation_mapping (
+                url_pattern, http_method, module_name, operation_type,
+                description_template, source_table_template, param_extractors,
+                event_class, order_value, enabled, source_system
+            )
+            SELECT
+                desired.url_pattern,
+                desired.http_method,
+                '数据标签',
+                desired.operation_type,
+                desired.description_template,
+                '数据标签',
+                desired.param_extractors,
+                'AuditEvent',
+                desired.order_value,
+                TRUE,
+                'platform'
+              FROM desired;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" stripComments="false"><![CDATA[
+                DELETE FROM audit_operation_mapping
+                 WHERE (url_pattern, http_method) IN (
+                     ('/api/catalog/tag-categories', 'POST'),
+                     ('/api/catalog/tag-categories/{id}', 'PUT'),
+                     ('/api/catalog/tag-categories/{id}', 'DELETE'),
+                     ('/api/catalog/tags', 'POST'),
+                     ('/api/catalog/tags/{id}', 'PUT'),
+                     ('/api/catalog/tags/{id}', 'DELETE'),
+                     ('/api/catalog/asset-tags', 'POST'),
+                     ('/api/catalog/asset-tags', 'DELETE'),
+                     ('/api/catalog/asset-tags/batch', 'POST'),
+                     ('/api/catalog/tags/builtin/install', 'POST'),
+                     ('/api/catalog/tag-migrations/dry-run', 'POST'),
+                     ('/api/catalog/tag-migrations/{batchId}/execute', 'POST'),
+                     ('/api/catalog/tag-migrations/{batchId}/rollback', 'POST')
+                 );
+
+                DELETE FROM audit_action_catalog
+                 WHERE source_system = 'platform'
+                   AND action_code IN (
+                       'CATALOG_TAG_CATEGORY_CREATE',
+                       'CATALOG_TAG_CATEGORY_UPDATE',
+                       'CATALOG_TAG_CATEGORY_DELETE',
+                       'CATALOG_TAG_CREATE',
+                       'CATALOG_TAG_UPDATE',
+                       'CATALOG_TAG_DELETE',
+                       'CATALOG_ASSET_TAG_CREATE',
+                       'CATALOG_ASSET_TAG_DELETE',
+                       'CATALOG_ASSET_TAG_BATCH_CREATE',
+                       'CATALOG_TAG_BUILTIN_INSTALL',
+                       'CATALOG_TAG_MIGRATION_DRY_RUN',
+                       'CATALOG_TAG_MIGRATION_EXECUTE',
+                       'CATALOG_TAG_MIGRATION_ROLLBACK'
+                   );
+
+                DELETE FROM audit_module_catalog
+                 WHERE source_system = 'platform'
+                   AND module_key = 'catalog.tags';
+
+                DELETE FROM audit_resource_dictionary
+                 WHERE resource_key = 'catalog_tag';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

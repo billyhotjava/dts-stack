@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260316-01-user-search-perf" author="system">
+        <comment>Add functional indexes to improve user management search performance</comment>
+
+        <sql>CREATE INDEX IF NOT EXISTS idx_admin_kc_user_username_lower ON admin_keycloak_user (lower(username))</sql>
+        <sql>CREATE INDEX IF NOT EXISTS idx_person_profile_account_lower ON person_profile (lower(account))</sql>
+        <sql>CREATE INDEX IF NOT EXISTS idx_person_profile_person_code_lower ON person_profile (lower(person_code))</sql>
+        <sql>CREATE INDEX IF NOT EXISTS idx_person_profile_external_id_lower ON person_profile (lower(external_id))</sql>
+        <sql>CREATE INDEX IF NOT EXISTS idx_admin_role_member_username_lower ON admin_role_member (lower(username))</sql>
+    </changeSet>
+
+</databaseChangeLog>

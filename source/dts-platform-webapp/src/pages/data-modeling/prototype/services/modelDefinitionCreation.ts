@@ -1,0 +1,69 @@
+import api from "@/api/apiClient";
+import { saveModelDraftOperation } from "@/api/modelSpecApi";
+import type { CanonicalModelSpecView } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { toModelSpecEtag, validateModelSpecUpdate } from "@/features/modeling/contracts/modelSpecV2Contract";
+import { createCommandForDraft } from "./modelDraftCreateCommand";
+import {
+	type ModelDraftSaveResult,
+	type ModelSaveContext,
+	type ModelSpecDraft,
+	modelDraftToUpdateCommand,
+	prepareModelDraftForSave,
+	validateModelDraftInput,
+} from "./modelWorkbenchService";
+
+export function validateModelDefinitionInput(draft: ModelSpecDraft) {
+	const errors = validateModelDraftInput({
+		...draft,
+		implementationInputMode: "",
+		loadStrategy: "FULL",
+		materialization: "table",
+	});
+	delete errors.implementationInputMode;
+	delete errors.physicalName;
+	delete errors.partitionFields;
+	delete errors.transformations;
+	if (!draft.name.trim()) errors.name = "请填写模型名称";
+	return errors;
+}
+
+export async function saveModelDefinitionDraft(
+	draft: ModelSpecDraft,
+	context: ModelSaveContext,
+): Promise<ModelDraftSaveResult> {
+	if (draft.base) throw new Error("首次保存设计仅适用于新建模型");
+	const prepared = prepareModelDraftForSave(draft, context.dimensionDefinitions);
+	const errors = Object.values(validateModelDefinitionInput(prepared));
+	if (errors.length) throw new Error(errors.join("；"));
+	const writable = prepared;
+	const modelSpec = modelDraftToUpdateCommand(writable);
+	const issues = validateModelSpecUpdate(modelSpec).filter(
+		(issue) => issue.code !== "MODEL_SPEC_UPSTREAM_REQUIRED" && !(issue.code === "MODEL_SPEC_PLAN_REQUIRED" && !prepared.planId),
+	);
+	if (issues.length)
+		throw new Error(issues.map((issue) => `${issue.field}：${issue.message || issue.code}`).join("；"));
+	const saved = await saveModelDraftOperation({
+		create: createCommandForDraft(writable, modelSpec, context),
+		modelSpec,
+		implementation: null,
+		saveMode: "DEFINITION_ONLY",
+	});
+	return { model: saved.model, implementation: saved.implementation };
+}
+
+export async function saveExistingModelDefinition(
+	draft: ModelSpecDraft,
+	context: ModelSaveContext,
+): Promise<ModelDraftSaveResult> {
+	if (!draft.base || draft.base.compatibilityMode !== "CANONICAL") throw new Error("请先打开可编辑的模型草稿");
+	const prepared = prepareModelDraftForSave(draft, context.dimensionDefinitions);
+	const errors = Object.values(validateModelDefinitionInput(prepared));
+	if (errors.length) throw new Error(errors.join("；"));
+	const model = await api.put<CanonicalModelSpecView>({
+		url: `/modeling/model-specs/${encodeURIComponent(draft.base.id)}/definition`,
+		headers: { "If-Match": toModelSpecEtag(draft.base) },
+		data: modelDraftToUpdateCommand(prepared),
+		_skipErrorToast: true,
+	} as any);
+	return { model, implementation: draft.implementationBase };
+}

@@ -1,0 +1,181 @@
+{
+  "categories": [
+    {
+      "code": "BUSINESS-DOMAIN",
+      "name": "业务域",
+      "parentCode": null,
+      "sortOrder": 10,
+      "description": "按业务职责范围标识数据资产"
+    },
+    {
+      "code": "DATA-QUALITY",
+      "name": "数据质量",
+      "parentCode": null,
+      "sortOrder": 20,
+      "description": "标识数据质量现状与核验状态"
+    },
+    {
+      "code": "UPDATE-FREQUENCY",
+      "name": "更新频率",
+      "parentCode": null,
+      "sortOrder": 30,
+      "description": "标识数据资产的常规更新周期"
+    },
+    {
+      "code": "USAGE-SCENARIO",
+      "name": "使用场景",
+      "parentCode": null,
+      "sortOrder": 40,
+      "description": "标识数据资产的主要消费场景"
+    },
+    {
+      "code": "MANAGEMENT-ATTRIBUTE",
+      "name": "管理属性",
+      "parentCode": null,
+      "sortOrder": 50,
+      "description": "标识资产在治理过程中的管理属性"
+    }
+  ],
+  "tags": [
+    {
+      "categoryCode": "BUSINESS-DOMAIN",
+      "code": "BUSINESS-FINANCE",
+      "name": "财务",
+      "color": "#1677FF",
+      "description": "财务核算与资金管理相关资产"
+    },
+    {
+      "categoryCode": "BUSINESS-DOMAIN",
+      "code": "BUSINESS-HR",
+      "name": "人力",
+      "color": "#722ED1",
+      "description": "组织与人力资源相关资产"
+    },
+    {
+      "categoryCode": "BUSINESS-DOMAIN",
+      "code": "BUSINESS-PROCUREMENT",
+      "name": "采购",
+      "color": "#13C2C2",
+      "description": "采购与供应商管理相关资产"
+    },
+    {
+      "categoryCode": "BUSINESS-DOMAIN",
+      "code": "BUSINESS-PRODUCTION",
+      "name": "生产",
+      "color": "#FA8C16",
+      "description": "生产制造与过程管理相关资产"
+    },
+    {
+      "categoryCode": "BUSINESS-DOMAIN",
+      "code": "BUSINESS-SALES",
+      "name": "销售",
+      "color": "#EB2F96",
+      "description": "销售与客户经营相关资产"
+    },
+    {
+      "categoryCode": "DATA-QUALITY",
+      "code": "QUALITY-TRUSTED",
+      "name": "高可信",
+      "color": "#52C41A",
+      "description": "已通过治理核验且可稳定使用"
+    },
+    {
+      "categoryCode": "DATA-QUALITY",
+      "code": "QUALITY-VERIFY",
+      "name": "待核验",
+      "color": "#FAAD14",
+      "description": "尚需业务或技术负责人核验"
+    },
+    {
+      "categoryCode": "DATA-QUALITY",
+      "code": "QUALITY-MISSING",
+      "name": "存在缺失",
+      "color": "#F5222D",
+      "description": "已发现字段或记录缺失问题"
+    },
+    {
+      "categoryCode": "UPDATE-FREQUENCY",
+      "code": "FREQUENCY-REALTIME",
+      "name": "实时",
+      "color": "#1677FF",
+      "description": "持续或近实时更新"
+    },
+    {
+      "categoryCode": "UPDATE-FREQUENCY",
+      "code": "FREQUENCY-DAILY",
+      "name": "日更",
+      "color": "#13C2C2",
+      "description": "每日更新"
+    },
+    {
+      "categoryCode": "UPDATE-FREQUENCY",
+      "code": "FREQUENCY-WEEKLY",
+      "name": "周更",
+      "color": "#722ED1",
+      "description": "每周更新"
+    },
+    {
+      "categoryCode": "UPDATE-FREQUENCY",
+      "code": "FREQUENCY-MONTHLY",
+      "name": "月更",
+      "color": "#FA8C16",
+      "description": "每月更新"
+    },
+    {
+      "categoryCode": "USAGE-SCENARIO",
+      "code": "USAGE-REPORTING",
+      "name": "报表分析",
+      "color": "#1677FF",
+      "description": "用于统计报表与经营分析"
+    },
+    {
+      "categoryCode": "USAGE-SCENARIO",
+      "code": "USAGE-EXTERNAL-SERVICE",
+      "name": "对外服务",
+      "color": "#13C2C2",
+      "description": "用于对外提供数据或接口服务"
+    },
+    {
+      "categoryCode": "USAGE-SCENARIO",
+      "code": "USAGE-INTERNAL-MANAGEMENT",
+      "name": "内部管理",
+      "color": "#722ED1",
+      "description": "用于组织内部运营与管理"
+    },
+    {
+      "categoryCode": "MANAGEMENT-ATTRIBUTE",
+      "code": "MANAGEMENT-CORE-ASSET",
+      "name": "核心资产",
+      "color": "#F5222D",
+      "description": "对核心业务过程具有关键价值"
+    },
+    {
+      "categoryCode": "MANAGEMENT-ATTRIBUTE",
+      "code": "MANAGEMENT-TEMPORARY",
+      "name": "临时数据",
+      "color": "#8C8C8C",
+      "description": "面向阶段性任务产生的临时资产"
+    },
+    {
+      "categoryCode": "MANAGEMENT-ATTRIBUTE",
+      "code": "MANAGEMENT-ARCHIVE-PENDING",
+      "name": "待归档",
+      "color": "#FAAD14",
+      "description": "已进入归档准备阶段"
+    },
+    {
+      "categoryCode": "MANAGEMENT-ATTRIBUTE",
+      "code": "MANAGEMENT-REFERENCE",
+      "name": "参考数据",
+      "color": "#52C41A",
+      "description": "用于统一解释或关联的参考资产"
+    },
+    {
+      "categoryCode": "MANAGEMENT-ATTRIBUTE",
+      "code": "MANAGEMENT-DEPRECATED",
+      "name": "待下线",
+      "color": "#BFBFBF",
+      "description": "已进入下线评估或替换阶段"
+    }
+  ]
+}

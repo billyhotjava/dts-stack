@@ -1,0 +1,1771 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-overview-v3",
+  "name": "项目综合看板",
+  "description": "一级看板：项目综合态势总览，进度为主轴 + 异常标红，核心维度：项目 + 科室。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    }
+  ],
+  "components": [
+    {
+      "id": "ov3-header-clock",
+      "type": "datetime",
+      "name": "ov3-header-clock",
+      "x": 1710,
+      "y": 24,
+      "width": 180,
+      "height": 22,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "format": "YYYY-MM-DD HH:mm:ss",
+        "fontSize": 12,
+        "color": "#e2ffff"
+      }
+    },
+    {
+      "id": "ov3-bg-overlay",
+      "type": "richtext",
+      "name": "ov3-bg-overlay",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -19,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;\">\n      <div style=\"position:absolute;inset:0;background-image:\n        linear-gradient(rgba(255,255,255,0.14) 1px, transparent 1px),\n        linear-gradient(90deg, rgba(255,255,255,0.14) 1px, transparent 1px);\n        background-size:28px 28px;opacity:0.55;\"></div>\n      <div style=\"position:absolute;inset:0;background:radial-gradient(circle at 50% 20%, rgba(255,255,255,0.12) 0%, transparent 60%);\"></div>\n    </div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-bg-base",
+      "type": "shape",
+      "name": "ov3-bg-base",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "zIndex": -20,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "#115AAD",
+        "borderColor": "#115AAD",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "ov3-header-bar",
+      "type": "shape",
+      "name": "ov3-header-bar",
+      "x": 10,
+      "y": 10,
+      "width": 1900,
+      "height": 62,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(17,68,138,0.82)",
+        "borderColor": "rgba(132,217,255,0.52)",
+        "borderWidth": 1,
+        "radius": 10
+      }
+    },
+    {
+      "id": "ov3-header-deco",
+      "type": "richtext",
+      "name": "ov3-header-deco",
+      "x": 10,
+      "y": 10,
+      "width": 1900,
+      "height": 62,
+      "zIndex": 55,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;overflow:hidden;pointer-events:none;\">\n<div style=\"position:absolute;left:0;right:0;top:0;bottom:0;background:linear-gradient(180deg, rgba(36,122,219,0.65) 0%, rgba(12,58,126,0.55) 40%, rgba(8,31,62,0.45) 100%);clip-path:polygon(0 0, 100% 0, calc(100% - 40px) 100%, 40px 100%);border-top:2px solid rgba(132,217,255,0.78);\"></div>\n<div style=\"position:absolute;left:8%;top:10%;width:180px;height:3px;background:linear-gradient(90deg, transparent, rgba(132,217,255,0.85), transparent);animation:hdr-shim 4s ease-in-out infinite;\"></div>\n<div style=\"position:absolute;right:8%;top:10%;width:180px;height:3px;background:linear-gradient(90deg, transparent, rgba(132,217,255,0.85), transparent);animation:hdr-shim 4s ease-in-out infinite reverse;\"></div>\n<div style=\"position:absolute;left:24px;top:50%;width:38px;height:10px;border-left:2px solid #7fd4ff;border-bottom:2px solid #7fd4ff;transform:translateY(8px);\"></div>\n<div style=\"position:absolute;right:24px;top:50%;width:38px;height:10px;border-right:2px solid #7fd4ff;border-bottom:2px solid #7fd4ff;transform:translateY(8px);\"></div>\n<div style=\"position:absolute;left:50%;top:0;transform:translateX(-50%);width:520px;height:62px;\">\n  <svg viewBox=\"0 0 520 62\" width=\"100%\" height=\"100%\" preserveAspectRatio=\"none\">\n    <polygon points=\"4,0 516,0 486,30 34,30\" fill=\"rgba(84,172,255,0.18)\" stroke=\"rgba(162,226,255,0.55)\" stroke-width=\"1\"/>\n    <polygon points=\"34,30 486,30 460,58 60,58\" fill=\"none\" stroke=\"rgba(132,217,255,0.45)\" stroke-width=\"1\"/>\n    <circle cx=\"260\" cy=\"4\" r=\"2\" fill=\"#bae8ff\"/>\n  </svg>\n</div>\n<style>@keyframes hdr-shim{0%,100%{opacity:0.35}50%{opacity:1}}</style>\n</div>",
+        "padding": 0,
+        "overflow": "hidden"
+      }
+    },
+    {
+      "id": "ov3-title",
+      "type": "title",
+      "name": "项目综合看板",
+      "x": 660,
+      "y": 18,
+      "width": 600,
+      "height": 40,
+      "zIndex": 70,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目综合看板",
+        "fontSize": 28,
+        "fontWeight": "800",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-overview-shape",
+      "type": "shape",
+      "name": "综合看板",
+      "x": 600,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.22)",
+        "borderColor": "rgba(255, 255, 255, 0.42)",
+        "borderWidth": 1,
+        "radius": 12
+      }
+    },
+    {
+      "id": "ov3-nav-overview-label",
+      "type": "title",
+      "name": "综合看板",
+      "x": 24,
+      "y": 28,
+      "width": 340,
+      "height": 18,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "Decision Twins · Project Command Center",
+        "fontSize": 11,
+        "fontWeight": "500",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-nav-progress-shape",
+      "type": "shape",
+      "name": "进度看板",
+      "x": 730,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      }
+    },
+    {
+      "id": "ov3-nav-progress-label",
+      "type": "title",
+      "name": "进度看板",
+      "x": 730,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "进度看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-quality-shape",
+      "type": "shape",
+      "name": "质量看板",
+      "x": 860,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      }
+    },
+    {
+      "id": "ov3-nav-quality-label",
+      "type": "title",
+      "name": "质量看板",
+      "x": 860,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "质量看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-techstate-shape",
+      "type": "shape",
+      "name": "技术状态",
+      "x": 990,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      }
+    },
+    {
+      "id": "ov3-nav-techstate-label",
+      "type": "title",
+      "name": "技术状态",
+      "x": 990,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "技术状态",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-nav-risk-shape",
+      "type": "shape",
+      "name": "风险看板",
+      "x": 1120,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 24,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.14)",
+        "borderColor": "rgba(255, 255, 255, 0.26)",
+        "borderWidth": 1,
+        "radius": 12
+      }
+    },
+    {
+      "id": "ov3-nav-risk-label",
+      "type": "title",
+      "name": "风险看板",
+      "x": 1120,
+      "y": 14,
+      "width": 120,
+      "height": 32,
+      "zIndex": 25,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "风险看板",
+        "fontSize": 16,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-kpi-project-total",
+      "type": "number-card",
+      "name": "项目总数",
+      "x": 122,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目总数",
+        "value": 8,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "项目总数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH progress AS (SELECT COUNT(DISTINCT s.project_no) AS project_total, COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS project_active, SUM(s.completed_total_cnt) AS completed_sum, SUM(s.due_cnt + s.outside_completed_cnt) AS due_sum FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')), quality AS (SELECT SUM(q.open_issue_cnt) AS open_quality_issues FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), tech AS (SELECT SUM(t.reform_pending_i_ii) AS pending_reform_cnt FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), risk AS (SELECT SUM(r.high_cnt) AS high_risk_cnt FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT p.project_total AS \"项目总数\", p.project_active AS \"进行中项目\", CASE WHEN p.due_sum = 0 THEN 0 ELSE ROUND(p.completed_sum::numeric / p.due_sum::numeric * 100, 1) END AS \"项目完成率\", COALESCE(q.open_quality_issues, 0) AS \"未闭环质量问题数\", COALESCE(t.pending_reform_cnt, 0) AS \"未整改落实技术更改单数\", COALESCE(r.high_risk_cnt, 0) AS \"高风险数量\" FROM progress p, quality q, tech t, risk r",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-kpi-completion-rate",
+      "type": "number-card",
+      "name": "项目完成率",
+      "x": 498,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "项目完成率",
+        "value": 67.5,
+        "suffix": "%",
+        "precision": 1,
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "项目完成率"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH progress AS (SELECT COUNT(DISTINCT s.project_no) AS project_total, COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS project_active, SUM(s.completed_total_cnt) AS completed_sum, SUM(s.due_cnt + s.outside_completed_cnt) AS due_sum FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')), quality AS (SELECT SUM(q.open_issue_cnt) AS open_quality_issues FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), tech AS (SELECT SUM(t.reform_pending_i_ii) AS pending_reform_cnt FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), risk AS (SELECT SUM(r.high_cnt) AS high_risk_cnt FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT p.project_total AS \"项目总数\", p.project_active AS \"进行中项目\", CASE WHEN p.due_sum = 0 THEN 0 ELSE ROUND(p.completed_sum::numeric / p.due_sum::numeric * 100, 1) END AS \"项目完成率\", COALESCE(q.open_quality_issues, 0) AS \"未闭环质量问题数\", COALESCE(t.pending_reform_cnt, 0) AS \"未整改落实技术更改单数\", COALESCE(r.high_risk_cnt, 0) AS \"高风险数量\" FROM progress p, quality q, tech t, risk r",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-kpi-quality-open",
+      "type": "number-card",
+      "name": "未闭环质量问题",
+      "x": 874,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未闭环质量问题",
+        "value": 5,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "未闭环质量问题数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH progress AS (SELECT COUNT(DISTINCT s.project_no) AS project_total, COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS project_active, SUM(s.completed_total_cnt) AS completed_sum, SUM(s.due_cnt + s.outside_completed_cnt) AS due_sum FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')), quality AS (SELECT SUM(q.open_issue_cnt) AS open_quality_issues FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), tech AS (SELECT SUM(t.reform_pending_i_ii) AS pending_reform_cnt FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), risk AS (SELECT SUM(r.high_cnt) AS high_risk_cnt FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT p.project_total AS \"项目总数\", p.project_active AS \"进行中项目\", CASE WHEN p.due_sum = 0 THEN 0 ELSE ROUND(p.completed_sum::numeric / p.due_sum::numeric * 100, 1) END AS \"项目完成率\", COALESCE(q.open_quality_issues, 0) AS \"未闭环质量问题数\", COALESCE(t.pending_reform_cnt, 0) AS \"未整改落实技术更改单数\", COALESCE(r.high_risk_cnt, 0) AS \"高风险数量\" FROM progress p, quality q, tech t, risk r",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-kpi-tech-reform",
+      "type": "number-card",
+      "name": "未整改技术更改单",
+      "x": 1250,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未整改技术更改单",
+        "value": 3,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "未整改落实技术更改单数"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH progress AS (SELECT COUNT(DISTINCT s.project_no) AS project_total, COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS project_active, SUM(s.completed_total_cnt) AS completed_sum, SUM(s.due_cnt + s.outside_completed_cnt) AS due_sum FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')), quality AS (SELECT SUM(q.open_issue_cnt) AS open_quality_issues FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), tech AS (SELECT SUM(t.reform_pending_i_ii) AS pending_reform_cnt FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), risk AS (SELECT SUM(r.high_cnt) AS high_risk_cnt FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT p.project_total AS \"项目总数\", p.project_active AS \"进行中项目\", CASE WHEN p.due_sum = 0 THEN 0 ELSE ROUND(p.completed_sum::numeric / p.due_sum::numeric * 100, 1) END AS \"项目完成率\", COALESCE(q.open_quality_issues, 0) AS \"未闭环质量问题数\", COALESCE(t.pending_reform_cnt, 0) AS \"未整改落实技术更改单数\", COALESCE(r.high_risk_cnt, 0) AS \"高风险数量\" FROM progress p, quality q, tech t, risk r",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-kpi-high-risk",
+      "type": "number-card",
+      "name": "高风险数量",
+      "x": 1626,
+      "y": 90,
+      "width": 264,
+      "height": 88,
+      "zIndex": 25,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险数量",
+        "value": 2,
+        "suffix": "",
+        "precision": 0,
+        "titleFontSize": 14,
+        "valueFontSize": 34,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "valueField": "高风险数量"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH progress AS (SELECT COUNT(DISTINCT s.project_no) AS project_total, COUNT(DISTINCT CASE WHEN s.incomplete_cnt > 0 THEN s.project_no END) AS project_active, SUM(s.completed_total_cnt) AS completed_sum, SUM(s.due_cnt + s.outside_completed_cnt) AS due_sum FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM')), quality AS (SELECT SUM(q.open_issue_cnt) AS open_quality_issues FROM biz_dws_quality_monthly_v2 q WHERE q.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND q.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), tech AS (SELECT SUM(t.reform_pending_i_ii) AS pending_reform_cnt FROM biz_dws_tech_state_monthly_v2 t WHERE t.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND t.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')), risk AS (SELECT SUM(r.high_cnt) AS high_risk_cnt FROM biz_dws_risk_monthly_v2 r WHERE r.period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND r.period_month <= to_char({{dateTo}}::date, 'YYYY-MM')) SELECT p.project_total AS \"项目总数\", p.project_active AS \"进行中项目\", CASE WHEN p.due_sum = 0 THEN 0 ELSE ROUND(p.completed_sum::numeric / p.due_sum::numeric * 100, 1) END AS \"项目完成率\", COALESCE(q.open_quality_issues, 0) AS \"未闭环质量问题数\", COALESCE(t.pending_reform_cnt, 0) AS \"未整改落实技术更改单数\", COALESCE(r.high_risk_cnt, 0) AS \"高风险数量\" FROM progress p, quality q, tech t, risk r",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 1,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-tab-panel",
+      "type": "shape",
+      "name": "ov3-tab-panel",
+      "x": 24,
+      "y": 188,
+      "width": 1872,
+      "height": 576,
+      "zIndex": 1,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-progress-by-project",
+      "type": "bar-chart",
+      "name": "项目节点统计",
+      "x": 22,
+      "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "已完成",
+            "data": []
+          },
+          {
+            "name": "未完成",
+            "data": []
+          },
+          {
+            "name": "正常待完成",
+            "data": []
+          }
+        ],
+        "seriesColors": [
+          "#2ee6a6",
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "horizontal": false,
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目\", SUM(s.on_time_cnt_v2) AS \"按时完成\", SUM(s.pending_normal_cnt_v2) AS \"正常待完成\", SUM(s.overdue_completed_effective_cnt) AS \"超期完成\", SUM(s.overdue_incomplete_effective_cnt) AS \"超期未完成\" FROM biz_dws_progress_monthly_v2 s WHERE s.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.project_no ORDER BY SUM(s.total_cnt) DESC LIMIT 10",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-progress-by-dept",
+      "type": "bar-chart",
+      "name": "科室项目节点统计",
+      "x": 22,
+      "y": 521,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "horizontal": false,
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "已完成",
+            "data": []
+          },
+          {
+            "name": "未完成",
+            "data": []
+          }
+        ],
+        "seriesColors": [
+          "#2ee6a6",
+          "#45a4ff",
+          "#ffc645",
+          "#ff5d73"
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(d.dept,'未填') AS \"科室\", SUM(CASE WHEN d.is_on_time THEN 1 ELSE 0 END) AS \"按时完成\", SUM(CASE WHEN d.is_pending_normal THEN 1 ELSE 0 END) AS \"正常待完成\", SUM(CASE WHEN d.is_overdue_completed_effective THEN 1 ELSE 0 END) AS \"超期完成\", SUM(CASE WHEN d.is_overdue_incomplete_effective THEN 1 ELSE 0 END) AS \"超期未完成\" FROM biz_dwd_project_node_v2 d WHERE d.plan_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY d.dept ORDER BY COUNT(*) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-quality-by-project",
+      "type": "combo-chart",
+      "name": "质量问题趋势",
+      "x": 500,
+      "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#ff5d73"
+        ],
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -30
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        }
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.period_month AS \"月份\", COALESCE(SUM(s.new_issue_cnt),0) AS \"当月新增\", COALESCE(SUM(s.open_issue_cnt),0) AS \"月末未闭环\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.period_month ORDER BY s.period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-quality-by-dept",
+      "type": "pie-chart",
+      "name": "质量问题占比",
+      "x": 500,
+      "y": 521,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
+        "legend": {
+          "show": true,
+          "position": "right",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#27d8ff",
+          "#ff8f45",
+          "#8fa7c4",
+          "#94a3b8"
+        ],
+        "categoryKey": "分类",
+        "valueKey": "数量",
+        "pieInnerRadius": 0,
+        "pieOuterRadius": 75
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT v.\"分类\", v.\"数量\" FROM (\nSELECT '设计' AS \"分类\", SUM(s.total_cat_design) AS \"数量\" FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '工艺',   SUM(s.total_cat_process)     FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '管理',   SUM(s.total_cat_management)  FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '元器件', SUM(s.total_cat_component)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '操作',   SUM(s.total_cat_operation)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '外协',   SUM(s.total_cat_outsource)   FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '软件',   SUM(s.total_cat_software)    FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '环境',   SUM(s.total_cat_environment) FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '其他',   SUM(s.total_cat_other)       FROM biz_dws_quality_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\n) v WHERE v.\"数量\" > 0",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-techstate-by-project",
+      "type": "line-chart",
+      "name": "技术变更趋势",
+      "x": 978,
+      "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": false
+        },
+        "seriesColors": [
+          "#27d8ff"
+        ],
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -30
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.period_month AS \"月份\", COALESCE(SUM(s.total_change_cnt),0) AS \"变更总数\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.period_month ORDER BY s.period_month",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-techstate-by-dept",
+      "type": "bar-chart",
+      "name": "科室技术变更",
+      "x": 978,
+      "y": 521,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "horizontal": false,
+        "series": [
+          {
+            "name": "未整改",
+            "data": []
+          }
+        ],
+        "seriesColors": [
+          "#ffc645",
+          "#ff5d73"
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "stackMode": "off",
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT COALESCE(s.dept,'未填') AS \"科室\", SUM(COALESCE(s.order_unsigned_cat_i,0)+COALESCE(s.order_unsigned_cat_ii,0)+COALESCE(s.order_unsigned_cat_iii,0)) AS \"未签署\", COALESCE(SUM(s.reform_pending_i_ii),0) AS \"未落实整改\" FROM biz_dws_tech_state_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') AND s.dept IS NOT NULL GROUP BY s.dept ORDER BY SUM(COALESCE(s.total_change_cnt,0)) DESC LIMIT 12",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-risk-by-project",
+      "type": "bar-chart",
+      "name": "项目风险统计",
+      "x": 1456,
+      "y": 228,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "stackMode": "stack",
+        "series": [
+          {
+            "name": "高风险",
+            "data": []
+          },
+          {
+            "name": "中风险",
+            "data": []
+          },
+          {
+            "name": "低风险",
+            "data": []
+          }
+        ],
+        "seriesColors": [
+          "#ff5d73",
+          "#ffc645",
+          "#45a4ff"
+        ],
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 40,
+        "chartPaddingLeft": 40,
+        "legend": {
+          "show": true,
+          "position": "bottom",
+          "fontSize": 12
+        },
+        "horizontal": false,
+        "xAxis": {
+          "show": true,
+          "labelFontSize": 11,
+          "labelRotate": -20
+        },
+        "yAxis": {
+          "show": true,
+          "labelFontSize": 11
+        },
+        "axisLabelColor": "#ffffff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT s.project_no AS \"项目\", SUM(s.high_cnt) AS \"高风险\", SUM(s.mid_cnt) AS \"中风险\", SUM(s.low_cnt) AS \"低风险\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM') GROUP BY s.project_no ORDER BY SUM(s.total_risk_cnt) DESC LIMIT 10",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-risk-by-dept",
+      "type": "pie-chart",
+      "name": "风险类型占比",
+      "x": 1456,
+      "y": 521,
+      "width": 444,
+      "height": 239,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "titleFontSize": 0,
+        "chartPaddingTop": 8,
+        "chartPaddingRight": 16,
+        "chartPaddingBottom": 16,
+        "chartPaddingLeft": 16,
+        "legend": {
+          "show": true,
+          "position": "right",
+          "fontSize": 12
+        },
+        "seriesColors": [
+          "#45a4ff",
+          "#2ee6a6",
+          "#ffc645",
+          "#ff5d73",
+          "#a978ff",
+          "#94a3b8"
+        ],
+        "categoryKey": "风险类型",
+        "valueKey": "数量",
+        "pieInnerRadius": 50,
+        "pieOuterRadius": 75
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT v.\"风险类型\", v.\"数量\" FROM (\nSELECT '技术' AS \"风险类型\", SUM(s.cat_technical_cnt) AS \"数量\" FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '进度', SUM(s.cat_schedule_cnt)  FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '成本', SUM(s.cat_cost_cnt)      FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '设计', SUM(s.cat_design_cnt)    FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '质量', SUM(s.cat_quality_cnt)   FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\nUNION ALL SELECT '其他', SUM(s.cat_other_cnt)     FROM biz_dws_risk_monthly_v2 s WHERE s.period_month >= to_char({{dateFrom}}::date,'YYYY-MM') AND s.period_month <= to_char({{dateTo}}::date,'YYYY-MM')\n) v WHERE v.\"数量\" > 0",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-gantt-panel",
+      "type": "shape",
+      "name": "ov3-gantt-panel",
+      "x": 10,
+      "y": 774,
+      "width": 1900,
+      "height": 296,
+      "zIndex": 1,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(255, 255, 255, 0.16)",
+        "borderColor": "rgba(255, 255, 255, 0.24)",
+        "borderWidth": 1,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-gantt-title",
+      "type": "title",
+      "name": "项目进度甘特图",
+      "x": 26,
+      "y": 784,
+      "width": 520,
+      "height": 28,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目进度详情",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-gantt-legend-plan",
+      "type": "title",
+      "name": "图例-计划",
+      "x": 1310,
+      "y": 786,
+      "width": 80,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "日",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-legend-normal",
+      "type": "title",
+      "name": "图例-正常",
+      "x": 1700,
+      "y": 786,
+      "width": 80,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "周",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-legend-delayed",
+      "type": "title",
+      "name": "图例-延期",
+      "x": 1790,
+      "y": 786,
+      "width": 90,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "月",
+        "fontSize": 11,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-gantt-chart",
+      "type": "gantt-chart",
+      "name": "项目进度甘特",
+      "x": 22,
+      "y": 820,
+      "width": 1876,
+      "height": 240,
+      "zIndex": 20,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "",
+        "renderMode": "board-hierarchical",
+        "drillMode": "modal",
+        "defaultZoom": "month",
+        "sideTextColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "titleColor": "#e6f6ff"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH active_projects AS (SELECT project_no FROM biz_dwd_project_node_v2 WHERE plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') GROUP BY project_no HAVING SUM(CASE WHEN is_incomplete THEN 1 ELSE 0 END) > 0) SELECT d.project_no AS \"重大项目\", COALESCE(d.subsystem, '(无子项目)') AS \"子项目\", d.node_task AS \"任务\", d.node_type AS \"类型\", to_char(d.plan_start_date, 'YYYY-MM-DD') AS \"计划开始日期\", to_char(d.plan_date, 'YYYY-MM-DD') AS \"计划完成日期\", to_char(COALESCE(d.actual_start_date, d.plan_start_date), 'YYYY-MM-DD') AS \"实际开始日期\", to_char(d.actual_date, 'YYYY-MM-DD') AS \"实际完成日期\", d.is_completed AS \"是否完成\", d.is_overdue_completed AS \"是否超期完成\", d.is_incomplete AS \"是否未完成\", COALESCE(d.delay_days, 0) AS \"延期天数\", d.risk_level AS \"风险等级\", d.completion_status AS \"完成情况\", d.dept AS \"责任科室\", d.owner AS \"责任人\", d.project_manager AS \"项目经理\" FROM biz_dwd_project_node_v2 d INNER JOIN active_projects ap ON ap.project_no = d.project_no WHERE d.plan_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND d.plan_month <= to_char({{dateTo}}::date, 'YYYY-MM') ORDER BY d.project_no, d.subsystem NULLS LAST, d.plan_date",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 5000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ov3-domain-header-0",
+      "type": "title",
+      "name": "进度计划",
+      "x": 32,
+      "y": 210,
+      "width": 454,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "项目节点统计",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-domain-header-1",
+      "type": "title",
+      "name": "质量问题",
+      "x": 498,
+      "y": 210,
+      "width": 454,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "质量问题趋势(近12个月)",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-domain-header-2",
+      "type": "title",
+      "name": "技术状态",
+      "x": 964,
+      "y": 210,
+      "width": 454,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "技术变更趋势(近12个月)",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-domain-header-3",
+      "type": "title",
+      "name": "项目风险",
+      "x": 1430,
+      "y": 210,
+      "width": 454,
+      "height": 24,
+      "zIndex": 20,
+      "locked": false,
+      "visible": false,
+      "config": {
+        "text": "项目风险统计",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "center"
+      }
+    },
+    {
+      "id": "ov3-panel-progress-project",
+      "type": "shape",
+      "name": "ov3-panel-progress-project",
+      "x": 10,
+      "y": 188,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-quality-project",
+      "type": "shape",
+      "name": "ov3-panel-quality-project",
+      "x": 488,
+      "y": 188,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-tech-project",
+      "type": "shape",
+      "name": "ov3-panel-tech-project",
+      "x": 966,
+      "y": 188,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-risk-project",
+      "type": "shape",
+      "name": "ov3-panel-risk-project",
+      "x": 1444,
+      "y": 188,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-progress-dept",
+      "type": "shape",
+      "name": "ov3-panel-progress-dept",
+      "x": 10,
+      "y": 481,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-quality-dept",
+      "type": "shape",
+      "name": "ov3-panel-quality-dept",
+      "x": 488,
+      "y": 481,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-tech-dept",
+      "type": "shape",
+      "name": "ov3-panel-tech-dept",
+      "x": 966,
+      "y": 481,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-risk-dept",
+      "type": "shape",
+      "name": "ov3-panel-risk-dept",
+      "x": 1444,
+      "y": 481,
+      "width": 468,
+      "height": 283,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(12, 38, 82, 0.18)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 16
+      }
+    },
+    {
+      "id": "ov3-panel-progress-project-title",
+      "type": "title",
+      "name": "ov3-panel-progress-project-title",
+      "x": 24,
+      "y": 198,
+      "width": 300,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目节点统计",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-quality-project-title",
+      "type": "title",
+      "name": "ov3-panel-quality-project-title",
+      "x": 502,
+      "y": 198,
+      "width": 300,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题趋势(近12个月)",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-tech-project-title",
+      "type": "title",
+      "name": "ov3-panel-tech-project-title",
+      "x": 980,
+      "y": 198,
+      "width": 300,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术变更趋势(近12个月)",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-risk-project-title",
+      "type": "title",
+      "name": "ov3-panel-risk-project-title",
+      "x": 1458,
+      "y": 198,
+      "width": 300,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "项目风险统计",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-progress-dept-title",
+      "type": "title",
+      "name": "ov3-panel-progress-dept-title",
+      "x": 24,
+      "y": 491,
+      "width": 160,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室项目节点统计",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-quality-dept-title",
+      "type": "title",
+      "name": "ov3-panel-quality-dept-title",
+      "x": 502,
+      "y": 491,
+      "width": 160,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "质量问题占比",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-tech-dept-title",
+      "type": "title",
+      "name": "ov3-panel-tech-dept-title",
+      "x": 980,
+      "y": 491,
+      "width": 160,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "科室技术变更",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-panel-risk-dept-title",
+      "type": "title",
+      "name": "ov3-panel-risk-dept-title",
+      "x": 1458,
+      "y": 491,
+      "width": 160,
+      "height": 22,
+      "zIndex": 21,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险类型占比",
+        "fontSize": 20,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-1",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-1",
+      "x": 32,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><svg viewBox=\"0 0 80 80\" width=\"100%\" height=\"100%\"><path d=\"M 74 40 A 34 34 0 0 1 40 74\" fill=\"none\" stroke=\"rgba(61,180,255,0.4)\" stroke-width=\"1.4\"/><circle cx=\"40\" cy=\"40\" r=\"30\" fill=\"rgba(9,30,62,0.55)\" stroke=\"rgba(49,181,255,0.85)\" stroke-width=\"2\"/><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"rgba(56,196,255,0.22)\" stroke-width=\"4\"/></svg><div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#33d6ff;font-size:28px;font-weight:800;text-shadow:0 0 10px rgba(56,196,255,0.65);\">◉</div></div>",
+        "padding": 0,
+        "overflow": "visible"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-2",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-2",
+      "x": 408,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><svg viewBox=\"0 0 80 80\" width=\"100%\" height=\"100%\"><path d=\"M 74 40 A 34 34 0 0 1 40 74\" fill=\"none\" stroke=\"rgba(61,180,255,0.4)\" stroke-width=\"1.4\"/><circle cx=\"40\" cy=\"40\" r=\"30\" fill=\"rgba(9,30,62,0.55)\" stroke=\"rgba(49,181,255,0.85)\" stroke-width=\"2\"/><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"rgba(56,196,255,0.22)\" stroke-width=\"4\"/></svg><div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#33d6ff;font-size:28px;font-weight:800;text-shadow:0 0 10px rgba(56,196,255,0.65);\">▣</div></div>",
+        "padding": 0,
+        "overflow": "visible"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-3",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-3",
+      "x": 784,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><svg viewBox=\"0 0 80 80\" width=\"100%\" height=\"100%\"><path d=\"M 74 40 A 34 34 0 0 1 40 74\" fill=\"none\" stroke=\"rgba(61,180,255,0.4)\" stroke-width=\"1.4\"/><circle cx=\"40\" cy=\"40\" r=\"30\" fill=\"rgba(9,30,62,0.55)\" stroke=\"rgba(49,181,255,0.85)\" stroke-width=\"2\"/><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"rgba(56,196,255,0.22)\" stroke-width=\"4\"/></svg><div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#33d6ff;font-size:28px;font-weight:800;text-shadow:0 0 10px rgba(56,196,255,0.65);\">⚙</div></div>",
+        "padding": 0,
+        "overflow": "visible"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-4",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-4",
+      "x": 1160,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><svg viewBox=\"0 0 80 80\" width=\"100%\" height=\"100%\"><path d=\"M 74 40 A 34 34 0 0 1 40 74\" fill=\"none\" stroke=\"rgba(61,180,255,0.4)\" stroke-width=\"1.4\"/><circle cx=\"40\" cy=\"40\" r=\"30\" fill=\"rgba(9,30,62,0.55)\" stroke=\"rgba(49,181,255,0.85)\" stroke-width=\"2\"/><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"rgba(56,196,255,0.22)\" stroke-width=\"4\"/></svg><div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#33d6ff;font-size:28px;font-weight:800;text-shadow:0 0 10px rgba(56,196,255,0.65);\">▤</div></div>",
+        "padding": 0,
+        "overflow": "visible"
+      }
+    },
+    {
+      "id": "ov3-kpi-ring-5",
+      "type": "richtext",
+      "name": "ov3-kpi-ring-5",
+      "x": 1536,
+      "y": 92,
+      "width": 78,
+      "height": 78,
+      "zIndex": 30,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "content": "<div style=\"width:100%;height:100%;position:relative;pointer-events:none;\"><svg viewBox=\"0 0 80 80\" width=\"100%\" height=\"100%\"><path d=\"M 74 40 A 34 34 0 0 1 40 74\" fill=\"none\" stroke=\"rgba(61,180,255,0.4)\" stroke-width=\"1.4\"/><circle cx=\"40\" cy=\"40\" r=\"30\" fill=\"rgba(9,30,62,0.55)\" stroke=\"rgba(49,181,255,0.85)\" stroke-width=\"2\"/><circle cx=\"40\" cy=\"40\" r=\"28\" fill=\"none\" stroke=\"rgba(56,196,255,0.22)\" stroke-width=\"4\"/></svg><div style=\"position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#33d6ff;font-size:28px;font-weight:800;text-shadow:0 0 10px rgba(56,196,255,0.65);\">✦</div></div>",
+        "padding": 0,
+        "overflow": "visible"
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-1",
+      "type": "shape",
+      "name": "ov3-kpi-bg-1",
+      "x": 24,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-2",
+      "type": "shape",
+      "name": "ov3-kpi-bg-2",
+      "x": 400,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-3",
+      "type": "shape",
+      "name": "ov3-kpi-bg-3",
+      "x": 776,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-4",
+      "type": "shape",
+      "name": "ov3-kpi-bg-4",
+      "x": 1152,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    },
+    {
+      "id": "ov3-kpi-bg-5",
+      "type": "shape",
+      "name": "ov3-kpi-bg-5",
+      "x": 1528,
+      "y": 84,
+      "width": 370,
+      "height": 100,
+      "zIndex": 15,
+      "locked": true,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(20, 67, 138, 0.22)",
+        "borderColor": "transparent",
+        "borderWidth": 0,
+        "radius": 14
+      }
+    }
+  ],
+  "autoHeight": false
+}

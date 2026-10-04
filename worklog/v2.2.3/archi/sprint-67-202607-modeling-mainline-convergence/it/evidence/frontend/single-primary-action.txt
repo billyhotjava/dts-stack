@@ -1,0 +1,13 @@
+Sprint-67 F4 single-primary-action evidence — 2026-07-19
+
+- WarehousePlanDetail baseline editing hides the competing header next action.
+- DimensionCatalogPage exposes one registration primary action.
+- ModelCenterPage exposes one create primary action; guided compatibility opens the same drawer.
+- Model detail gates choose the action from the current server-backed stage instead of rendering publish/run button walls.
+- Warehouse plan implementation uses one SQL/dbt action; file browsing is a tab/view, not a second primary entry.
+
+Evidence:
+- canonicalModelingPages.source-contract.test.ts: PASS
+- WarehousePlanDetailPage.source-contract.test.ts: PASS
+- JourneyStageState and route consistency source contracts: PASS
+- Frontend production build: PASS (Chrome 95 legacy build, 10,594 modules)

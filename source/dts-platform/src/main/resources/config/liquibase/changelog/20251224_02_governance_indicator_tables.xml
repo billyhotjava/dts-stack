@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251224_02_governance_indicator_tables" author="platform">
+        <createTable tableName="gov_indicator_definition">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="varchar(64)"/>
+            <column name="name" type="varchar(256)"/>
+            <column name="category" type="varchar(64)"/>
+            <column name="definition" type="text"/>
+            <column name="expression_sql" type="text"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="version" type="varchar(32)"/>
+            <column name="version_notes" type="text"/>
+            <column name="tags" type="text"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="gov_indicator_definition" columnNames="code" constraintName="uk_gov_indicator_definition_code"/>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_data_level">
+            <column name="data_level"/>
+        </createIndex>
+        <createIndex tableName="gov_indicator_definition" indexName="idx_gov_indicator_definition_updated">
+            <column name="last_modified_date"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20251224_02_governance_dimension_tables" author="platform">
+        <createTable tableName="gov_dimension_dictionary">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="varchar(64)"/>
+            <column name="name" type="varchar(256)"/>
+            <column name="description" type="text"/>
+            <column name="owner" type="varchar(64)"/>
+            <column name="owner_dept" type="varchar(128)"/>
+            <column name="data_level" type="varchar(32)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="tags" type="text"/>
+
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="gov_dimension_dictionary" columnNames="code" constraintName="uk_gov_dimension_dictionary_code"/>
+        <createIndex tableName="gov_dimension_dictionary" indexName="idx_gov_dimension_dictionary_owner_dept">
+            <column name="owner_dept"/>
+        </createIndex>
+        <createIndex tableName="gov_dimension_dictionary" indexName="idx_gov_dimension_dictionary_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="gov_dimension_dictionary" indexName="idx_gov_dimension_dictionary_data_level">
+            <column name="data_level"/>
+        </createIndex>
+        <createIndex tableName="gov_dimension_dictionary" indexName="idx_gov_dimension_dictionary_updated">
+            <column name="last_modified_date"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
+

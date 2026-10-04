@@ -1,0 +1,247 @@
+- generic [ref=e1]:
+  - generic [ref=e3]:
+    - generic [ref=e14]:
+      - banner [ref=e15]:
+        - generic [ref=e16]:
+          - generic [ref=e17]: D
+          - generic [ref=e18]: DTS
+          - generic [ref=e19]: ▸
+        - button "apartment 销售处 down" [ref=e20] [cursor=pointer]:
+          - img "apartment" [ref=e21]:
+            - img [ref=e22]
+          - generic [ref=e24]: 销售处
+          - img "down" [ref=e25]:
+            - img [ref=e26]
+        - button "search 搜索 ⌘K" [ref=e28] [cursor=pointer]:
+          - img "search" [ref=e29]:
+            - img [ref=e30]
+          - generic [ref=e32]: 搜索
+          - generic [ref=e33]: ⌘K
+        - img "bell" [ref=e34]:
+          - img [ref=e35]
+        - generic [ref=e37]:
+          - generic [ref=e39]: 测
+          - generic [ref=e40]: 测试用户
+      - generic [ref=e41]:
+        - navigation "主导航" [ref=e42]:
+          - link "appstore 部门门户" [ref=e43] [cursor=pointer]:
+            - /url: /portal
+            - img "appstore" [ref=e44]:
+              - img [ref=e45]
+            - generic [ref=e47]: 部门门户
+          - generic [ref=e48]: 黄金主线
+          - link "check 连接 完成" [ref=e49] [cursor=pointer]:
+            - /url: /connect
+            - img "check" [ref=e51]:
+              - img [ref=e52]
+            - generic [ref=e54]: 连接
+            - generic [ref=e55]: 完成
+          - link "集成 进行中" [ref=e56] [cursor=pointer]:
+            - /url: /integrate
+            - generic [ref=e60]: 集成
+            - generic [ref=e61]: 进行中
+          - link "3 资产 待开始" [ref=e62] [cursor=pointer]:
+            - /url: /assets
+            - generic [ref=e63]: "3"
+            - generic [ref=e64]: 资产
+            - generic [ref=e65]: 待开始
+          - link "4 指标 待开始" [ref=e66] [cursor=pointer]:
+            - /url: /metrics
+            - generic [ref=e67]: "4"
+            - generic [ref=e68]: 指标
+            - generic [ref=e69]: 待开始
+          - generic [ref=e71]: 平台
+          - link "api 数据服务" [ref=e72] [cursor=pointer]:
+            - /url: /platform/serve
+            - img "api" [ref=e74]:
+              - img [ref=e75]
+            - generic [ref=e77]: 数据服务
+          - link "safety-certificate 治理" [ref=e78] [cursor=pointer]:
+            - /url: /platform/govern
+            - img "safety-certificate" [ref=e80]:
+              - img [ref=e81]
+            - generic [ref=e83]: 治理
+          - link "lock 安全" [ref=e84] [cursor=pointer]:
+            - /url: /platform/security
+            - img "lock" [ref=e86]:
+              - img [ref=e87]
+            - generic [ref=e89]: 安全
+          - link "cloud-server 运维" [ref=e90] [cursor=pointer]:
+            - /url: /platform/ops
+            - img "cloud-server" [ref=e92]:
+              - img [ref=e93]
+            - generic [ref=e97]: 运维
+          - link "setting 设置" [ref=e98] [cursor=pointer]:
+            - /url: /platform/settings
+            - img "setting" [ref=e100]:
+              - img [ref=e101]
+            - generic [ref=e103]: 设置
+        - main [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e107]:
+              - generic [ref=e108]: 阶段 ①
+              - generic [ref=e109]: 连接
+              - generic [ref=e110]: 接入并管理数据源，是黄金主线的起点。当前部门：销售处
+            - generic [ref=e111]:
+              - tablist [ref=e112]:
+                - generic [ref=e114]:
+                  - tab "数据源" [selected] [ref=e116] [cursor=pointer]
+                  - tab "连接器" [ref=e118] [cursor=pointer]
+                  - tab "JDBC 驱动" [ref=e120] [cursor=pointer]
+                  - tab "接入与调度" [ref=e122] [cursor=pointer]
+              - tabpanel "数据源" [ref=e125]:
+                - generic [ref=e126]:
+                  - generic [ref=e127]:
+                    - generic [ref=e128]: 平台共享源对部门只读；本部门本地源可增删改。物理接入与密钥在平台/部门层统一管控。
+                    - button "plus 新建数据源" [ref=e129] [cursor=pointer]:
+                      - img "plus" [ref=e131]:
+                        - img [ref=e132]
+                      - generic [ref=e135]: 新建数据源
+                  - generic [ref=e137]:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - generic:
+                            - table:
+                              - rowgroup:
+                                - row "名称 类型 连接器 归属 状态 最近连通 操作":
+                                  - columnheader "名称"
+                                  - columnheader "类型"
+                                  - columnheader "连接器"
+                                  - columnheader "归属"
+                                  - columnheader "状态"
+                                  - columnheader "最近连通"
+                                  - columnheader "操作"
+                              - rowgroup:
+                                - row "PLM 生产系统 PLM Oracle 平台共享 已连通 2026-06-22 09:12 测试 详情 编辑 删除":
+                                  - cell "PLM 生产系统":
+                                    - button "PLM 生产系统"
+                                  - cell "PLM"
+                                  - cell "Oracle"
+                                  - cell "平台共享":
+                                    - generic: 平台共享
+                                  - cell "已连通":
+                                    - generic:
+                                      - generic: 已连通
+                                  - cell "2026-06-22 09:12"
+                                  - cell "测试 详情 编辑 删除":
+                                    - generic:
+                                      - generic:
+                                        - button "测试":
+                                          - generic: 测试
+                                      - generic:
+                                        - button "详情":
+                                          - generic: 详情
+                                      - generic:
+                                        - button "编辑" [disabled]:
+                                          - generic: 编辑
+                                      - generic:
+                                        - button "删除" [disabled]:
+                                          - generic: 删除
+                                - row "ERP 企业系统 ERP SQLServer 平台共享 已连通 2026-06-22 09:13 测试 详情 编辑 删除":
+                                  - cell "ERP 企业系统":
+                                    - button "ERP 企业系统"
+                                  - cell "ERP"
+                                  - cell "SQLServer"
+                                  - cell "平台共享":
+                                    - generic: 平台共享
+                                  - cell "已连通":
+                                    - generic:
+                                      - generic: 已连通
+                                  - cell "2026-06-22 09:13"
+                                  - cell "测试 详情 编辑 删除":
+                                    - generic:
+                                      - generic:
+                                        - button "测试":
+                                          - generic: 测试
+                                      - generic:
+                                        - button "详情":
+                                          - generic: 详情
+                                      - generic:
+                                        - button "编辑" [disabled]:
+                                          - generic: 编辑
+                                      - generic:
+                                        - button "删除" [disabled]:
+                                          - generic: 删除
+                                - row "QMIS 质量系统 QMIS MySQL 平台共享 已连通 2026-06-21 18:40 测试 详情 编辑 删除":
+                                  - cell "QMIS 质量系统":
+                                    - button "QMIS 质量系统"
+                                  - cell "QMIS"
+                                  - cell "MySQL"
+                                  - cell "平台共享":
+                                    - generic: 平台共享
+                                  - cell "已连通":
+                                    - generic:
+                                      - generic: 已连通
+                                  - cell "2026-06-21 18:40"
+                                  - cell "测试 详情 编辑 删除":
+                                    - generic:
+                                      - generic:
+                                        - button "测试":
+                                          - generic: 测试
+                                      - generic:
+                                        - button "详情":
+                                          - generic: 详情
+                                      - generic:
+                                        - button "编辑" [disabled]:
+                                          - generic: 编辑
+                                      - generic:
+                                        - button "删除" [disabled]:
+                                          - generic: 删除
+                                - row "销售本地台账 Excel File 本部门 未测试 — loading 测试 详情 编辑 删除":
+                                  - cell "销售本地台账":
+                                    - button "销售本地台账"
+                                  - cell "Excel"
+                                  - cell "File"
+                                  - cell "本部门":
+                                    - generic: 本部门
+                                  - cell "未测试":
+                                    - generic:
+                                      - generic: 未测试
+                                  - cell "—"
+                                  - cell "loading 测试 详情 编辑 删除":
+                                    - generic:
+                                      - generic:
+                                        - button "loading 测试" [active]:
+                                          - generic:
+                                            - img "loading"
+                                          - generic: 测试
+                                      - generic:
+                                        - button "详情":
+                                          - generic: 详情
+                                      - generic:
+                                        - button "编辑":
+                                          - generic: 编辑
+                                      - generic:
+                                        - button "删除":
+                                          - generic: 删除
+                      - list:
+                        - listitem: 共 4 条
+                        - listitem "上一页":
+                          - button "left" [disabled]:
+                            - img "left":
+                              - img
+                        - listitem "1":
+                          - generic: "1"
+                        - listitem "下一页":
+                          - button "right" [disabled]:
+                            - img "right":
+                              - img
+                        - listitem:
+                          - generic "页码":
+                            - generic:
+                              - generic:
+                                - generic:
+                                  - combobox "页码"
+                                - generic "10 条/页"
+                            - generic:
+                              - img:
+                                - img
+    - button "reload 重置样例数据" [ref=e281] [cursor=pointer]:
+      - img "reload" [ref=e283]:
+        - img [ref=e284]
+      - generic [ref=e286]: 重置样例数据
+  - generic [ref=e295]:
+    - img "close-circle" [ref=e296]:
+      - img [ref=e297]
+    - generic [ref=e299]: 销售本地台账：连接失败：未配置连接信息或驱动缺失

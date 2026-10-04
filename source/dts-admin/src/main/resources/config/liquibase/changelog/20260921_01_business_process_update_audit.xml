@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+    <changeSet id="20260921-01-business-process-update-audit" author="xiezm">
+        <comment>S10DC-97：登记业务过程编辑审计动作，不修改业务数据</comment>
+        <sql><![CDATA[
+            INSERT INTO audit_action_catalog (
+                source_system, action_code, module_key, module_name, operation_code,
+                operation_name, operation_kind, resource_type, allow_empty_targets,
+                enabled, version, updated_at
+            ) VALUES (
+                'platform', 'MODELING_BUSINESS_PROCESS_UPDATE', 'modeling.architecture.businessProcesses',
+                '业务过程', 'MODELING_BUSINESS_PROCESS_UPDATE', '修改业务过程', 'UPDATE',
+                'data_architecture', FALSE, TRUE, 's10dc-97', CURRENT_TIMESTAMP
+            ) ON CONFLICT (source_system, action_code) DO NOTHING;
+        ]]></sql>
+        <rollback>
+            <!-- 审计证据可能已引用此字典项，回滚应用时保留登记。 -->
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,39 @@
+{
+  "browser": "152.0.7977.82",
+  "calls": [
+    {
+      "path": "/api/governance/quality/rules/validate-sql",
+      "body": {
+        "datasetId": "11111111-1111-1111-1111-111111111111",
+        "definition": {
+          "sql": "SELECT pg_sleep(1) FROM public.projects"
+        }
+      }
+    },
+    {
+      "path": "/api/governance/quality/rules/validate-sql",
+      "body": {
+        "datasetId": "11111111-1111-1111-1111-111111111111",
+        "definition": {
+          "sql": "SELECT project_code FROM public.projects WHERE project_code IS NULL"
+        }
+      }
+    },
+    {
+      "path": "/api/governance/quality/rules/dry-run",
+      "body": {
+        "datasetId": "11111111-1111-1111-1111-111111111111",
+        "definition": {
+          "sql": "SELECT project_code FROM public.projects WHERE project_code IS NULL"
+        }
+      }
+    }
+  ],
+  "errors": [],
+  "narrowButton": {
+    "x": 142.609375,
+    "y": 406,
+    "width": 117.609375,
+    "height": 32
+  }
+}

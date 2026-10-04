@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>设计文档 · DTS 原理与设计</title>
+  <style>
+    :root { --ink: #172e43; --muted: #526879; --accent: #087a79; --line: #d8e2e8; --paper: #f3f6f8; --code: #f5f8fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: #fff; font: 15px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; }
+    .doc { max-width: 1080px; margin: 0 auto; padding: 28px 32px 64px; }
+    .status { color: var(--muted); font-size: 14px; }
+    .status.error { color: #a4332a; }
+    h1 { font-size: 26px; line-height: 1.35; margin: 0 0 18px; letter-spacing: -0.3px; }
+    h2 { font-size: 20px; margin: 38px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+    h3 { font-size: 16.5px; margin: 26px 0 10px; }
+    h4 { font-size: 15px; margin: 20px 0 8px; }
+    a { color: var(--accent); text-underline-offset: 3px; }
+    p, ul, ol { margin: 10px 0; }
+    blockquote { margin: 14px 0; padding: 8px 16px; border-left: 3px solid var(--accent); background: #f0f7f7; color: #33495a; }
+    code { font: 13px/1.6 ui-monospace, "SFMono-Regular", Consolas, monospace; background: var(--code); padding: 1px 5px; border-radius: 4px; }
+    pre { background: var(--code); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+    pre code { background: none; padding: 0; }
+    .table-wrap { overflow-x: auto; margin: 14px 0; border: 1px solid var(--line); border-radius: 8px; }
+    table { border-collapse: collapse; width: 100%; font-size: 13.5px; line-height: 1.6; }
+    th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { background: var(--paper); font-weight: 600; white-space: nowrap; }
+    tr:last-child td { border-bottom: 0; }
+    td code { white-space: nowrap; }
+    .mermaid-block { margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 8px; overflow-x: auto; background: #fff; }
+    .mermaid-block svg { max-width: 100%; height: auto; }
+    .mermaid-error { color: #a4332a; font-size: 13px; margin-top: 8px; }
+    hr { border: 0; border-top: 1px solid var(--line); margin: 28px 0; }
+    @media (max-width: 800px) { .doc { padding: 18px 16px 40px; } h1 { font-size: 22px; } }
+  </style>
+</head>
+<body>
+  <main class="doc" id="doc"><p class="status" id="status">正在加载文档…</p></main>
+  <script src="assets/vendor/markdown-it-14.1.0.min.js"></script>
+  <script>
+    (() => {
+      'use strict';
+      const MERMAID_SRC = 'assets/vendor/mermaid-11.12.0.min.js';
+      const container = document.getElementById('doc');
+      const params = new URLSearchParams(window.location.search);
+      const file = params.get('f') || 'README.md';
+
+      function fail(message) {
+        container.innerHTML = '';
+        const p = document.createElement('p');
+        p.className = 'status error';
+        p.textContent = message;
+        container.appendChild(p);
+      }
+
+      // 只允许本目录内的 Markdown 相对路径，参数不会成为任意 URL。
+      function isSafePath(path) {
+        return /^[A-Za-z0-9_\-./]+\.md$/.test(path) && !path.split('/').includes('..') && !path.startsWith('/');
+      }
+
+      function resolveRelative(base, target) {
+        const baseParts = base.split('/').slice(0, -1);
+        target.split('/').forEach(part => {
+          if (part === '..') baseParts.pop();
+          else if (part !== '.' && part !== '') baseParts.push(part);
+        });
+        return baseParts.join('/');
+      }
+
+      if (!isSafePath(file)) { fail('文档路径无效。'); return; }
+
+      const md = window.markdownit({ html: false, linkify: true, typographer: false });
+      const defaultFence = md.renderer.rules.fence;
+      md.renderer.rules.fence = (tokens, idx, options, env, self) => {
+        const token = tokens[idx];
+        if (token.info.trim() === 'mermaid') {
+          return '<div class="mermaid-block"><pre class="mermaid">' + md.utils.escapeHtml(token.content) + '</pre></div>';
+        }
+        return defaultFence(tokens, idx, options, env, self);
+      };
+
+      function rewriteLinks() {
+        container.querySelectorAll('a[href]').forEach(anchor => {
+          const href = anchor.getAttribute('href');
+          if (/^[a-z]+:/i.test(href) || href.startsWith('#')) {
+            if (/^https?:/i.test(href)) { anchor.target = '_blank'; anchor.rel = 'noopener'; }
+            return;
+          }
+          const [path, hash] = href.split('#');
+          const resolved = resolveRelative(file, path);
+          if (resolved.endsWith('.md') && isSafePath(resolved)) {
+            anchor.setAttribute('href', 'doc.html?f=' + encodeURIComponent(resolved) + (hash ? '#' + hash : ''));
+          } else {
+            anchor.setAttribute('href', resolved + (hash ? '#' + hash : ''));
+            anchor.target = '_blank';
+            anchor.rel = 'noopener';
+          }
+        });
+      }
+
+      // markdown-it 默认不生成标题锚点；按标题文本生成稳定 id，供门户与文档内 #锚点 跳转。
+      function slugify(text) {
+        return text.trim().toLowerCase()
+          .replace(/[（）()·、，,：:。.`'"/?!！？\[\]]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+      }
+
+      function addHeadingIds() {
+        const used = new Set();
+        container.querySelectorAll('h1, h2, h3, h4').forEach(heading => {
+          let id = slugify(heading.textContent);
+          let suffix = 1;
+          while (used.has(id)) id = slugify(heading.textContent) + '-' + suffix++;
+          used.add(id);
+          heading.id = id;
+        });
+      }
+
+      function wrapTables() {
+        container.querySelectorAll('table').forEach(table => {
+          const wrap = document.createElement('div');
+          wrap.className = 'table-wrap';
+          table.parentNode.insertBefore(wrap, table);
+          wrap.appendChild(table);
+        });
+      }
+
+      function renderMermaid() {
+        const blocks = container.querySelectorAll('pre.mermaid');
+        if (!blocks.length) return;
+        const script = document.createElement('script');
+        script.src = MERMAID_SRC;
+        script.onload = async () => {
+          window.mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' });
+          for (const block of blocks) {
+            try {
+              await window.mermaid.run({ nodes: [block] });
+            } catch (error) {
+              const note = document.createElement('div');
+              note.className = 'mermaid-error';
+              note.textContent = 'Mermaid 渲染失败：' + (error && error.message ? error.message : error);
+              block.parentNode.appendChild(note);
+            }
+          }
+        };
+        script.onerror = () => fail('Mermaid 渲染库加载失败。');
+        document.body.appendChild(script);
+      }
+
+      fetch(file, { credentials: 'same-origin', cache: 'no-cache' })
+        .then(response => {
+          // 会话失效时 nginx 302 到登录页，fetch 会跟随跳转；不能把登录页当 Markdown 渲染
+          if (response.redirected && new URL(response.url).pathname.endsWith('/login.html')) {
+            window.location.replace('login.html?reason=timeout');
+            return null;
+          }
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          return response.text();
+        })
+        .then(text => {
+          if (text === null) return;
+          container.innerHTML = md.render(text);
+          const heading = container.querySelector('h1');
+          document.title = (heading ? heading.textContent : file) + ' · DTS 原理与设计';
+          addHeadingIds();
+          rewriteLinks();
+          wrapTables();
+          renderMermaid();
+          if (window.location.hash) {
+            const target = document.getElementById(decodeURIComponent(window.location.hash.slice(1)));
+            if (target) target.scrollIntoView();
+          }
+        })
+        .catch(error => fail('文档加载失败：' + error.message));
+    })();
+  </script>
+  <script src="assets/session-watch.js"></script>
+</body>
+</html>

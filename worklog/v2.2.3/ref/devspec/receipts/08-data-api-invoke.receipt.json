@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "sequence",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/diagrams/08-data-api-invoke.sequence.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/devspec/08-data-api-invoke.html",
+  "specification": {
+    "sha256": "96f746547d22b7173a6bd0eef180094004d38e23435b8e1e09e3f25b96465313",
+    "bytes": 3167
+  },
+  "artifact": {
+    "sha256": "d40f5d2d06e2408db025d6511b9ad701c32f79641f5efccb90eb6fbd7b7ae526",
+    "bytes": 713622
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

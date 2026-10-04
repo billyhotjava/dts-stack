@@ -1,0 +1,10 @@
+method,endpoint,total,non200,dominant_status,non200_statuses,avg_ms,p50_ms,p95_ms,p99_ms,max_ms
+GET,/api/governance/dimensions?page=0&size=20,10,0,200,,10,9,18,18,18
+GET,/api/governance/indicators/8d8539dc-f210-4b39-a4e0-6e07a3116a82/references,10,0,200,,12,12,20,20,20
+GET,/api/governance/indicators/8d8539dc-f210-4b39-a4e0-6e07a3116a82/versions,10,0,200,,11,11,18,18,18
+GET,/api/governance/indicators/ops/overview?hours=168,10,10,404,404,10,10,12,12,12
+GET,/api/governance/indicators/ops/trend?hours=168&bucketHours=24,10,10,404,404,10,10,11,11,11
+GET,/api/governance/indicators?page=0&size=20,10,0,200,,9,8,12,12,12
+GET,/api/governance/indicators?status=PUBLISHED&page=0&size=20,10,0,200,,9,8,11,11,11
+POST,/api/governance/indicators/8d8539dc-f210-4b39-a4e0-6e07a3116a82/preview?limit=20,10,0,200,,11,10,20,20,20
+POST,/api/governance/indicators/8d8539dc-f210-4b39-a4e0-6e07a3116a82/publish-preview,10,0,200,,24,24,27,27,27

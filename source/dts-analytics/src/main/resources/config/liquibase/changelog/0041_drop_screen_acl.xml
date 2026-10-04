@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="0041-01-drop-screen-acl" author="system">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="analytics_screen_acl"/>
+        </preConditions>
+        <dropTable tableName="analytics_screen_acl"/>
+        <rollback>
+            <createTable tableName="analytics_screen_acl">
+                <column name="id" type="bigint" autoIncrement="true">
+                    <constraints primaryKey="true" nullable="false"/>
+                </column>
+                <column name="screen_id" type="bigint"><constraints nullable="false"/></column>
+                <column name="subject_type" type="varchar(16)"><constraints nullable="false"/></column>
+                <column name="subject_id" type="varchar(128)"><constraints nullable="false"/></column>
+                <column name="perm" type="varchar(16)"><constraints nullable="false"/></column>
+                <column name="creator_id" type="bigint"/>
+                <column name="created_at" type="timestamp with time zone" defaultValueComputed="${now}"><constraints nullable="false"/></column>
+                <column name="updated_at" type="timestamp with time zone" defaultValueComputed="${now}"><constraints nullable="false"/></column>
+            </createTable>
+            <!-- rollback 仅恢复表结构；权限数据已统一到 platform asset_grant，不可恢复旧 ACL 数据 -->
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

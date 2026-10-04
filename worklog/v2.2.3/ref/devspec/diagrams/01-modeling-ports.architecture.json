@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "建模主链：接口与实现关系",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "viewBox": [980, 600]
+  },
+  "components": [
+    { "id": "p-src", "type": "backend", "label": "ModelSpecSourceValidationPort", "sublabel": "来源与绑定校验端口", "pos": [60, 60], "size": [260, 58] },
+    { "id": "p-write", "type": "backend", "label": "ModelSpecPlanWriteAccessPort", "sublabel": "规划写权限端口", "pos": [60, 150], "size": [260, 58] },
+    { "id": "p-compiler", "type": "backend", "label": "ModelLifecycleCompilerPort", "sublabel": "编译端口", "pos": [60, 240], "size": [260, 58] },
+    { "id": "p-test", "type": "backend", "label": "ModelLifecycleTestEvidencePort", "sublabel": "测试证据端口", "pos": [60, 330], "size": [260, 58] },
+    { "id": "p-gateway", "type": "backend", "label": "DbtExecutionGateway", "sublabel": "构建执行网关", "pos": [60, 420], "size": [260, 58] },
+    { "id": "p-ref", "type": "backend", "label": "CatalogSourceReferenceReadPort", "sublabel": "来源引用读取端口", "pos": [60, 510], "size": [260, 58] },
+    { "id": "a-src", "type": "backend", "label": "ModelSpecSourceValidationAdapter", "sublabel": "注入 ModelSpecApplicationService 等", "pos": [580, 60], "size": [320, 58] },
+    { "id": "a-write", "type": "backend", "label": "ModelSpecPlanWriteAccessAdapter", "sublabel": "注入 ModelLifecycleService 等", "pos": [580, 150], "size": [320, 58] },
+    { "id": "a-compiler", "type": "backend", "label": "CanonicalModelLifecycleCompilerAdapter", "sublabel": "注入 ModelLifecycleService", "pos": [580, 240], "size": [320, 58] },
+    { "id": "a-test", "type": "backend", "label": "DbtRunLifecycleTestEvidenceAdapter", "sublabel": "注入 ModelLifecycleService", "pos": [580, 330], "size": [320, 58] },
+    { "id": "a-gateway", "type": "backend", "label": "AirflowDbtExecutionGateway", "sublabel": "注入 ModelMaterializationDispatchService", "pos": [580, 420], "size": [320, 58] },
+    { "id": "a-ref", "type": "backend", "label": "JpaCatalogSourceReferenceReadAdapter", "sublabel": "注入分类门禁与来源解析", "pos": [580, 510], "size": [320, 58] }
+  ],
+  "connections": [
+    { "id": "i-src", "from": "a-src", "to": "p-src", "label": "实现", "variant": "emphasis" },
+    { "id": "i-write", "from": "a-write", "to": "p-write", "label": "实现" },
+    { "id": "i-compiler", "from": "a-compiler", "to": "p-compiler", "label": "实现", "variant": "emphasis" },
+    { "id": "i-test", "from": "a-test", "to": "p-test", "label": "实现" },
+    { "id": "i-gateway", "from": "a-gateway", "to": "p-gateway", "label": "实现", "variant": "emphasis" },
+    { "id": "i-ref", "from": "a-ref", "to": "p-ref", "label": "实现" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "运行时选择",
+      "items": [
+        "端口均为单实现，构造注入；无继承分派",
+        "构建执行经 DbtExecutionGateway 提交 Airflow",
+        "端口实现类与方法级证据见 call-graph-and-dispatch"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "阅读边界",
+      "items": [
+        "接口名保留代码标识，中文为职责说明",
+        "实现类未穷举端口全部方法",
+        "运行期 Bean 覆盖未在本图验证"
+      ]
+    }
+  ]
+}

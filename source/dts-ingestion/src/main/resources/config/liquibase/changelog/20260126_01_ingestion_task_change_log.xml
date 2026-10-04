@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 数据入湖任务变更记录 -->
+    <changeSet id="20260126-01-ingestion-task-change-log" author="system">
+        <createTable tableName="ingestion_task_change_log">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="task_name" type="varchar(200)"/>
+            <column name="obj_type" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_type" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="summary" type="varchar(512)"/>
+            <column name="detail" type="text"/>
+            <column name="risk_level" type="varchar(10)"/>
+            <column name="status" type="varchar(50)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex indexName="idx_ingestion_task_change_task_id" tableName="ingestion_task_change_log">
+            <column name="task_id"/>
+        </createIndex>
+        <createIndex indexName="idx_ingestion_task_change_type" tableName="ingestion_task_change_log">
+            <column name="change_type"/>
+        </createIndex>
+        <createIndex indexName="idx_ingestion_task_change_status" tableName="ingestion_task_change_log">
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_ingestion_task_change_created" tableName="ingestion_task_change_log">
+            <column name="created_date"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

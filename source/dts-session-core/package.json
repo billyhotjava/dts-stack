@@ -1,0 +1,15 @@
+{
+  "name": "@dts/session-core",
+  "private": true,
+  "version": "0.0.0-private",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./logout-broadcast": "./src/logout-broadcast.ts",
+    "./persisted-store": "./src/persisted-store.ts",
+    "./route": "./src/route.ts",
+    "./storage": "./src/storage.ts"
+  },
+  "types": "./src/index.ts"
+}

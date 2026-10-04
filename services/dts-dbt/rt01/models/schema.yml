@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: stg_rt01_orders
+    description: Fixed RT-01 PostgreSQL staging view.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - unique
+      - name: customer_code
+        data_tests:
+          - not_null
+
+  - name: fct_rt01_orders
+    description: Fixed RT-01 PostgreSQL table.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - unique
+      - name: amount
+        data_tests:
+          - not_null
+
+  - name: inc_rt01_order_totals
+    description: Fixed RT-01 idempotent incremental relation.
+    columns:
+      - name: order_id
+        data_tests:
+          - not_null
+          - unique

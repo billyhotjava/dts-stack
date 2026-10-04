@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.6.xsd">
+    <changeSet id="20260418-01_person_import_record_keycloak_id" author="dts">
+        <addColumn tableName="person_import_record">
+            <column name="keycloak_user_id" type="varchar(64)"/>
+        </addColumn>
+        <createIndex tableName="person_import_record" indexName="idx_person_record_kc_id">
+            <column name="keycloak_user_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

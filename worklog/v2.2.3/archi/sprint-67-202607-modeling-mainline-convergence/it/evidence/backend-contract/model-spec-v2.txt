@@ -1,0 +1,37 @@
+Sprint-67 F3-T01 ModelSpec v2 backend contract and API verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Actual GREEN command:
+  cd source/dts-platform
+  ./mvnw -q -Dmaven.repo.local=/tmp/codex-m2 \
+    -Dtest=ModelSpecContractTest,ModelSpecCreateRequestDecoderTest,ModelSpecRequestDecoderTest,ModelSpecV2FixtureTest,ModelSpecApplicationServiceTest,ModelSpecCompatibilityReaderTest,ModelSpecCompilerProjectionTest,ModelSpecSnapshotCodecTest,ModelSpecDomainWriteAccessAdapterTest,ModelSpecPlanWriteAccessAdapterTest,ModelSpecResourceTest,ModelingVNextCanonicalProjectionTest,ModelingVNextCanonicalReleaseGateTest,ModelingVNextWriterCompatibilityContractTest \
+    test
+
+Surefire result (63 tests total):
+- 63 passed;
+- 0 failures;
+- 0 errors;
+- 0 skipped;
+- observed command exit code: 0.
+
+Covered behavior:
+- objectless canonical v2 create, read and full-replacement update use server tenant, revision, checksum and strong ETag;
+- create-only idempotencyKey is excluded from PUT, while POST replay and conflicting key reuse remain deterministic;
+- unknown and retired objectId/processId/legacyRef fields are rejected at the canonical boundary;
+- lost CAS updates return the latest revision/checksum instead of overwriting the current head;
+- plan, confirmed domain, source binding and pinned dimension revision are checked before persistence;
+- canonical release registration uses plan plus confirmed domain and never requires a business object;
+- compatibility reads prefer canonical v2 snapshots and expose v1 as LEGACY_READONLY;
+- legacy writers cannot update contract_version=2 rows, so this slice introduces no v1/v2 dual write;
+- compiler and legacy projections do not fabricate objectId for canonical models.
+
+Test-harness corrections made before the final GREEN run:
+- used a primitive-aware Mockito matcher for the expected revision;
+- removed stubs that are intentionally not consumed by immutable idempotent replay;
+- made the PUT fixture omit create-only idempotencyKey.
+
+Evidence boundary:
+- This is a focused F3-T01 unit/WebMvc contract run, not a full dts-platform build or full test suite.
+- ModelSpecResourceTest proves REST mapping and stable response behavior with MockMvc; it does not prove a live authenticated browser journey.
+- No production source was changed while repairing and rerunning this evidence slice.

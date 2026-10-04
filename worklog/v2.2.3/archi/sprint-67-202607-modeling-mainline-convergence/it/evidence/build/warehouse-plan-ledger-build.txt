@@ -1,0 +1,15 @@
+Sprint-67 F2-T05 production build
+时间：2026-07-21 +08:00
+
+命令：
+cd source/dts-platform-webapp
+pnpm build
+
+结果：退出码 0。
+- LEGACY_BROWSER_BUILD=1
+- TypeScript tsc 通过
+- Vite 6.3.3 转换 10,589 个模块
+- 产物包含 WarehousePlanLedgerPage、WarehousePlanHeaderEditor、ModelingWorkbenchPage 和 WarehousePlanDetailPage chunks
+- built in 2m 1s
+
+只有既有 Browserslist 数据过期和大 chunk 告警，无编译错误。

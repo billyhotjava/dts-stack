@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260222-ops-meta-02-column-safe-guards" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <not>
+                <columnExists tableName="system_config" columnName="config_scope"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="system_config">
+            <column name="config_scope" type="VARCHAR(32)" defaultValue="RUNTIME">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-03-column-safe-guards-restart" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <not>
+                <columnExists tableName="system_config" columnName="restart_required"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="system_config">
+            <column name="restart_required" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-04-column-safe-guards-validation" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <not>
+                <columnExists tableName="system_config" columnName="validation_rule"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="system_config">
+            <column name="validation_rule" type="VARCHAR(512)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-05-column-safe-guards-owner" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <not>
+                <columnExists tableName="system_config" columnName="owner"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="system_config">
+            <column name="owner" type="VARCHAR(64)" defaultValue="platform"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-06-backfill-defaults" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="config_scope"/>
+            <columnExists tableName="system_config" columnName="restart_required"/>
+            <columnExists tableName="system_config" columnName="owner"/>
+        </preConditions>
+        <update tableName="system_config">
+            <column name="config_scope" value="RUNTIME"/>
+            <where>config_scope is null</where>
+        </update>
+        <update tableName="system_config">
+            <column name="restart_required" valueBoolean="false"/>
+            <where>restart_required is null</where>
+        </update>
+        <update tableName="system_config">
+            <column name="owner" value="platform"/>
+            <where>owner is null or trim(owner) = ''</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-07-known-keys-classify" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="config_scope"/>
+            <columnExists tableName="system_config" columnName="restart_required"/>
+        </preConditions>
+        <update tableName="system_config">
+            <column name="config_scope" value="RUNTIME_RESTART"/>
+            <column name="restart_required" valueBoolean="true"/>
+            <column name="owner" value="security"/>
+            <where>cfg_key in ('security.pki.enabled', 'feature.mdm_gateway.enabled')</where>
+        </update>
+        <update tableName="system_config">
+            <column name="config_scope" value="BOOTSTRAP"/>
+            <column name="restart_required" valueBoolean="true"/>
+            <column name="owner" value="ops"/>
+            <where>cfg_key in ('cluster.mode', 'minio.endpoint', 'airflow.deployment')</where>
+        </update>
+        <update tableName="system_config">
+            <column name="validation_rule" value="range:5,1440"/>
+            <where>cfg_key = 'security.session.timeout_minutes'</where>
+        </update>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-08-index-scope" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="config_scope"/>
+            <not>
+                <indexExists tableName="system_config" indexName="idx_system_config_scope"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="system_config" indexName="idx_system_config_scope">
+            <column name="config_scope"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260222-ops-meta-09-mdm-bootstrap-scope" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="system_config"/>
+            <columnExists tableName="system_config" columnName="config_scope"/>
+            <columnExists tableName="system_config" columnName="restart_required"/>
+            <columnExists tableName="system_config" columnName="owner"/>
+        </preConditions>
+        <update tableName="system_config">
+            <column name="config_scope" value="BOOTSTRAP"/>
+            <column name="restart_required" valueBoolean="true"/>
+            <column name="owner" value="admin"/>
+            <where>cfg_key like 'DTS_MDM_GATEWAY_%'</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

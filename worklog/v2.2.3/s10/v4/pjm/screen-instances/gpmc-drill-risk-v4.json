@@ -1,0 +1,1102 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-risk-v4",
+  "name": "执行层-风险与预警中心明细",
+  "description": "风险预警钻取页面，分区展示风险全量清单、风险分类释放摘要及未释放风险应对措施。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-risk-header-bar",
+      "type": "shape",
+      "name": "drill-risk-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-risk-title",
+      "type": "title",
+      "name": "执行层-风险与预警中心明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-风险与预警中心明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(88, 180, 255, 0.20)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-risk-back-shape",
+      "type": "shape",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.20)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-risk-back-label",
+      "type": "title",
+      "name": "返回风险看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回风险看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-risk-kpi-1",
+      "type": "number-card",
+      "name": "风险总数",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险总数",
+        "value": "89",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_total",
+          "displayName": "风险总数",
+          "domain": "风险",
+          "category": "基础",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "周期内提出的风险总数(高+中+低)",
+          "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)新增风险计数"
+        },
+        "metricCode": "pjm_risk_total"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-2",
+      "type": "number-card",
+      "name": "高风险",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "高风险数",
+        "value": "14",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_high",
+          "displayName": "高风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'高'的风险总数",
+          "formula": "风险等级='高' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)高风险计数"
+        },
+        "metricCode": "pjm_risk_high"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-3",
+      "type": "number-card",
+      "name": "中风险",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "中风险数",
+        "value": "31",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_mid",
+          "displayName": "中风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'中'的风险总数",
+          "formula": "风险等级='中' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)中风险计数"
+        },
+        "metricCode": "pjm_risk_mid"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-kpi-4",
+      "type": "number-card",
+      "name": "低风险",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "低风险数",
+        "value": "44",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_risk_low",
+          "displayName": "低风险数",
+          "domain": "风险",
+          "category": "等级",
+          "unit": "个",
+          "direction": "DOWN",
+          "definition": "风险等级为'低'的风险总数",
+          "formula": "风险等级='低' 的风险计数",
+          "scope": "受顶部时间筛选器控制",
+          "sourceTable": "风险信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": null,
+          "excelRef": "(衍生)低风险计数"
+        },
+        "metricCode": "pjm_risk_low"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT SUM(total_risk_cnt) AS \"风险总数\", SUM(high_cnt) AS \"高风险\", SUM(mid_cnt) AS \"中风险\", SUM(low_cnt) AS \"低风险\", SUM(released_cnt) AS \"已释放\", SUM(open_cnt) AS \"未释放\" FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-detail-table",
+      "type": "table",
+      "name": "风险全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险全量清单",
+        "header": [
+          "项目编号",
+          "风险名称",
+          "分系统",
+          "责任科室",
+          "风险等级",
+          "风险类别",
+          "风险状态",
+          "应对措施",
+          "提交日期",
+          "释放日期",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30,
+              "critical": 60,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          },
+          "风险类别": {
+            "kind": "field",
+            "displayName": "风险类别",
+            "definition": "风险按业务领域的分类。",
+            "enumValues": [
+              {
+                "code": "技术",
+                "label": "技术风险",
+                "description": "技术方案/技术难题/技术指标相关"
+              },
+              {
+                "code": "进度",
+                "label": "进度风险",
+                "description": "节点延期/计划偏差相关"
+              },
+              {
+                "code": "成本",
+                "label": "成本风险",
+                "description": "预算超支/成本上升相关"
+              },
+              {
+                "code": "设计",
+                "label": "设计风险",
+                "description": "设计变更/方案返工相关"
+              },
+              {
+                "code": "质量",
+                "label": "质量风险",
+                "description": "产品/工艺质量相关"
+              },
+              {
+                "code": "其他",
+                "label": "其他风险",
+                "description": "未归入以上分类的风险"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": null
+          },
+          "风险状态": {
+            "kind": "field",
+            "displayName": "风险状态",
+            "definition": "风险的当前生命周期状态。",
+            "enumValues": [
+              {
+                "code": "已释放",
+                "label": "已释放",
+                "description": "风险已闭环,不再影响项目"
+              },
+              {
+                "code": "未释放",
+                "label": "未释放",
+                "description": "风险仍在跟踪中(默认状态)"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
+          }
+        },
+        "description": "事实明细表：展示统计周期内风险事实、等级、类别、状态、应对措施和滞留天数。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 126,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_category AS \"风险类别\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", risk_submit_date AS \"提交日期\", final_release_date AS \"释放日期\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-side-panel",
+      "type": "table",
+      "name": "风险分类与释放摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "风险分类与释放摘要",
+        "header": [
+          "指标",
+          "数值",
+          "说明"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "风险总数": {
+            "code": "pjm_risk_total",
+            "displayName": "风险总数",
+            "domain": "风险",
+            "category": "基础",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内提出的风险总数(高+中+低)",
+            "formula": "风险提出时间在[开始日期,结束日期]内的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)新增风险计数"
+          },
+          "高风险": {
+            "code": "pjm_risk_high",
+            "displayName": "高风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'高'的风险总数",
+            "formula": "风险等级='高' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)高风险计数"
+          },
+          "中风险": {
+            "code": "pjm_risk_mid",
+            "displayName": "中风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'中'的风险总数",
+            "formula": "风险等级='中' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)中风险计数"
+          },
+          "低风险": {
+            "code": "pjm_risk_low",
+            "displayName": "低风险数",
+            "domain": "风险",
+            "category": "等级",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "风险等级为'低'的风险总数",
+            "formula": "风险等级='低' 的风险计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)低风险计数"
+          },
+          "已释放": {
+            "code": "pjm_risk_released",
+            "displayName": "已释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "目前状态为'已释放'(已闭环)的风险数",
+            "formula": "风险状态='已释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)已释放风险计数"
+          },
+          "未释放": {
+            "code": "pjm_risk_open",
+            "displayName": "未释放风险数",
+            "domain": "风险",
+            "category": "状态",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "目前状态为'未释放'的风险总数",
+            "formula": "风险状态='未释放' 的风险计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "风险信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "(衍生)未释放风险计数"
+          }
+        },
+        "description": "指标摘要表：按风险月度汇总展示总量、等级分布、已释放和未释放规模。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(total_risk_cnt),0)::numeric AS total_risk_cnt, COALESCE(SUM(high_cnt),0)::numeric AS high_cnt, COALESCE(SUM(mid_cnt),0)::numeric AS mid_cnt, COALESCE(SUM(low_cnt),0)::numeric AS low_cnt, COALESCE(SUM(released_cnt),0)::numeric AS released_cnt, COALESCE(SUM(open_cnt),0)::numeric AS open_cnt FROM biz_dws_risk_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('风险总数', agg.total_risk_cnt, '统计周期内登记风险总量'), ('高风险', agg.high_cnt, '高等级风险数量'), ('中风险', agg.mid_cnt, '中等级风险数量'), ('低风险', agg.low_cnt, '低等级风险数量'), ('已释放', agg.released_cnt, '已完成释放闭环的风险数量'), ('未释放', agg.open_cnt, '截至统计周期仍未释放的风险数量')) AS v(metric,value,note)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-support-table",
+      "type": "table",
+      "name": "未释放风险应对措施表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未释放风险应对措施表",
+        "header": [
+          "项目编号",
+          "风险名称",
+          "分系统",
+          "责任科室",
+          "风险等级",
+          "风险状态",
+          "应对措施",
+          "月度管控计划",
+          "周度释放计划",
+          "责任人",
+          "滞留天数"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "滞留天数": {
+            "code": "pjm_qual_aging_days",
+            "displayName": "滞留天数",
+            "domain": "质量",
+            "category": "节点属性",
+            "unit": "天",
+            "direction": "DOWN",
+            "definition": "质量问题从发生到当前(或归零完成)的累计天数",
+            "formula": "未归零: 当前日期 − 问题发生日期; 已归零: 归零完成日期 − 问题发生日期",
+            "scope": "针对单个质量问题/风险/变更",
+            "sourceTable": "质量信息汇总表 / 风险信息汇总表 / 技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": {
+              "warning": 30,
+              "critical": 60,
+              "rule": ">"
+            },
+            "excelRef": "(派生)aging_days"
+          },
+          "风险等级": {
+            "kind": "field",
+            "displayName": "风险等级",
+            "definition": "风险按业务影响程度的分级。",
+            "enumValues": [
+              {
+                "code": "高",
+                "label": "高风险",
+                "description": "影响项目目标的重大风险,需重点关注与即时响应"
+              },
+              {
+                "code": "中",
+                "label": "中风险",
+                "description": "影响范围有限的中等风险,定期跟进"
+              },
+              {
+                "code": "低",
+                "label": "低风险",
+                "description": "潜在风险,持续观察"
+              }
+            ],
+            "sourceTable": "风险信息汇总表 / 进度信息汇总表(节点风险)",
+            "note": null
+          },
+          "风险类别": {
+            "kind": "field",
+            "displayName": "风险类别",
+            "definition": "风险按业务领域的分类。",
+            "enumValues": [
+              {
+                "code": "技术",
+                "label": "技术风险",
+                "description": "技术方案/技术难题/技术指标相关"
+              },
+              {
+                "code": "进度",
+                "label": "进度风险",
+                "description": "节点延期/计划偏差相关"
+              },
+              {
+                "code": "成本",
+                "label": "成本风险",
+                "description": "预算超支/成本上升相关"
+              },
+              {
+                "code": "设计",
+                "label": "设计风险",
+                "description": "设计变更/方案返工相关"
+              },
+              {
+                "code": "质量",
+                "label": "质量风险",
+                "description": "产品/工艺质量相关"
+              },
+              {
+                "code": "其他",
+                "label": "其他风险",
+                "description": "未归入以上分类的风险"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": null
+          },
+          "风险状态": {
+            "kind": "field",
+            "displayName": "风险状态",
+            "definition": "风险的当前生命周期状态。",
+            "enumValues": [
+              {
+                "code": "已释放",
+                "label": "已释放",
+                "description": "风险已闭环,不再影响项目"
+              },
+              {
+                "code": "未释放",
+                "label": "未释放",
+                "description": "风险仍在跟踪中(默认状态)"
+              }
+            ],
+            "sourceTable": "风险信息汇总表",
+            "note": "数据规范化: 仅'已释放'是显式标识,其余值统一归为'未释放'"
+          }
+        },
+        "description": "跟进处置表：聚焦仍未释放风险的应对措施、月度管控和周度释放计划。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 130,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", risk_name AS \"风险名称\", subsystem AS \"分系统\", dept AS \"责任科室\", risk_level AS \"风险等级\", risk_status AS \"风险状态\", response_measure AS \"应对措施\", monthly_control_plan AS \"月度管控计划\", weekly_release_plan AS \"周度释放计划\", response_owner AS \"责任人\", pending_days AS \"滞留天数\" FROM biz_dwd_risk_info_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND COALESCE(risk_status,'未释放') <> '已释放' [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] [[AND risk_level = {{riskLevel}}]] ORDER BY pending_days DESC NULLS LAST, risk_submit_date ASC",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            },
+            {
+              "name": "riskLevel",
+              "variableKey": "riskLevel"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-title",
+      "type": "title",
+      "name": "风险全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-detail-section-desc",
+      "type": "title",
+      "name": "风险全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内风险事实、等级、类别、状态、应对措施和滞留天数。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-side-section-title",
+      "type": "title",
+      "name": "风险分类与释放摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "风险分类与释放摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-side-section-desc",
+      "type": "title",
+      "name": "风险分类与释放摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：按风险月度汇总展示总量、等级分布、已释放和未释放规模。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-risk-support-section-title",
+      "type": "title",
+      "name": "未释放风险应对措施表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未释放风险应对措施表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-risk-support-section-desc",
+      "type": "title",
+      "name": "未释放风险应对措施表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦仍未释放风险的应对措施、月度管控和周度释放计划。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

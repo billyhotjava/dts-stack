@@ -1,0 +1,61 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: dts-metrics
+  # Datasource / JPA / Liquibase mirror dts-admin (source/dts-admin/.../config/application-{dev,prod}.yml
+  # + application.yml). dts-metrics owns an isolated database `dts_metrics` (fact-source isolation, T02),
+  # but reuses the sibling env-var names SPRING_DATASOURCE_* / PG_HOST that docker-compose already feeds.
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://${PG_HOST:dts-pg}:5432/dts_metrics}
+    username: ${SPRING_DATASOURCE_USERNAME:dts_metrics}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    hikari:
+      poolName: Hikari
+      auto-commit: false
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.connection.provider_disables_autocommit: true
+      hibernate.jdbc.batch_size: 25
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - health
+          - info
+
+dts:
+  metrics:
+    edition: ${DTS_EDITION:foundation}
+    service-name: ${DTS_METRICS_SERVICE_NAME:dts-metrics}
+    platform:
+      base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}
+      api-path: ${DTS_PLATFORM_API_PATH:/api}
+      service-token: ${DTS_METRICS_TO_PLATFORM:${DTS_ADMIN_SERVICE_TOKEN:}}
+      connect-timeout-ms: ${DTS_PLATFORM_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${DTS_PLATFORM_READ_TIMEOUT_MS:5000}
+      taggable-asset-register-enabled: ${DTS_METRICS_TAGGABLE_ASSET_REGISTER_ENABLED:false}
+
+liquibase:
+  searchPath: classpath:/config/liquibase
+  duplicateFileMode: WARN

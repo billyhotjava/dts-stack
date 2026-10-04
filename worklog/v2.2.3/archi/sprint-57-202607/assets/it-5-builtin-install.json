@@ -1,0 +1,151 @@
+{
+  "installs": [
+    {
+      "code": "gbt-2261-gender",
+      "httpStatus": "200",
+      "status": 200,
+      "message": "OK",
+      "data": {
+        "runId": "94e4156a-a4d1-4cfd-ab7b-5126030e94af",
+        "status": "APPLIED",
+        "created": {
+          "CODE_DIRECTORY": 1,
+          "CODE_VALUE": 4
+        },
+        "updated": {},
+        "totalCreated": 5,
+        "totalUpdated": 0,
+        "applied": true,
+        "packageCode": "gbt-2261-gender",
+        "packageName": "性别代码"
+      }
+    },
+    {
+      "code": "gbt-4658-education",
+      "httpStatus": "200",
+      "status": 200,
+      "message": "OK",
+      "data": {
+        "runId": "c3655a2d-6959-4221-a9e0-715e98c3539b",
+        "status": "APPLIED",
+        "created": {
+          "CODE_DIRECTORY": 1,
+          "CODE_VALUE": 16
+        },
+        "updated": {},
+        "totalCreated": 17,
+        "totalUpdated": 0,
+        "applied": true,
+        "packageCode": "gbt-4658-education",
+        "packageName": "学历代码"
+      }
+    },
+    {
+      "code": "gbt-2260-region",
+      "httpStatus": "200",
+      "status": 200,
+      "message": "OK",
+      "data": {
+        "runId": "5c413203-ed27-4dec-99e4-ef1730635788",
+        "status": "APPLIED",
+        "created": {
+          "CODE_DIRECTORY": 1,
+          "CODE_VALUE": 34
+        },
+        "updated": {},
+        "totalCreated": 35,
+        "totalUpdated": 0,
+        "applied": true,
+        "packageCode": "gbt-2260-region",
+        "packageName": "行政区划代码（省级）"
+      }
+    },
+    {
+      "code": "common-data-elements",
+      "httpStatus": "200",
+      "status": 200,
+      "message": "OK",
+      "data": {
+        "runId": "bcadc062-b617-40f9-a8cc-3794d8f4aa4d",
+        "status": "APPLIED",
+        "created": {
+          "TERM": 3,
+          "ELEMENT": 15
+        },
+        "updated": {},
+        "totalCreated": 18,
+        "totalUpdated": 0,
+        "applied": true,
+        "packageCode": "common-data-elements",
+        "packageName": "常用数据元"
+      }
+    },
+    {
+      "code": "gbt-2261-gender-repeat",
+      "httpStatus": "200",
+      "status": 200,
+      "message": "OK",
+      "data": {
+        "runId": "b497c007-fb03-4486-9952-f91a90c30982",
+        "status": "APPLIED",
+        "created": {},
+        "updated": {
+          "CODE_DIRECTORY": 1,
+          "CODE_VALUE": 4
+        },
+        "totalCreated": 0,
+        "totalUpdated": 5,
+        "applied": true,
+        "packageCode": "gbt-2261-gender",
+        "packageName": "性别代码"
+      }
+    }
+  ],
+  "listHttpStatus": "200",
+  "builtinInstalledFlags": [
+    {
+      "code": "gbt-2261-gender",
+      "installed": true,
+      "entryCounts": {
+        "03-reference-code-directories.csv": 1,
+        "04-reference-code-items.csv": 4
+      }
+    },
+    {
+      "code": "gbt-4658-education",
+      "installed": true,
+      "entryCounts": {
+        "03-reference-code-directories.csv": 1,
+        "04-reference-code-items.csv": 16
+      }
+    },
+    {
+      "code": "gbt-2260-region",
+      "installed": true,
+      "entryCounts": {
+        "03-reference-code-directories.csv": 1,
+        "04-reference-code-items.csv": 34
+      }
+    },
+    {
+      "code": "common-data-elements",
+      "installed": true,
+      "entryCounts": {
+        "01-business-terms.csv": 3,
+        "02-data-elements.csv": 15
+      }
+    }
+  ],
+  "sqlCounts": [
+    "gender_dirs=1",
+    "gender_values=4",
+    "education_dirs=1",
+    "education_values=16",
+    "region_dirs=1",
+    "region_values=34",
+    "common_elements=15",
+    "gender_code_set_elements=1",
+    "education_code_set_elements=1",
+    "region_code_set_elements=1"
+  ]
+}

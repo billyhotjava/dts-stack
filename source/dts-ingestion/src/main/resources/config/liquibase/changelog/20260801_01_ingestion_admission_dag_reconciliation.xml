@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260801-01-ingestion-admission-dag-reconciliation" author="codex">
+        <addColumn tableName="ingestion_task_revision">
+            <column name="dag_deployment_status" type="varchar(32)"/>
+            <column name="dag_deployment_error" type="text"/>
+            <column name="staged_dag_path" type="varchar(1000)"/>
+            <column name="published_dag_path" type="varchar(1000)"/>
+            <column name="previous_airflow_dag_id" type="varchar(200)"/>
+            <column name="dag_deployment_updated_at" type="timestamp with time zone"/>
+        </addColumn>
+        <createIndex tableName="ingestion_task_revision" indexName="idx_ingestion_revision_dag_deployment">
+            <column name="dag_deployment_status"/>
+            <column name="dag_deployment_updated_at"/>
+        </createIndex>
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE ingestion_task_revision
+                ADD CONSTRAINT ck_ingestion_revision_dag_deployment_status
+                CHECK (
+                    dag_deployment_status IS NULL
+                    OR dag_deployment_status IN ('STAGED', 'RESTAGE_REQUIRED', 'RECONCILIATION_REQUIRED', 'ACTIVE')
+                ),
+                ADD CONSTRAINT ck_ingestion_revision_dag_paths
+                CHECK (
+                    (staged_dag_path IS NULL AND published_dag_path IS NULL)
+                    OR
+                    (staged_dag_path IS NOT NULL AND published_dag_path IS NOT NULL)
+                ),
+                ADD CONSTRAINT ck_ingestion_revision_dag_deployment_metadata
+                CHECK (
+                    (dag_deployment_status IS NULL AND dag_deployment_updated_at IS NULL)
+                    OR
+                    (
+                        dag_deployment_status IS NOT NULL
+                        AND dag_deployment_updated_at IS NOT NULL
+                        AND staged_dag_path IS NOT NULL
+                        AND published_dag_path IS NOT NULL
+                    )
+                )
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                ALTER TABLE ingestion_task_revision
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_revision_dag_deployment_metadata,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_revision_dag_paths,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_revision_dag_deployment_status
+            ]]></sql>
+            <dropIndex tableName="ingestion_task_revision" indexName="idx_ingestion_revision_dag_deployment"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="dag_deployment_updated_at"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="previous_airflow_dag_id"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="published_dag_path"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="staged_dag_path"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="dag_deployment_error"/>
+            <dropColumn tableName="ingestion_task_revision" columnName="dag_deployment_status"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260801-02-ingestion-access-contract-checks" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE ingestion_access_default_policy
+                ADD CONSTRAINT ck_ingestion_access_policy_version_positive
+                    CHECK (version > 0) NOT VALID,
+                ADD CONSTRAINT ck_ingestion_access_policy_status
+                    CHECK (status IN ('DRAFT', 'ACTIVE', 'SUPERSEDED')) NOT VALID;
+            ALTER TABLE ingestion_task_revision
+                ADD CONSTRAINT ck_ingestion_task_revision_number_positive
+                    CHECK (revision_number > 0) NOT VALID,
+                ADD CONSTRAINT ck_ingestion_task_revision_policy_version_positive
+                    CHECK (default_policy_version > 0) NOT VALID,
+                ADD CONSTRAINT ck_ingestion_task_revision_state
+                    CHECK (state IN ('DRAFT', 'ACTIVE', 'SUPERSEDED', 'LEGACY_UNSEALED')) NOT VALID,
+                ADD CONSTRAINT ck_ingestion_task_revision_source_kind
+                    CHECK (source_kind IN ('database', 'api', 'file')) NOT VALID,
+                ADD CONSTRAINT ck_ingestion_task_revision_runtime_snapshot
+                    CHECK (
+                        (runtime_snapshot IS NULL AND runtime_snapshot_iv IS NULL AND runtime_snapshot_key_version IS NULL)
+                        OR
+                        (runtime_snapshot IS NOT NULL AND runtime_snapshot_iv IS NOT NULL AND runtime_snapshot_key_version IS NOT NULL)
+                    ) NOT VALID;
+            ALTER TABLE ingestion_execution
+                DROP CONSTRAINT fk_ingestion_execution_task_revision,
+                ADD CONSTRAINT fk_ingestion_execution_task_revision
+                    FOREIGN KEY (task_revision_id)
+                    REFERENCES ingestion_task_revision(id)
+                    ON DELETE SET NULL
+                    NOT VALID,
+                ADD CONSTRAINT ck_ingestion_execution_revision_number_positive
+                    CHECK (revision_number IS NULL OR revision_number > 0) NOT VALID
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                ALTER TABLE ingestion_execution
+                    DROP CONSTRAINT IF EXISTS fk_ingestion_execution_task_revision,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_execution_revision_number_positive;
+                ALTER TABLE ingestion_execution
+                    ADD CONSTRAINT fk_ingestion_execution_task_revision
+                    FOREIGN KEY (task_revision_id)
+                    REFERENCES ingestion_task_revision(id)
+                    ON DELETE SET NULL;
+                ALTER TABLE ingestion_task_revision
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_task_revision_runtime_snapshot,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_task_revision_source_kind,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_task_revision_state,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_task_revision_policy_version_positive,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_task_revision_number_positive;
+                ALTER TABLE ingestion_access_default_policy
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_access_policy_status,
+                    DROP CONSTRAINT IF EXISTS ck_ingestion_access_policy_version_positive
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260801-03-validate-ingestion-access-contract-checks" author="codex">
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE ingestion_access_default_policy
+                VALIDATE CONSTRAINT ck_ingestion_access_policy_version_positive;
+            ALTER TABLE ingestion_access_default_policy
+                VALIDATE CONSTRAINT ck_ingestion_access_policy_status;
+            ALTER TABLE ingestion_task_revision
+                VALIDATE CONSTRAINT ck_ingestion_task_revision_number_positive;
+            ALTER TABLE ingestion_task_revision
+                VALIDATE CONSTRAINT ck_ingestion_task_revision_policy_version_positive;
+            ALTER TABLE ingestion_task_revision
+                VALIDATE CONSTRAINT ck_ingestion_task_revision_state;
+            ALTER TABLE ingestion_task_revision
+                VALIDATE CONSTRAINT ck_ingestion_task_revision_source_kind;
+            ALTER TABLE ingestion_task_revision
+                VALIDATE CONSTRAINT ck_ingestion_task_revision_runtime_snapshot;
+            ALTER TABLE ingestion_execution
+                VALIDATE CONSTRAINT fk_ingestion_execution_task_revision;
+            ALTER TABLE ingestion_execution
+                VALIDATE CONSTRAINT ck_ingestion_execution_revision_number_positive
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                ALTER TABLE ingestion_execution
+                    DROP CONSTRAINT fk_ingestion_execution_task_revision;
+                ALTER TABLE ingestion_execution
+                    ADD CONSTRAINT fk_ingestion_execution_task_revision
+                    FOREIGN KEY (task_revision_id)
+                    REFERENCES ingestion_task_revision(id)
+                    ON DELETE SET NULL
+                    NOT VALID;
+                ALTER TABLE ingestion_execution
+                    DROP CONSTRAINT ck_ingestion_execution_revision_number_positive;
+                ALTER TABLE ingestion_execution
+                    ADD CONSTRAINT ck_ingestion_execution_revision_number_positive
+                    CHECK (revision_number IS NULL OR revision_number > 0) NOT VALID;
+                ALTER TABLE ingestion_task_revision
+                    DROP CONSTRAINT ck_ingestion_task_revision_runtime_snapshot,
+                    DROP CONSTRAINT ck_ingestion_task_revision_source_kind,
+                    DROP CONSTRAINT ck_ingestion_task_revision_state,
+                    DROP CONSTRAINT ck_ingestion_task_revision_policy_version_positive,
+                    DROP CONSTRAINT ck_ingestion_task_revision_number_positive;
+                ALTER TABLE ingestion_task_revision
+                    ADD CONSTRAINT ck_ingestion_task_revision_number_positive
+                        CHECK (revision_number > 0) NOT VALID,
+                    ADD CONSTRAINT ck_ingestion_task_revision_policy_version_positive
+                        CHECK (default_policy_version > 0) NOT VALID,
+                    ADD CONSTRAINT ck_ingestion_task_revision_state
+                        CHECK (state IN ('DRAFT', 'ACTIVE', 'SUPERSEDED', 'LEGACY_UNSEALED')) NOT VALID,
+                    ADD CONSTRAINT ck_ingestion_task_revision_source_kind
+                        CHECK (source_kind IN ('database', 'api', 'file')) NOT VALID,
+                    ADD CONSTRAINT ck_ingestion_task_revision_runtime_snapshot
+                        CHECK (
+                            (runtime_snapshot IS NULL AND runtime_snapshot_iv IS NULL AND runtime_snapshot_key_version IS NULL)
+                            OR
+                            (runtime_snapshot IS NOT NULL AND runtime_snapshot_iv IS NOT NULL AND runtime_snapshot_key_version IS NOT NULL)
+                        ) NOT VALID;
+                ALTER TABLE ingestion_access_default_policy
+                    DROP CONSTRAINT ck_ingestion_access_policy_status,
+                    DROP CONSTRAINT ck_ingestion_access_policy_version_positive;
+                ALTER TABLE ingestion_access_default_policy
+                    ADD CONSTRAINT ck_ingestion_access_policy_version_positive
+                        CHECK (version > 0) NOT VALID,
+                    ADD CONSTRAINT ck_ingestion_access_policy_status
+                        CHECK (status IN ('DRAFT', 'ACTIVE', 'SUPERSEDED')) NOT VALID
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260801-04-ingestion-scheduled-execution-idempotency" author="codex" runInTransaction="false">
+        <sql splitStatements="false"><![CDATA[
+            DROP INDEX CONCURRENTLY IF EXISTS idx_ingestion_execution_task_revision
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE INDEX CONCURRENTLY idx_ingestion_execution_task_revision
+            ON ingestion_execution(task_revision_id)
+            WHERE task_revision_id IS NOT NULL
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DROP INDEX CONCURRENTLY IF EXISTS uk_ingestion_execution_scheduled_run
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1
+                    FROM ingestion_execution
+                    WHERE task_id IS NOT NULL
+                      AND airflow_dag_id IS NOT NULL
+                      AND execution_id IS NOT NULL
+                    GROUP BY task_id, airflow_dag_id, execution_id
+                    HAVING count(*) > 1
+                ) THEN
+                    RAISE EXCEPTION 'INGESTION_SCHEDULED_EXECUTION_DUPLICATES_EXIST';
+                END IF;
+            END
+            $$
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE UNIQUE INDEX CONCURRENTLY uk_ingestion_execution_scheduled_run
+            ON ingestion_execution(task_id, airflow_dag_id, execution_id)
+            WHERE task_id IS NOT NULL AND airflow_dag_id IS NOT NULL AND execution_id IS NOT NULL
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS uk_ingestion_execution_scheduled_run
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                DROP INDEX CONCURRENTLY IF EXISTS idx_ingestion_execution_task_revision
+            ]]></sql>
+            <sql splitStatements="false"><![CDATA[
+                CREATE INDEX CONCURRENTLY idx_ingestion_execution_task_revision
+                ON ingestion_execution(task_revision_id)
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

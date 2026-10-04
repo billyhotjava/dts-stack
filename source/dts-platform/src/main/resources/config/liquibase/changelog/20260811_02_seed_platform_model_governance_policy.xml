@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260811-02-seed-platform-model-governance-policy" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_platform_governance_policy"/>
+        </preConditions>
+        <comment>
+            Seed the platform-wide release policy with the historical safe default: key and measure
+            fields require standards, and quality evidence is blocking.
+        </comment>
+
+        <sql><![CDATA[
+            INSERT INTO modeling_platform_governance_policy (
+                policy_key,
+                standard_coverage,
+                quality_gate,
+                revision,
+                created_by,
+                last_modified_by,
+                created_date,
+                last_modified_date
+            ) VALUES (
+                'PLATFORM_DEFAULT',
+                'KEY_AND_MEASURE',
+                'BLOCKING',
+                1,
+                'system-migration',
+                'system-migration',
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            );
+        ]]></sql>
+
+        <rollback>
+            <sql><![CDATA[
+                DELETE FROM modeling_platform_governance_policy
+                 WHERE policy_key = 'PLATFORM_DEFAULT';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

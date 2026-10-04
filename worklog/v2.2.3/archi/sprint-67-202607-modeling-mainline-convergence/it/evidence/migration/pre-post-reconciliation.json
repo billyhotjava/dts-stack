@@ -1,0 +1,8 @@
+{
+  "batchId": "legacy-objects-608ba1f186f04890",
+  "sourceChecksum": "608ba1f186f0489041e6db22b49c73f6c0170a8383802657383e2a9bee540d24",
+  "before": {"legacyObjects": 5, "models": 4, "mappings": 9, "dimensions": 4, "metrics": 5, "artifacts": 13, "runs": 2, "reviews": 2},
+  "after": {"isolated": 4, "archivedReadonly": 1, "migrated": 0, "readyForApproval": 0, "accounted": 5, "unaccounted": 0},
+  "replay": {"replayed": true, "checksumChanged": false, "countsChanged": false},
+  "orphanCounts": {"all": 0}
+}

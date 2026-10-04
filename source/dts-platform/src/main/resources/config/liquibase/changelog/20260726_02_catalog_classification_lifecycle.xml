@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260726-02-catalog-classification-facts" author="codex">
+        <createTable tableName="catalog_classification_snapshot">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_classification_snapshot"/>
+            </column>
+            <column name="subject_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)"/>
+            <column name="declared_level" type="varchar(32)"/>
+            <column name="detected_level" type="varchar(32)"/>
+            <column name="manual_floor" type="varchar(32)"/>
+            <column name="effective_level" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="origin_type" type="varchar(48)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="origin_ref" type="varchar(512)"/>
+            <column name="sealed_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="evidence_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="propagation_status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="record_version" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <addUniqueConstraint
+            tableName="catalog_classification_snapshot"
+            columnNames="subject_type, subject_key"
+            constraintName="uk_catalog_classification_snapshot_subject"/>
+        <createIndex
+            tableName="catalog_classification_snapshot"
+            indexName="idx_catalog_classification_snapshot_asset">
+            <column name="asset_type"/>
+            <column name="effective_level"/>
+        </createIndex>
+        <createIndex
+            tableName="catalog_classification_snapshot"
+            indexName="idx_catalog_classification_snapshot_status">
+            <column name="propagation_status"/>
+        </createIndex>
+
+        <createTable tableName="catalog_classification_event">
+            <column name="id" type="uuid">
+                <constraints nullable="false" primaryKey="true" primaryKeyName="pk_catalog_classification_event"/>
+            </column>
+            <column name="subject_type" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="subject_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asset_type" type="varchar(32)"/>
+            <column name="event_type" type="varchar(48)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="previous_level" type="varchar(32)"/>
+            <column name="candidate_level" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="resulting_level" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_type" type="varchar(48)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="trigger_ref" type="varchar(512)"/>
+            <column name="evidence_json" type="text"/>
+            <column name="actor" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="occurred_at" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="snapshot_version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+        <createIndex
+            tableName="catalog_classification_event"
+            indexName="idx_catalog_classification_event_subject_time">
+            <column name="subject_type"/>
+            <column name="subject_key"/>
+            <column name="occurred_at"/>
+        </createIndex>
+        <createIndex
+            tableName="catalog_classification_event"
+            indexName="idx_catalog_classification_event_result">
+            <column name="resulting_level"/>
+            <column name="occurred_at"/>
+        </createIndex>
+
+        <sql><![CDATA[
+            ALTER TABLE catalog_classification_snapshot
+                ADD CONSTRAINT ck_catalog_classification_snapshot_subject_type
+                CHECK (subject_type IN ('ASSET', 'COLUMN', 'FILE', 'SCREEN_COMPONENT')),
+                ADD CONSTRAINT ck_catalog_classification_snapshot_declared
+                CHECK (declared_level IS NULL OR declared_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')),
+                ADD CONSTRAINT ck_catalog_classification_snapshot_detected
+                CHECK (detected_level IS NULL OR detected_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')),
+                ADD CONSTRAINT ck_catalog_classification_snapshot_manual_floor
+                CHECK (manual_floor IS NULL OR manual_floor IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')),
+                ADD CONSTRAINT ck_catalog_classification_snapshot_effective
+                CHECK (effective_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL'));
+
+            ALTER TABLE catalog_classification_event
+                ADD CONSTRAINT ck_catalog_classification_event_previous
+                CHECK (previous_level IS NULL OR previous_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')),
+                ADD CONSTRAINT ck_catalog_classification_event_candidate
+                CHECK (candidate_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL')),
+                ADD CONSTRAINT ck_catalog_classification_event_resulting
+                CHECK (resulting_level IN ('PUBLIC', 'INTERNAL', 'SECRET', 'CONFIDENTIAL'));
+        ]]></sql>
+
+        <rollback>
+            <dropTable tableName="catalog_classification_event"/>
+            <dropTable tableName="catalog_classification_snapshot"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260726-02-catalog-classification-monotonic-guards" author="codex" dbms="postgresql">
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION catalog_classification_level_rank(level_code varchar)
+            RETURNS integer
+            LANGUAGE sql
+            IMMUTABLE
+            AS $$
+                SELECT CASE level_code
+                    WHEN 'PUBLIC' THEN 0
+                    WHEN 'INTERNAL' THEN 1
+                    WHEN 'SECRET' THEN 2
+                    WHEN 'CONFIDENTIAL' THEN 3
+                    ELSE NULL
+                END
+            $$;
+
+            CREATE FUNCTION guard_catalog_classification_snapshot()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                IF NEW.subject_type IS DISTINCT FROM OLD.subject_type
+                   OR NEW.subject_key IS DISTINCT FROM OLD.subject_key
+                   OR NEW.asset_type IS DISTINCT FROM OLD.asset_type
+                   OR NEW.declared_level IS DISTINCT FROM OLD.declared_level
+                   OR NEW.origin_type IS DISTINCT FROM OLD.origin_type
+                   OR NEW.origin_ref IS DISTINCT FROM OLD.origin_ref
+                   OR NEW.sealed_at IS DISTINCT FROM OLD.sealed_at
+                   OR NEW.evidence_checksum IS DISTINCT FROM OLD.evidence_checksum THEN
+                    RAISE EXCEPTION 'classification source evidence is immutable';
+                END IF;
+
+                IF catalog_classification_level_rank(NEW.effective_level)
+                   < catalog_classification_level_rank(OLD.effective_level) THEN
+                    RAISE EXCEPTION 'effective classification cannot be lowered';
+                END IF;
+                IF OLD.detected_level IS NOT NULL
+                   AND (
+                       NEW.detected_level IS NULL
+                       OR catalog_classification_level_rank(NEW.detected_level)
+                          < catalog_classification_level_rank(OLD.detected_level)
+                   ) THEN
+                    RAISE EXCEPTION 'detected classification cannot be lowered';
+                END IF;
+                IF OLD.manual_floor IS NOT NULL
+                   AND (
+                       NEW.manual_floor IS NULL
+                       OR catalog_classification_level_rank(NEW.manual_floor)
+                          < catalog_classification_level_rank(OLD.manual_floor)
+                   ) THEN
+                    RAISE EXCEPTION 'manual classification floor cannot be lowered';
+                END IF;
+                RETURN NEW;
+            END;
+            $$;
+
+            CREATE TRIGGER trg_catalog_classification_snapshot_guard
+            BEFORE UPDATE ON catalog_classification_snapshot
+            FOR EACH ROW EXECUTE FUNCTION guard_catalog_classification_snapshot();
+
+            CREATE FUNCTION reject_catalog_classification_event_mutation()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                RAISE EXCEPTION 'classification events are append-only';
+            END;
+            $$;
+
+            CREATE TRIGGER trg_catalog_classification_event_immutable
+            BEFORE UPDATE OR DELETE ON catalog_classification_event
+            FOR EACH ROW EXECUTE FUNCTION reject_catalog_classification_event_mutation();
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DROP TRIGGER IF EXISTS trg_catalog_classification_event_immutable ON catalog_classification_event;
+                DROP FUNCTION IF EXISTS reject_catalog_classification_event_mutation();
+                DROP TRIGGER IF EXISTS trg_catalog_classification_snapshot_guard ON catalog_classification_snapshot;
+                DROP FUNCTION IF EXISTS guard_catalog_classification_snapshot();
+                DROP FUNCTION IF EXISTS catalog_classification_level_rank(varchar);
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

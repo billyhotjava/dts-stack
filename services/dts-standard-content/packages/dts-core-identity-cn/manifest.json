@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "2.0",
+  "packageCode": "dts-core-identity-cn",
+  "packageName": "中国居民身份证基础标准包",
+  "packageVersion": "1.0.0",
+  "standardNo": "居民身份证法；GB 11643-1999；GB/T 2261.1-2003",
+  "category": "身份数据标准",
+  "industry": "COMMON",
+  "releasedAt": "2026-07-29T00:00:00Z",
+  "effectiveFrom": "2026-07-29",
+  "dependencies": [
+    {
+      "packageCode": "gbt-2261-gender",
+      "minimumVersion": "1.0.0"
+    }
+  ],
+  "replaces": [],
+  "deprecated": false,
+  "sourceRegisterRef": "source-register.json#dts-core-identity-cn",
+  "licenseConclusion": "REVIEW_REQUIRED",
+  "description": "居民身份证登记项目与自然人身份基础数据元；不包含身份证样本、个人数据或标准全文。",
+  "files": {
+    "01-business-terms.csv": "2fea4c13e2faaba43d22433b1b6dbcbb4b562ef563b3800d6705c92a2062d594",
+    "02-data-elements.csv": "7c1bda9051305b813e1917a908ce80c912d2611336a5706468f9e385fa88a698",
+    "source-register.json": "b25260287df1b79c3f4aeec3d62a2581dd7812aeb9e8872dc98323f6f590f52c"
+  },
+  "contentChecksum": "c103a82aef3d8644ddf33a2120be8a4dfd0c3db6c882ae104cc3ac36356de20f"
+}

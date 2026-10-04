@@ -1,0 +1,773 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260731-04-data-integration-access-menu-convergence" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <and>
+                <tableExists tableName="portal_menu"/>
+                <tableExists tableName="portal_menu_visibility"/>
+                <tableExists tableName="system_config"/>
+                <sequenceExists sequenceName="portal_menu_visibility_seq"/>
+                <columnExists tableName="portal_menu" columnName="metadata"/>
+                <columnExists tableName="portal_menu" columnName="parent_id"/>
+                <columnExists tableName="portal_menu" columnName="deleted"/>
+            </and>
+        </preConditions>
+
+        <comment>
+            Converge the legacy data-integration children into the unified access workspace. Reuse the
+            existing Sources, Connectors, and JDBC Drivers rows so their ids and direct visibility bindings
+            survive the upgrade. Visibility is copied only from the legacy capability it replaces; the root
+            and sibling bindings never fan out transitively. Retire only enabled seed-managed legacy rows.
+        </comment>
+
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                resource_id BIGINT;
+                resource_root_count INTEGER;
+                legacy_sources_id BIGINT;
+                existing_overview_id BIGINT;
+                existing_overview_was_created BOOLEAN;
+                access_overview_id BIGINT;
+                runtime_id BIGINT;
+                runtime_was_created BOOLEAN;
+                target_menu_id BIGINT;
+                target_was_direct BOOLEAN;
+                target_was_created BOOLEAN;
+                source_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                ingestion_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                metadata_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                changes_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                connector_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                jdbc_menu_ids BIGINT[] := ARRAY[]::BIGINT[];
+                menu_snapshot JSONB := '[]'::JSONB;
+                desired RECORD;
+                seed_hash TEXT := 'd3283387b18e31a492acd664233a201e5b84bcb3ab044485f8c8d8becef74283';
+                snapshot_key TEXT := 'portal.menu.access.convergence.snapshot.20260731-04';
+            BEGIN
+                -- The data-integration root is identified by its exact seed metadata key. A populated but
+                -- unrecognisable tree is unsafe to mutate and therefore fails closed.
+                SELECT COUNT(*), MIN(id)
+                  INTO resource_root_count, resource_id
+                 FROM portal_menu
+                 WHERE parent_id IS NULL
+                   AND deleted = FALSE
+                   AND metadata IS NOT NULL
+                   AND metadata::jsonb ->> 'key' = 'resource';
+
+                IF resource_root_count = 0 THEN
+                    IF EXISTS (SELECT 1 FROM portal_menu) THEN
+                        RAISE EXCEPTION 'data-integration menu root metadata key resource is missing';
+                    END IF;
+                    RETURN;
+                END IF;
+                IF resource_root_count <> 1 THEN
+                    RAISE EXCEPTION 'data-integration menu root metadata key resource is ambiguous: % rows', resource_root_count;
+                END IF;
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = snapshot_key) THEN
+                    RAISE EXCEPTION 'data-integration menu convergence snapshot already exists';
+                END IF;
+
+                SELECT id
+                  INTO runtime_id
+                 FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND (
+                       deleted = FALSE
+                       OR (
+                           deleted = TRUE
+                           AND created_by = 'data-integration-access-menu-convergence'
+                           AND last_modified_by = 'data-integration-access-menu-convergence-rollback'
+                       )
+                   )
+                   AND (
+                       name = 'sys.nav.portal.resourceRuntime'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceRuntime'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                -- Snapshot only enabled legacy capability rows before any row is renamed, moved, or retired.
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO source_menu_ids
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.resourceSources'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceSources'
+                   );
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO ingestion_menu_ids
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.resourceIngestion'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceIngestion'
+                   );
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO metadata_menu_ids
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.resourceMetadata'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceMetadata'
+                   );
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO changes_menu_ids
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.resourceChanges'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceChanges'
+                   );
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO connector_menu_ids
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (parent_id = resource_id OR parent_id = runtime_id)
+                   AND (
+                       name = 'sys.nav.portal.resourceConnectors'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceConnectors'
+                   );
+                SELECT COALESCE(ARRAY_AGG(id ORDER BY id), ARRAY[]::BIGINT[])
+                  INTO jdbc_menu_ids
+                  FROM portal_menu
+                 WHERE deleted = FALSE
+                   AND (parent_id = resource_id OR parent_id = runtime_id)
+                   AND (
+                       name = 'sys.nav.portal.resourceJdbcDrivers'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceJdbcDrivers'
+                   );
+
+                SELECT id
+                  INTO legacy_sources_id
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND deleted = FALSE
+                   AND (
+                       name = 'sys.nav.portal.resourceSources'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceSources'
+                   )
+                 ORDER BY id
+                 LIMIT 1;
+
+                SELECT id, created_by = 'data-integration-access-menu-convergence'
+                  INTO existing_overview_id, existing_overview_was_created
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND (
+                       deleted = FALSE
+                       OR (
+                           deleted = TRUE
+                           AND created_by = 'data-integration-access-menu-convergence'
+                           AND last_modified_by = 'data-integration-access-menu-convergence-rollback'
+                       )
+                   )
+                   AND (
+                       name = 'sys.nav.portal.resourceAccessOverview'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceAccessOverview'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                -- Prefer the legacy Sources id. Its own visibility triples stay on the same row.
+                access_overview_id := COALESCE(legacy_sources_id, existing_overview_id);
+                IF access_overview_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.resourceAccessOverview',
+                        'resource/access-overview',
+                        '/pages/foundation/access/AccessWorkspacePage',
+                        1,
+                        '{"key":"accessOverview","sectionKey":"resource","entryKey":"accessOverview","titleKey":"sys.nav.portal.resourceAccessOverview","title":"接入概览","icon":"solar:layers-bold-duotone","externalLink":"/foundation/data-sources"}',
+                        resource_id,
+                        'solar:layers-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'data-integration-access-menu-convergence', now(),
+                        'data-integration-access-menu-convergence-created', now()
+                    ) RETURNING id INTO access_overview_id;
+                ELSE
+                    IF legacy_sources_id IS NOT NULL OR NOT existing_overview_was_created THEN
+                        SELECT menu_snapshot || jsonb_build_array(to_jsonb(snapshot_menu))
+                          INTO menu_snapshot
+                          FROM portal_menu snapshot_menu
+                         WHERE snapshot_menu.id = access_overview_id
+                           AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                           AND NOT EXISTS (
+                               SELECT 1
+                                 FROM jsonb_array_elements(menu_snapshot) saved
+                                WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                           );
+                    END IF;
+                    UPDATE portal_menu
+                       SET name = 'sys.nav.portal.resourceAccessOverview',
+                           path = 'resource/access-overview',
+                           component = '/pages/foundation/access/AccessWorkspacePage',
+                           sort_order = 1,
+                           metadata = '{"key":"accessOverview","sectionKey":"resource","entryKey":"accessOverview","titleKey":"sys.nav.portal.resourceAccessOverview","title":"接入概览","icon":"solar:layers-bold-duotone","externalLink":"/foundation/data-sources"}',
+                           icon = 'solar:layers-bold-duotone',
+                           deleted = FALSE,
+                           last_modified_by = CASE
+                               WHEN legacy_sources_id IS NOT NULL
+                                   THEN 'data-integration-access-menu-convergence-migrated-sources'
+                               WHEN existing_overview_was_created
+                                   THEN 'data-integration-access-menu-convergence-created'
+                               ELSE 'data-integration-access-menu-convergence-aligned-overview'
+                           END,
+                           last_modified_date = now()
+                     WHERE id = access_overview_id;
+                END IF;
+
+                -- Overview receives only the direct Sources, Ingestion, Metadata, and Changes triples.
+                INSERT INTO portal_menu_visibility (
+                    id, menu_id, role_code, permission_code, data_level,
+                    created_by, created_date, last_modified_by, last_modified_date
+                )
+                SELECT nextval('portal_menu_visibility_seq'), access_overview_id, source.role_code,
+                       source.permission_code, source.data_level,
+                       'data-integration-access-menu-convergence', now(),
+                       'data-integration-access-menu-convergence', now()
+                  FROM (
+                      SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                        FROM portal_menu_visibility visibility
+                       WHERE visibility.menu_id = ANY(
+                           source_menu_ids || ingestion_menu_ids || metadata_menu_ids || changes_menu_ids
+                       )
+                  ) source
+                 WHERE NOT EXISTS (
+                       SELECT 1
+                         FROM portal_menu_visibility target
+                        WHERE target.menu_id = access_overview_id
+                          AND target.role_code = source.role_code
+                          AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                          AND target.data_level IS NOT DISTINCT FROM source.data_level
+                );
+
+                -- If seed upsert already created a second overview, retire it only when it was enabled.
+                SELECT menu_snapshot || COALESCE(jsonb_agg(to_jsonb(snapshot_menu) ORDER BY snapshot_menu.id), '[]'::JSONB)
+                  INTO menu_snapshot
+                  FROM portal_menu snapshot_menu
+                 WHERE snapshot_menu.id = existing_overview_id
+                   AND existing_overview_id IS DISTINCT FROM access_overview_id
+                   AND snapshot_menu.deleted = FALSE
+                   AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM jsonb_array_elements(menu_snapshot) saved
+                        WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                   );
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = 'data-integration-access-menu-convergence-retired-enabled',
+                       last_modified_date = now()
+                 WHERE id = existing_overview_id
+                   AND existing_overview_id IS DISTINCT FROM access_overview_id
+                   AND deleted = FALSE;
+
+                -- Database/API/file inherit only Sources + Ingestion. Defaults never receives historical bindings.
+                FOR desired IN
+                    SELECT * FROM (VALUES
+                        ('databaseAccess', 'database-access', 'sys.nav.portal.resourceDatabaseAccess', '数据库接入', 'solar:database-bold-duotone', '/foundation/data-sources/database', '/pages/foundation/access/AccessWorkspacePage', 2),
+                        ('apiAccess', 'api-access', 'sys.nav.portal.resourceApiAccess', 'API 接入', 'solar:link-bold-duotone', '/foundation/data-sources/api', '/pages/foundation/access/AccessWorkspacePage', 3),
+                        ('fileAccess', 'file-access', 'sys.nav.portal.resourceFileAccess', '离线文件接入', 'solar:file-text-bold-duotone', '/foundation/data-sources/files', '/pages/foundation/access/AccessWorkspacePage', 4),
+                        ('accessDefaults', 'access-defaults', 'sys.nav.portal.resourceAccessDefaults', '默认策略', 'solar:settings-minimalistic-bold-duotone', '/foundation/data-sources/defaults', '/pages/foundation/access/AccessDefaultsPage', 5)
+                    ) AS access_node(menu_key, path_segment, title_key, menu_title, menu_icon, external_link, component_path, menu_order)
+                LOOP
+                    target_menu_id := NULL;
+                    target_was_created := FALSE;
+                    SELECT id, created_by = 'data-integration-access-menu-convergence'
+                      INTO target_menu_id, target_was_created
+                      FROM portal_menu
+                     WHERE parent_id = resource_id
+                       AND (
+                           deleted = FALSE
+                           OR (
+                               deleted = TRUE
+                               AND created_by = 'data-integration-access-menu-convergence'
+                               AND last_modified_by = 'data-integration-access-menu-convergence-rollback'
+                           )
+                       )
+                       AND (
+                           name = desired.title_key
+                           OR metadata::jsonb ->> 'titleKey' = desired.title_key
+                       )
+                     ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            desired.title_key,
+                            'resource/' || desired.path_segment,
+                            desired.component_path,
+                            desired.menu_order,
+                            jsonb_build_object(
+                                'key', desired.menu_key,
+                                'sectionKey', 'resource',
+                                'entryKey', desired.menu_key,
+                                'titleKey', desired.title_key,
+                                'title', desired.menu_title,
+                                'icon', desired.menu_icon,
+                                'externalLink', desired.external_link
+                            )::TEXT,
+                            resource_id,
+                            desired.menu_icon,
+                            'GENERAL',
+                            FALSE,
+                            'data-integration-access-menu-convergence', now(),
+                            'data-integration-access-menu-convergence-created', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        IF NOT target_was_created THEN
+                            SELECT menu_snapshot || jsonb_build_array(to_jsonb(snapshot_menu))
+                              INTO menu_snapshot
+                              FROM portal_menu snapshot_menu
+                             WHERE snapshot_menu.id = target_menu_id
+                               AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                     FROM jsonb_array_elements(menu_snapshot) saved
+                                    WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                               );
+                        END IF;
+                        UPDATE portal_menu
+                           SET name = desired.title_key,
+                               path = 'resource/' || desired.path_segment,
+                               component = desired.component_path,
+                               sort_order = desired.menu_order,
+                               metadata = jsonb_build_object(
+                                   'key', desired.menu_key,
+                                   'sectionKey', 'resource',
+                                   'entryKey', desired.menu_key,
+                                   'titleKey', desired.title_key,
+                                   'title', desired.menu_title,
+                                   'icon', desired.menu_icon,
+                                   'externalLink', desired.external_link
+                               )::TEXT,
+                               icon = desired.menu_icon,
+                               deleted = FALSE,
+                               last_modified_by = CASE
+                                   WHEN target_was_created THEN 'data-integration-access-menu-convergence-created'
+                                   ELSE 'data-integration-access-menu-convergence-aligned-existing'
+                               END,
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    IF desired.menu_key <> 'accessDefaults' THEN
+                        INSERT INTO portal_menu_visibility (
+                            id, menu_id, role_code, permission_code, data_level,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        )
+                        SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                               source.permission_code, source.data_level,
+                               'data-integration-access-menu-convergence', now(),
+                               'data-integration-access-menu-convergence', now()
+                          FROM (
+                              SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                                FROM portal_menu_visibility visibility
+                               WHERE visibility.menu_id = ANY(source_menu_ids || ingestion_menu_ids)
+                          ) source
+                         WHERE NOT EXISTS (
+                               SELECT 1
+                                 FROM portal_menu_visibility target
+                                WHERE target.menu_id = target_menu_id
+                                  AND target.role_code = source.role_code
+                                  AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                                  AND target.data_level IS NOT DISTINCT FROM source.data_level
+                         );
+                    END IF;
+                END LOOP;
+
+                SELECT id, created_by = 'data-integration-access-menu-convergence'
+                  INTO runtime_id, runtime_was_created
+                  FROM portal_menu
+                 WHERE parent_id = resource_id
+                   AND (
+                       deleted = FALSE
+                       OR (
+                           deleted = TRUE
+                           AND created_by = 'data-integration-access-menu-convergence'
+                           AND last_modified_by = 'data-integration-access-menu-convergence-rollback'
+                       )
+                   )
+                   AND (
+                       name = 'sys.nav.portal.resourceRuntime'
+                       OR metadata::jsonb ->> 'titleKey' = 'sys.nav.portal.resourceRuntime'
+                   )
+                 ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END, id
+                 LIMIT 1;
+
+                IF runtime_id IS NULL THEN
+                    INSERT INTO portal_menu (
+                        name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    ) VALUES (
+                        'sys.nav.portal.resourceRuntime',
+                        'resource/runtime',
+                        NULL,
+                        6,
+                        '{"key":"runtime","sectionKey":"resource","entryKey":"runtime","titleKey":"sys.nav.portal.resourceRuntime","title":"连接器与运行时","icon":"solar:widget-add-bold-duotone"}',
+                        resource_id,
+                        'solar:widget-add-bold-duotone',
+                        'GENERAL',
+                        FALSE,
+                        'data-integration-access-menu-convergence', now(),
+                        'data-integration-access-menu-convergence-created', now()
+                    ) RETURNING id INTO runtime_id;
+                ELSE
+                    IF NOT runtime_was_created THEN
+                        SELECT menu_snapshot || jsonb_build_array(to_jsonb(snapshot_menu))
+                          INTO menu_snapshot
+                          FROM portal_menu snapshot_menu
+                         WHERE snapshot_menu.id = runtime_id
+                           AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                           AND NOT EXISTS (
+                               SELECT 1
+                                 FROM jsonb_array_elements(menu_snapshot) saved
+                                WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                           );
+                    END IF;
+                    UPDATE portal_menu
+                       SET name = 'sys.nav.portal.resourceRuntime',
+                           path = 'resource/runtime',
+                           component = NULL,
+                           sort_order = 6,
+                           metadata = '{"key":"runtime","sectionKey":"resource","entryKey":"runtime","titleKey":"sys.nav.portal.resourceRuntime","title":"连接器与运行时","icon":"solar:widget-add-bold-duotone"}',
+                           icon = 'solar:widget-add-bold-duotone',
+                           deleted = FALSE,
+                           last_modified_by = CASE
+                               WHEN runtime_was_created THEN 'data-integration-access-menu-convergence-created'
+                               ELSE 'data-integration-access-menu-convergence-aligned-existing'
+                           END,
+                           last_modified_date = now()
+                     WHERE id = runtime_id;
+                END IF;
+
+                -- Connectors and JDBC keep only their own historical triples and their canonical row ids.
+                FOR desired IN
+                    SELECT * FROM (VALUES
+                        ('connectors', 'sys.nav.portal.resourceConnectors', '连接器目录', 'solar:widget-add-bold-duotone', '/foundation/connectors', '/pages/foundation/ConnectorRegistryPage', 1),
+                        ('jdbcDrivers', 'sys.nav.portal.resourceJdbcDrivers', '驱动管理', 'solar:plug-circle-bold-duotone', '/foundation/jdbc-drivers', '/pages/foundation/JdbcDriversPage', 2)
+                    ) AS runtime_node(menu_key, title_key, menu_title, menu_icon, external_link, component_path, menu_order)
+                LOOP
+                    target_menu_id := NULL;
+                    target_was_direct := FALSE;
+                    target_was_created := FALSE;
+                    SELECT id, parent_id = resource_id, created_by = 'data-integration-access-menu-convergence'
+                      INTO target_menu_id, target_was_direct, target_was_created
+                      FROM portal_menu
+                     WHERE parent_id IN (resource_id, runtime_id)
+                       AND (
+                           deleted = FALSE
+                           OR (
+                               deleted = TRUE
+                               AND created_by = 'data-integration-access-menu-convergence'
+                               AND last_modified_by = 'data-integration-access-menu-convergence-rollback'
+                           )
+                       )
+                       AND (
+                           name = desired.title_key
+                           OR metadata::jsonb ->> 'titleKey' = desired.title_key
+                       )
+                     ORDER BY CASE WHEN deleted = FALSE THEN 0 ELSE 1 END,
+                              CASE WHEN parent_id = resource_id THEN 0 ELSE 1 END,
+                              id
+                     LIMIT 1;
+
+                    IF target_menu_id IS NULL THEN
+                        INSERT INTO portal_menu (
+                            name, path, component, sort_order, metadata, parent_id, icon, security_level, deleted,
+                            created_by, created_date, last_modified_by, last_modified_date
+                        ) VALUES (
+                            desired.title_key,
+                            'resource/runtime/' || CASE WHEN desired.menu_key = 'jdbcDrivers' THEN 'jdbc-drivers' ELSE desired.menu_key END,
+                            desired.component_path,
+                            desired.menu_order,
+                            jsonb_build_object(
+                                'key', desired.menu_key,
+                                'sectionKey', 'resource',
+                                'entryKey', desired.menu_key,
+                                'titleKey', desired.title_key,
+                                'title', desired.menu_title,
+                                'icon', desired.menu_icon,
+                                'externalLink', desired.external_link
+                            )::TEXT,
+                            runtime_id,
+                            desired.menu_icon,
+                            'GENERAL',
+                            FALSE,
+                            'data-integration-access-menu-convergence', now(),
+                            'data-integration-access-menu-convergence-created', now()
+                        ) RETURNING id INTO target_menu_id;
+                    ELSE
+                        IF NOT target_was_created THEN
+                            SELECT menu_snapshot || jsonb_build_array(to_jsonb(snapshot_menu))
+                              INTO menu_snapshot
+                              FROM portal_menu snapshot_menu
+                             WHERE snapshot_menu.id = target_menu_id
+                               AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                               AND NOT EXISTS (
+                                   SELECT 1
+                                     FROM jsonb_array_elements(menu_snapshot) saved
+                                    WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                               );
+                        END IF;
+                        UPDATE portal_menu
+                           SET parent_id = runtime_id,
+                               name = desired.title_key,
+                               path = 'resource/runtime/' || CASE WHEN desired.menu_key = 'jdbcDrivers' THEN 'jdbc-drivers' ELSE desired.menu_key END,
+                               component = desired.component_path,
+                               sort_order = desired.menu_order,
+                               metadata = jsonb_build_object(
+                                   'key', desired.menu_key,
+                                   'sectionKey', 'resource',
+                                   'entryKey', desired.menu_key,
+                                   'titleKey', desired.title_key,
+                                   'title', desired.menu_title,
+                                   'icon', desired.menu_icon,
+                                   'externalLink', desired.external_link
+                               )::TEXT,
+                               icon = desired.menu_icon,
+                               deleted = FALSE,
+                               last_modified_by = CASE
+                                   WHEN target_was_created
+                                       THEN 'data-integration-access-menu-convergence-created'
+                                   WHEN target_was_direct
+                                       THEN 'data-integration-access-menu-convergence-migrated-direct'
+                                   ELSE 'data-integration-access-menu-convergence-aligned-existing'
+                               END,
+                               last_modified_date = now()
+                         WHERE id = target_menu_id;
+                    END IF;
+
+                    INSERT INTO portal_menu_visibility (
+                        id, menu_id, role_code, permission_code, data_level,
+                        created_by, created_date, last_modified_by, last_modified_date
+                    )
+                    SELECT nextval('portal_menu_visibility_seq'), target_menu_id, source.role_code,
+                           source.permission_code, source.data_level,
+                           'data-integration-access-menu-convergence', now(),
+                           'data-integration-access-menu-convergence', now()
+                      FROM (
+                          SELECT DISTINCT visibility.role_code, visibility.permission_code, visibility.data_level
+                            FROM portal_menu_visibility visibility
+                           WHERE visibility.menu_id = ANY(
+                               CASE WHEN desired.menu_key = 'connectors' THEN connector_menu_ids ELSE jdbc_menu_ids END
+                           )
+                      ) source
+                     WHERE NOT EXISTS (
+                           SELECT 1
+                             FROM portal_menu_visibility target
+                            WHERE target.menu_id = target_menu_id
+                              AND target.role_code = source.role_code
+                              AND target.permission_code IS NOT DISTINCT FROM source.permission_code
+                              AND target.data_level IS NOT DISTINCT FROM source.data_level
+                    );
+
+                    -- Duplicate runtime leaves are recoverable; only rows enabled before this migration are retired.
+                    SELECT menu_snapshot || COALESCE(jsonb_agg(to_jsonb(snapshot_menu) ORDER BY snapshot_menu.id), '[]'::JSONB)
+                      INTO menu_snapshot
+                      FROM portal_menu snapshot_menu
+                     WHERE snapshot_menu.id <> target_menu_id
+                       AND snapshot_menu.parent_id IN (resource_id, runtime_id)
+                       AND snapshot_menu.deleted = FALSE
+                       AND (
+                           snapshot_menu.name = desired.title_key
+                           OR snapshot_menu.metadata::jsonb ->> 'titleKey' = desired.title_key
+                       )
+                       AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                       AND NOT EXISTS (
+                           SELECT 1
+                             FROM jsonb_array_elements(menu_snapshot) saved
+                            WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                       );
+                    UPDATE portal_menu
+                       SET deleted = TRUE,
+                           last_modified_by = 'data-integration-access-menu-convergence-retired-enabled',
+                           last_modified_date = now()
+                     WHERE id <> target_menu_id
+                       AND parent_id IN (resource_id, runtime_id)
+                       AND deleted = FALSE
+                       AND (
+                           name = desired.title_key
+                           OR metadata::jsonb ->> 'titleKey' = desired.title_key
+                       );
+                END LOOP;
+
+                -- Retire only enabled legacy access rows. Pre-deleted rows keep their state and audit marker.
+                SELECT menu_snapshot || COALESCE(jsonb_agg(to_jsonb(snapshot_menu) ORDER BY snapshot_menu.id), '[]'::JSONB)
+                  INTO menu_snapshot
+                  FROM portal_menu snapshot_menu
+                 WHERE snapshot_menu.parent_id = resource_id
+                   AND snapshot_menu.id <> access_overview_id
+                   AND snapshot_menu.deleted = FALSE
+                   AND (
+                       snapshot_menu.name IN (
+                           'sys.nav.portal.resourceSources',
+                           'sys.nav.portal.resourceMetadata',
+                           'sys.nav.portal.resourceIngestion',
+                           'sys.nav.portal.resourceChanges'
+                       )
+                       OR snapshot_menu.metadata::jsonb ->> 'titleKey' IN (
+                           'sys.nav.portal.resourceSources',
+                           'sys.nav.portal.resourceMetadata',
+                           'sys.nav.portal.resourceIngestion',
+                           'sys.nav.portal.resourceChanges'
+                       )
+                   )
+                   AND snapshot_menu.created_by IS DISTINCT FROM 'data-integration-access-menu-convergence'
+                   AND NOT EXISTS (
+                       SELECT 1
+                         FROM jsonb_array_elements(menu_snapshot) saved
+                        WHERE (saved ->> 'id')::BIGINT = snapshot_menu.id
+                   );
+                UPDATE portal_menu
+                   SET deleted = TRUE,
+                       last_modified_by = 'data-integration-access-menu-convergence-retired-enabled',
+                       last_modified_date = now()
+                 WHERE parent_id = resource_id
+                   AND id <> access_overview_id
+                   AND deleted = FALSE
+                   AND (
+                       name IN (
+                           'sys.nav.portal.resourceSources',
+                           'sys.nav.portal.resourceMetadata',
+                           'sys.nav.portal.resourceIngestion',
+                           'sys.nav.portal.resourceChanges'
+                       )
+                       OR metadata::jsonb ->> 'titleKey' IN (
+                           'sys.nav.portal.resourceSources',
+                           'sys.nav.portal.resourceMetadata',
+                           'sys.nav.portal.resourceIngestion',
+                           'sys.nav.portal.resourceChanges'
+                       )
+                   );
+
+                INSERT INTO system_config (
+                    cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                    display_name, config_scope, restart_required, owner, created_by, created_date,
+                    last_modified_by, last_modified_date
+                ) VALUES (
+                    snapshot_key, menu_snapshot::TEXT, 'Rollback snapshot for data-integration menu convergence',
+                    'SYSTEM', FALSE, 'JSON', FALSE, 0,
+                    'Data-integration menu rollback snapshot', 'RUNTIME', FALSE, 'platform',
+                    'data-integration-access-menu-convergence', now(),
+                    'data-integration-access-menu-convergence', now()
+                );
+
+                -- Prevent a seed-hash mismatch from invoking the service's destructive unseeded path.
+                IF EXISTS (SELECT 1 FROM system_config WHERE cfg_key = 'portal.menu.seed.hash') THEN
+                    UPDATE system_config
+                       SET cfg_value = seed_hash,
+                           description = COALESCE(NULLIF(description, ''), 'Portal menu seed hash'),
+                           last_modified_by = 'data-integration-access-menu-convergence',
+                           last_modified_date = now()
+                     WHERE cfg_key = 'portal.menu.seed.hash';
+                ELSE
+                    INSERT INTO system_config (
+                        cfg_key, cfg_value, description, category, sensitive, data_type, editable, sort_order,
+                        display_name, config_scope, restart_required, owner, created_by, created_date,
+                        last_modified_by, last_modified_date
+                    ) VALUES (
+                        'portal.menu.seed.hash', seed_hash, 'Portal menu seed hash', 'SYSTEM', FALSE, 'STRING', FALSE, 0,
+                        'Portal menu seed hash', 'RUNTIME', FALSE, 'platform',
+                        'data-integration-access-menu-convergence', now(),
+                        'data-integration-access-menu-convergence', now()
+                    );
+                END IF;
+            END
+            $do$;
+        ]]></sql>
+
+        <rollback>
+            <sql dbms="postgresql" splitStatements="false"><![CDATA[
+                DO $do$
+                DECLARE
+                    resource_id BIGINT;
+                    resource_root_count INTEGER;
+                    snapshot_key TEXT := 'portal.menu.access.convergence.snapshot.20260731-04';
+                BEGIN
+                    SELECT COUNT(*), MIN(id)
+                      INTO resource_root_count, resource_id
+                     FROM portal_menu
+                     WHERE parent_id IS NULL
+                       AND deleted = FALSE
+                       AND metadata IS NOT NULL
+                       AND metadata::jsonb ->> 'key' = 'resource';
+
+                    IF resource_root_count = 0 THEN
+                        IF EXISTS (SELECT 1 FROM portal_menu) THEN
+                            RAISE EXCEPTION 'data-integration menu root metadata key resource is missing during rollback';
+                        END IF;
+                        RETURN;
+                    END IF;
+                    IF resource_root_count <> 1 THEN
+                        RAISE EXCEPTION 'data-integration menu root metadata key resource is ambiguous during rollback: % rows', resource_root_count;
+                    END IF;
+
+                    -- Visibility rows added by this migration are the only visibility rows rollback removes.
+                    DELETE FROM portal_menu_visibility
+                     WHERE created_by = 'data-integration-access-menu-convergence';
+
+                    IF NOT EXISTS (
+                        SELECT 1
+                          FROM system_config
+                         WHERE cfg_key = snapshot_key
+                           AND created_by = 'data-integration-access-menu-convergence'
+                    ) THEN
+                        RAISE EXCEPTION 'data-integration menu convergence rollback snapshot is missing';
+                    END IF;
+
+                    -- Restore every overwritten field of pre-existing canonical and retired rows.
+                    WITH snapshots AS (
+                        SELECT snapshot_item
+                          FROM system_config config,
+                               LATERAL jsonb_array_elements(config.cfg_value::JSONB) snapshot_item
+                         WHERE config.cfg_key = snapshot_key
+                           AND config.created_by = 'data-integration-access-menu-convergence'
+                    )
+                    UPDATE portal_menu menu
+                       SET name = snapshots.snapshot_item ->> 'name',
+                           path = snapshots.snapshot_item ->> 'path',
+                           component = snapshots.snapshot_item ->> 'component',
+                           sort_order = NULLIF(snapshots.snapshot_item ->> 'sort_order', '')::INTEGER,
+                           metadata = snapshots.snapshot_item ->> 'metadata',
+                           parent_id = NULLIF(snapshots.snapshot_item ->> 'parent_id', '')::BIGINT,
+                           icon = snapshots.snapshot_item ->> 'icon',
+                           security_level = snapshots.snapshot_item ->> 'security_level',
+                           deleted = (snapshots.snapshot_item ->> 'deleted')::BOOLEAN,
+                           last_modified_by = snapshots.snapshot_item ->> 'last_modified_by',
+                           last_modified_date = NULLIF(snapshots.snapshot_item ->> 'last_modified_date', '')::TIMESTAMP
+                      FROM snapshots
+                     WHERE menu.id = (snapshots.snapshot_item ->> 'id')::BIGINT;
+
+                    -- Rows created by this migration did not exist before it; keep them recoverable but hidden.
+                    UPDATE portal_menu
+                       SET deleted = TRUE,
+                           last_modified_by = 'data-integration-access-menu-convergence-rollback',
+                           last_modified_date = now()
+                     WHERE created_by = 'data-integration-access-menu-convergence'
+                       AND last_modified_by = 'data-integration-access-menu-convergence-created';
+
+                    DELETE FROM system_config
+                     WHERE cfg_key = snapshot_key
+                       AND created_by = 'data-integration-access-menu-convergence';
+                END
+                $do$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

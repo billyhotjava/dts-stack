@@ -1,0 +1,96 @@
+{
+  "sourceCommit": "caa4203793fc6c64b37e14eeee3c63a648a2eda2",
+  "packageSha256": "0f8f339004a37c1529f81cfd46865d3d08ef26460398f850975ac4a72f9443ae",
+  "before": [
+    {
+      "service": "dts-admin",
+      "container": "/dts-stack-dts-admin-1",
+      "image": "sha256:46a8d9af2b020e45d9bb4c29060bde59f28699561f31ba8ab2304f833a447a1f",
+      "revision": "814a7c21bc74a4c82e00ed409f408f92010fefa1",
+      "rollbackTag": "dts-admin:f6-rollback-caa420379"
+    },
+    {
+      "service": "dts-platform",
+      "container": "/dts-stack-dts-platform-1",
+      "image": "sha256:887ff584942b1f48d3b71d7818eeb1ab04849a9fcc6c7f265b9daa727b479f4d",
+      "revision": "e6c11f7264265d9b780e9282d25aa5648c6e6fd7",
+      "rollbackTag": "dts-platform:f6-rollback-caa420379"
+    },
+    {
+      "service": "dts-analytics",
+      "container": "/dts-stack-dts-analytics-1",
+      "image": "sha256:382c4946fbdb8326c83205f2a9b77aa8981fcc8d02926928bb26b03c53277853",
+      "revision": "ca1559a2166e5334b62acb77a011b62d4f61594d",
+      "rollbackTag": "dts-analytics:f6-rollback-caa420379"
+    },
+    {
+      "service": "dts-platform-webapp",
+      "container": "/dts-stack-dts-platform-webapp-1",
+      "image": "sha256:9e2f295833677f0192c5e056530b4d4467bc8fd13d1e50654c991e09f0512d80",
+      "revision": "e6c11f7264265d9b780e9282d25aa5648c6e6fd7",
+      "rollbackTag": "dts-platform-webapp:f6-rollback-caa420379"
+    }
+  ],
+  "packageImages": [
+    {
+      "archive": "dts-admin_1.0.0-20260910-133124.tar",
+      "sha256": "f4e2f4554b20fd767077e69be75a958a8e894e86eba25d3c882bec2e438cd7ed",
+      "images": [
+        {
+          "imageId": "sha256:d6a408ff103d9784bef4d461728b5099e1ae2c32f379ce2757ff78fc58f744db",
+          "tags": [
+            "dts-admin:1.0.0"
+          ],
+          "architecture": "amd64",
+          "os": "linux",
+          "sourceRevision": "caa4203793fc6c64b37e14eeee3c63a648a2eda2"
+        }
+      ]
+    },
+    {
+      "archive": "dts-analytics_1.0.0-20260910-133124.tar",
+      "sha256": "c521a4d62eb6026dbaa472962472dd0c15cecef7f5241278226fe1fc9d79c212",
+      "images": [
+        {
+          "imageId": "sha256:4cad9bdecdb3fdc69a16b30da88893bbc5f8820e9a4f99bdaef73debbee242f5",
+          "tags": [
+            "dts-analytics:1.0.0"
+          ],
+          "architecture": "amd64",
+          "os": "linux",
+          "sourceRevision": "caa4203793fc6c64b37e14eeee3c63a648a2eda2"
+        }
+      ]
+    },
+    {
+      "archive": "dts-platform-webapp_1.0.0-20260910-133124.tar",
+      "sha256": "f6bb4d5a3766e5450b489ca4d12f46af8c9fa939e97bc38acd6b350fc166f9cc",
+      "images": [
+        {
+          "imageId": "sha256:d1e096fb06721fbaceafb10ff5d934438c8a010decc8c126f04033504e2ea7e5",
+          "tags": [
+            "dts-platform-webapp:1.0.0"
+          ],
+          "architecture": "amd64",
+          "os": "linux",
+          "sourceRevision": "caa4203793fc6c64b37e14eeee3c63a648a2eda2"
+        }
+      ]
+    },
+    {
+      "archive": "dts-platform_1.0.0-20260910-133124.tar",
+      "sha256": "d78e4f2458c5cd873a6b2d875d9c7a972d5b8438896fdf7854bff26d8f534805",
+      "images": [
+        {
+          "imageId": "sha256:dc2cd25f905ad1b082e6c2b49f76b775757dce324b749148ac90cb83620edc76",
+          "tags": [
+            "dts-platform:1.0.0"
+          ],
+          "architecture": "amd64",
+          "os": "linux",
+          "sourceRevision": "caa4203793fc6c64b37e14eeee3c63a648a2eda2"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "PKI 链：双证书登录与会话建立",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "animation": "none",
+    "column_fit": "spread",
+    "viewBox": [1080, 620]
+  },
+  "participants": [
+    { "id": "client", "type": "external", "label": "证书客户端", "sublabel": "浏览器" },
+    { "id": "platform", "type": "backend", "label": "平台认证", "sublabel": "AuthResource" },
+    { "id": "admin", "type": "backend", "label": "管理认证", "sublabel": "KeycloakApi" },
+    { "id": "challenge", "type": "backend", "label": "挑战服务", "sublabel": "Challenge" },
+    { "id": "verify", "type": "backend", "label": "验签服务", "sublabel": "Verification" },
+    { "id": "ticket", "type": "backend", "label": "会话票据", "sublabel": "Ticket" },
+    { "id": "session", "type": "database", "label": "门户会话", "sublabel": "Session" }
+  ],
+  "segments": [
+    { "from": 246, "to": 510, "label": "挑战、验签与会话" }
+  ],
+  "messages": [
+    { "id": "m-chal", "from": "client", "to": "platform", "y": 168, "label": "GET /api/keycloak/auth/pki-challenge" },
+    { "id": "m-proxy", "from": "platform", "to": "admin", "y": 196, "label": "AdminAuthGateway.pkiChallenge" },
+    { "id": "m-issue", "from": "admin", "to": "challenge", "y": 224, "label": "issue(aud, ip, ua, ttl)" },
+    { "id": "m-chal-back", "from": "challenge", "to": "admin", "y": 256, "label": "Challenge（nonce/ttl）", "variant": "return" },
+    { "id": "m-chal-ret", "from": "admin", "to": "platform", "y": 284, "label": "challenge 返回", "variant": "return" },
+    { "id": "m-login", "from": "client", "to": "platform", "y": 312, "label": "POST /pki-login（origin/p7 签名）", "variant": "security" },
+    { "id": "m-login-proxy", "from": "platform", "to": "admin", "y": 340, "label": "AdminAuthGateway.pkiLogin" },
+    { "id": "m-verify", "from": "admin", "to": "verify", "y": 368, "label": "verifyPkcs7(origin, p7, cert)" },
+    { "id": "m-verify-back", "from": "verify", "to": "admin", "y": 396, "label": "VerifyResult（identity）", "variant": "return" },
+    { "id": "m-ticket", "from": "admin", "to": "platform", "y": 424, "label": "username + 签名票据", "variant": "return" },
+    { "id": "m-session", "from": "platform", "to": "session", "y": 452, "label": "resolve(ticket) 建立门户会话" },
+    { "id": "m-ok", "from": "platform", "to": "client", "y": 480, "label": "登录成功", "variant": "return" }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "安全约定",
+      "items": [
+        "挑战一次性消费，peek 只读",
+        "PKCS7 验签可带证书或走外部 PKI 服务",
+        "门户会话绑定短时签名票据，不信任请求体用户名"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "已确认边界",
+      "items": [
+        "PKI 未启用时管理侧返回 404 提示",
+        "证书吊销/OCSP 是否外部承担未验证",
+        "/api/mdm/** 放行 + 网关令牌校验（见文档）"
+      ]
+    }
+  ]
+}

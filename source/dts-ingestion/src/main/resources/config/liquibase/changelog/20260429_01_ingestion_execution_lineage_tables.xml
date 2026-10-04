@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260429-01-add-ingestion-execution-source-tables" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="source_tables"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="source_tables" type="jsonb"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260429-02-add-ingestion-execution-target-tables" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_execution" columnName="target_tables"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_execution">
+            <column name="target_tables" type="jsonb"/>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

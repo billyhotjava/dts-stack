@@ -1,0 +1,503 @@
+# ===================================================================
+# Spring Boot configuration.
+#
+# This configuration will be overridden by the Spring profile you use,
+# for example application-dev.yml if you use the "dev" profile.
+#
+# More information on profiles: https://www.jhipster.tech/profiles/
+# More information on configuration properties: https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+# ===================================================================
+# Standard Spring Boot properties.
+# Full reference is available at:
+# http://docs.spring.io/spring-boot/docs/current/reference/html/common-application-properties.html
+# ===================================================================
+
+spring:
+  config:
+    import:
+      - optional:file:./config/mdm/
+      - optional:file:./config/mdm/mdm-gateway.yml
+
+---
+# Conditionally disable springdoc on missing api-docs profile
+spring:
+  config:
+    activate:
+      on-profile: '!api-docs'
+springdoc:
+  api-docs:
+    enabled: false
+---
+eureka:
+  client:
+    enabled: true
+    healthcheck:
+      enabled: true
+    fetch-registry: true
+    register-with-eureka: true
+    instance-info-replication-interval-seconds: 10
+    registry-fetch-interval-seconds: 10
+  instance:
+    appname: dtsadmin
+    instanceId: dtsadmin:${spring.application.instance-id:${random.value}}
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
+    status-page-url-path: ${management.endpoints.web.base-path}/info
+    health-check-url-path: ${management.endpoints.web.base-path}/health
+    metadata-map:
+      zone: primary # This is needed for the load balancer
+      profile: ${spring.profiles.active}
+      version: '@project.version@'
+      git-version: ${git.commit.id.describe:}
+      git-commit: ${git.commit.id.abbrev:}
+      git-branch: ${git.branch:}
+      context-path: ${server.servlet.context-path:}
+feign:
+  circuitbreaker:
+    enabled: true
+  # client:
+  #   config:
+  #     default:
+  #       connectTimeout: 5000
+  #       readTimeout: 5000
+management:
+  endpoints:
+    web:
+      base-path: /management
+      exposure:
+        include:
+          - configprops
+          - env
+          - health
+          - info
+          - jhimetrics
+          - jhiopenapigroups
+          - logfile
+          - loggers
+          - prometheus
+          - threaddump
+          - caches
+          - liquibase
+  endpoint:
+    health:
+      show-details: when_authorized
+      roles: 'ROLE_ADMIN'
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+    jhimetrics:
+      enabled: true
+  info:
+    git:
+      mode: full
+    env:
+      enabled: true
+  health:
+    mail:
+      enabled: false # When using the MailService, configure an SMTP server and set this to true
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+        step: 60
+  observations:
+    key-values:
+      application: ${spring.application.name}
+  metrics:
+    enable:
+      http: true
+      jvm: true
+      logback: true
+      process: true
+      system: true
+    distribution:
+      percentiles-histogram:
+        all: true
+      percentiles:
+        all: 0, 0.5, 0.75, 0.95, 0.99, 1.0
+    data:
+      repository:
+        autotime:
+          enabled: true
+    tags:
+      application: ${spring.application.name}
+
+spring:
+  application:
+    name: dtsAdmin
+  docker:
+    compose:
+      enabled: true
+      lifecycle-management: start-only
+      file: src/main/docker/postgresql.yml
+  profiles:
+    # The commented value for `active` can be replaced with valid Spring profiles to load.
+    # Otherwise, it will be filled in by maven when building the JAR file
+    # Either way, it can be overridden by `--spring.profiles.active` value passed in the commandline or `-Dspring.profiles.active` set in `JAVA_OPTS`
+    active: '@spring.profiles.active@'
+    group:
+      dev:
+        - dev
+        - api-docs
+        # Uncomment to activate TLS for the dev profile
+        #- tls
+  # custom dev flags
+  jmx:
+    enabled: false
+  data:
+    jpa:
+      repositories:
+        bootstrap-mode: deferred
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+      hibernate.timezone.default_storage: NORMALIZE
+      # Leave Instant mapping to Hibernate defaults to avoid incubating setting warnings
+      hibernate.id.new_generator_mappings: true
+      hibernate.connection.provider_disables_autocommit: true
+      hibernate.cache.use_second_level_cache: true
+      hibernate.cache.use_query_cache: false
+      hibernate.generate_statistics: false
+      # modify batch size as necessary
+      hibernate.jdbc.batch_size: 25
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      hibernate.query.fail_on_pagination_over_collection_fetch: true
+      hibernate.query.in_clause_parameter_padding: true
+      hibernate.cache.region.factory_class: com.hazelcast.hibernate.HazelcastCacheRegionFactory
+      hibernate.cache.use_minimal_puts: true
+      hibernate.cache.hazelcast.instance_name: dtsAdmin
+      hibernate.cache.hazelcast.use_lite_member: true
+    hibernate:
+      ddl-auto: none
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+  liquibase:
+    change-log: classpath:config/liquibase/master.xml
+  messages:
+    basename: i18n/messages
+  main:
+    allow-bean-definition-overriding: true
+  mvc:
+    problemdetails:
+      enabled: true
+  security:
+    oauth2:
+      client:
+        provider:
+          oidc:
+            issuer-uri: http://dts-keycloak:8080/realms/S10
+        registration:
+          oidc:
+            client-id: ${OAUTH2_ADMIN_CLIENT_ID:internal}
+            client-secret: ${OAUTH2_ADMIN_CLIENT_SECRET:internal}
+            scope: openid, profile, email, offline_access # last one for refresh tokens
+  task:
+    execution:
+      thread-name-prefix: dts-admin-task-
+      pool:
+        core-size: 2
+        max-size: 50
+        queue-capacity: 10000
+
+liquibase:
+  searchPath: classpath:/config/liquibase
+  duplicateFileMode: WARN
+
+server:
+  forward-headers-strategy: framework
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      host-header: x-forwarded-host
+      internal-proxies: ${DTS_TRUSTED_PROXY_REGEX:.*}
+    scheduling:
+      thread-name-prefix: dts-admin-scheduling-
+      pool:
+        size: 2
+  servlet:
+    session:
+      cookie:
+        http-only: true
+  thymeleaf:
+    mode: HTML
+  output:
+    ansi:
+      console-available: true
+
+springdoc:
+  show-actuator: true
+
+# Properties to be exposed on the /info management endpoint
+info:
+  # Comma separated list of profiles that will trigger the ribbon to show
+  display-ribbon-on-profiles: 'dev'
+
+auditing:
+  enabled: true
+  queue-capacity: ${AUDIT_QUEUE_CAPACITY:5000}
+  retention-days: ${AUDIT_RETENTION_DAYS:180}
+  encryption-key: ${AUDIT_ENCRYPTION_KEY:}
+  hmac-key: ${AUDIT_HMAC_KEY:${AUDIT_ENCRYPTION_KEY:}}
+  forward-enabled: ${AUDIT_FORWARD_ENABLED:false}
+  forward-retry-interval: ${AUDIT_FORWARD_RETRY_INTERVAL:60000}
+  retention:
+    enabled: ${AUDIT_RETENTION_CLEANUP_ENABLED:true}
+    days: ${AUDIT_RETENTION_DAYS:180}
+    batch-size: ${AUDIT_RETENTION_BATCH_SIZE:5000}
+  ingest:
+    # Internal endpoint transport guard: authenticate before JSON parsing, then bound and rate-limit payloads.
+    max-body-bytes: ${AUDIT_INGEST_MAX_BODY_BYTES:262144}
+    rate-limit-per-second: ${AUDIT_INGEST_RATE_LIMIT_PER_SECOND:100}
+    rate-limit-burst: ${AUDIT_INGEST_RATE_LIMIT_BURST:200}
+    # CIDR ranges treated as container/proxy hops when resolving a pushed event's real client IP.
+    # Loopback is always treated as a hop. Add the site's bridge network here when it is not the
+    # Docker default (172.16/12) — e.g. deployments whose container subnet is 172.168.0.0/16 —
+    # otherwise that range is mistaken for a real client IP in the audit log.
+    container-cidrs: ${AUDIT_INGEST_CONTAINER_CIDRS:172.16.0.0/12,172.168.0.0/16}
+  dictionary:
+    # HMAC verification of audit dictionary files (audit-button-registry.json, legacy-action-mappings.json).
+    # The HMAC key MUST be held by the authorization administrator (authadmin), not the system administrator.
+    # When verify-signatures=true and hmac-key is empty, dictionary loading fails closed (audit subsystem
+    # cannot start) — this is intentional fail-secure.
+    verify-signatures: ${AUDIT_DICT_VERIFY_SIG:false}
+    hmac-key: ${AUDIT_DICT_HMAC_KEY:}
+    legacy-keys: ${AUDIT_DICT_HMAC_LEGACY_KEYS:}
+    signature-suffix: ${AUDIT_DICT_SIG_SUFFIX:.sig}
+
+
+dts:
+  keycloak:
+    admin-client-id: "${DTS_KEYCLOAK_ADMIN_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:}}}"
+    admin-client-secret: "${DTS_KEYCLOAK_ADMIN_CLIENT_SECRET:${OAUTH2_ADMIN_CLIENT_SECRET:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_SECRET:}}}"
+    # Business client where data roles (DEPT/INST_DATA_*) are defined as client roles
+    # Default to platform client id to match realm seeds (override with DTS_KEYCLOAK_TARGET_CLIENT_ID if different)
+    target-client-id: "${DTS_KEYCLOAK_TARGET_CLIENT_ID:${KC_SYNC_TARGET_CLIENT_ID:${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:${OAUTH2_PLATFORM_CLIENT_ID:dts-platform}}}}"
+    # Whether to write DEPT/INST data roles to Keycloak as client roles.
+    # Default false: rely on admin DB role assignments and enrich platform login response.
+    use-client-roles: ${DTS_KEYCLOAK_USE_CLIENT_ROLES:false}
+    # Controls whether dts-admin will auto-provision/sync Keycloak groups for organizations.
+    # Default false to avoid startup failures when the client lacks admin privileges.
+    # Enable by default; disable explicitly with DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED=false if KC admin perms not granted
+    group-provisioning-enabled: ${DTS_KEYCLOAK_GROUP_PROVISIONING_ENABLED:false}
+  platform:
+    enabled: ${DTS_PLATFORM_SYNC_ENABLED:true}
+    base-url: ${DTS_PLATFORM_BASE_URL:http://dts-platform:8081}
+    api-path: ${DTS_PLATFORM_API_PATH:/api}
+    service-name: ${DTS_PLATFORM_SERVICE_NAME:dts-admin}
+    service-token: ${DTS_ADMIN_TO_PLATFORM:}
+  infra:
+    heartbeat:
+      enabled: ${DTS_INFRA_HEARTBEAT_ENABLED:true}
+      interval-ms: ${DTS_INFRA_HEARTBEAT_INTERVAL_MS:60000}
+      initial-delay-ms: ${DTS_INFRA_HEARTBEAT_INITIAL_DELAY_MS:15000}
+      timeout-ms: ${DTS_INFRA_HEARTBEAT_TIMEOUT_MS:5000}
+  organization:
+    default-root-name: ${DTS_ORG_DEFAULT_ROOT_NAME:}
+    unassigned-name: ${DTS_ORG_UNASSIGNED_NAME:}
+    unassigned-description: ${DTS_ORG_UNASSIGNED_DESCRIPTION:}
+    unassigned-data-level: ${DTS_ORG_UNASSIGNED_DATA_LEVEL:}
+  personnel:
+    api:
+      enabled: ${DTS_PERSONNEL_API_ENABLED:false}
+      endpoint: ${DTS_PERSONNEL_API_ENDPOINT:}
+      method: ${DTS_PERSONNEL_API_METHOD:GET}
+      auth-token: ${DTS_PERSONNEL_API_TOKEN:}
+    excel:
+      enabled: ${DTS_PERSONNEL_EXCEL_ENABLED:true}
+      max-rows: ${DTS_PERSONNEL_EXCEL_MAX_ROWS:10000}
+    logging:
+      operations-log: ${DTS_PERSONNEL_LOG_PATH:${LOG_ROOT:-../../logs}/dts-admin/personnel-operations.log}
+  mdm:
+    gateway:
+      enabled: ${DTS_MDM_GATEWAY_ENABLED:true}
+      storage-path: ${DTS_MDM_GATEWAY_STORAGE_PATH:${DATA_ROOT:-../../data}/mdm}
+      log-path: ${DTS_MDM_GATEWAY_LOG_PATH:${LOG_ROOT:-../../logs}/dts-admin/mdm-gateway.log}
+      auto-provision-users: ${DTS_MDM_GATEWAY_AUTO_PROVISION_USERS:true}
+      auto-provision-roles: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ROLES:EMPLOYEE}
+      auto-provision-enable-login: ${DTS_MDM_GATEWAY_AUTO_PROVISION_ENABLE_LOGIN:true}
+      required-fields: ${DTS_MDM_GATEWAY_REQUIRED_FIELDS:orgCode,deptCode,status}
+      registry:
+        system-code: ${DTS_MDM_GATEWAY_REGISTRY_SYSTEM_CODE:10XT}
+        data-range: ${DTS_MDM_GATEWAY_REGISTRY_DATA_RANGE:9010}
+        area-security: ${DTS_MDM_GATEWAY_REGISTRY_AREA_SECURITY:9001}
+        area-business: ${DTS_MDM_GATEWAY_REGISTRY_AREA_BUSINESS:B}
+        data-type: ${DTS_MDM_GATEWAY_REGISTRY_DATA_TYPE:sync-demand}
+      upstream:
+        base-url: ${DTS_MDM_GATEWAY_UPSTREAM_BASE_URL:http://mdm-upstream.example.com}
+        pull-path: ${DTS_MDM_GATEWAY_UPSTREAM_PULL_PATH:/api/mdm/pull} # base + path = 握手/拉取地址
+        auth-token: ${DTS_MDM_GATEWAY_UPSTREAM_AUTH_TOKEN:}
+        use-multipart: ${DTS_MDM_GATEWAY_UPSTREAM_USE_MULTIPART:true}
+        file-part-name: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PART_NAME:file}
+        file-prefix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_PREFIX:orgItDemand}
+        file-suffix: ${DTS_MDM_GATEWAY_UPSTREAM_FILE_SUFFIX:.txt}
+        # 默认将院方示例参数一起发送，方便现场直接拉取；可用环境变量覆盖
+        form-params:
+          targetNodeCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_NODE_CODE:9000}
+          targetDomainCode: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_DOMAIN_CODE:B}
+          targetServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_TARGET_SERVICE_ID:orgit}
+          sourceServiceId: ${DTS_MDM_GATEWAY_UPSTREAM_SOURCE_SERVICE_ID:WXXXXXDDD}
+          approval: ${DTS_MDM_GATEWAY_UPSTREAM_APPROVAL:1}
+          title: ${DTS_MDM_GATEWAY_UPSTREAM_TITLE:9000}
+          dataType: ${DTS_MDM_GATEWAY_UPSTREAM_DATA_TYPE:9000}
+          securityLevel: ${DTS_MDM_GATEWAY_UPSTREAM_SECURITY_LEVEL:9000}
+          filedType: ${DTS_MDM_GATEWAY_UPSTREAM_FILED_TYPE:9000}
+          version: ${DTS_MDM_GATEWAY_UPSTREAM_VERSION:9000}
+        payload-template: {} # 额外 JSON 字段，如 pushMode/securityLevel 等
+        connect-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_CONNECT_TIMEOUT:5s}
+        read-timeout: ${DTS_MDM_GATEWAY_UPSTREAM_READ_TIMEOUT:30s}
+      callback:
+        url: ${DTS_MDM_GATEWAY_CALLBACK_URL:}
+        auth-token: ${DTS_MDM_GATEWAY_CALLBACK_AUTH_TOKEN:}
+        signature-header: ${DTS_MDM_GATEWAY_CALLBACK_SIGNATURE_HEADER:X-Signature}
+      required:
+        users: ${DTS_MDM_GATEWAY_REQUIRED_USERS:userCode,userName,deptCode}
+        depts: ${DTS_MDM_GATEWAY_REQUIRED_DEPTS:deptCode,deptName}
+  admin:
+    inbound:
+      service-auth:
+        # Pairwise credential used only by narrow /api/platform/internal APIs.
+        # Empty or missing credentials fail closed.
+        trusted-services:
+          dts-platform: ${DTS_PLATFORM_TO_ADMIN_TOKEN:}
+          dts-analytics: ${DTS_ANALYTICS_TO_ADMIN_TOKEN:}
+          dts-ingestion: ${DTS_INGESTION_TO_ADMIN_TOKEN:}
+    infra:
+      encryption-key: ${DTS_ADMIN_INFRA_ENCRYPTION_KEY:}
+      key-version: ${DTS_ADMIN_INFRA_KEY_VERSION:v1}
+    require-approval:
+      portal-menu:
+        # 强约束字段（可见性/授权）变更是否必须走审批：visibilityRules/allowedRoles/allowedPermissions/maxDataLevel
+        visibility: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_VISIBILITY:true}
+        # 结构/展示类变更（name/icon/sortOrder/path/component/parent/deleted）是否需要审批（默认开启）
+        structure: ${DTS_REQUIRE_APPROVAL_PORTAL_MENU_STRUCTURE:true}
+  session:
+    # Maximum idle time (in minutes) for interactive administrator sessions before forcing re-authentication
+    max-idle-minutes: ${DTS_SESSION_MAX_IDLE_MINUTES:10}
+
+# ===================================================================
+# JHipster specific properties
+#
+# Full reference is available at: https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+jhipster:
+  clientApp:
+    name: 'dtsAdminApp'
+  # By default CORS is disabled. Uncomment to enable.
+  # cors:
+  #   allowed-origins: "http://localhost:8100,http://localhost:9000"
+  #   allowed-methods: "*"
+  #   allowed-headers: "*"
+  #   exposed-headers: "Authorization,Link,X-Total-Count,X-${jhipster.clientApp.name}-alert,X-${jhipster.clientApp.name}-error,X-${jhipster.clientApp.name}-params"
+  #   allow-credentials: true
+  #   max-age: 1800
+  mail:
+    from: dtsAdmin@localhost
+  api-docs:
+    default-include-pattern: /api/**
+    management-include-pattern: /management/**
+    title: Dts Admin API
+    description: Dts Admin API documentation
+    version: 0.0.1
+    terms-of-service-url:
+    contact-name:
+    contact-url:
+    contact-email:
+    license: unlicensed
+    license-url:
+  security:
+    oauth2:
+      audience:
+        # Accept tokens minted for the configured admin OIDC client (single-client mode)
+        - ${SPRING_SECURITY_OAUTH2_CLIENT_REGISTRATION_OIDC_CLIENT_ID:${OAUTH2_ADMIN_CLIENT_ID:dts-system}}
+        - account
+        - api://default
+
+# jhipster-needle-add-application-yaml-document
+---
+# ===================================================================
+# Application specific properties
+# Add your own application properties here, see the ApplicationProperties class
+# to have type-safe configuration, like in the JHipsterProperties above
+#
+# More documentation is available at:
+# https://www.jhipster.tech/common-application-properties/
+# ===================================================================
+
+# application:
+dts:
+  common:
+    audit:
+      enabled: false
+      # Base URL of dts-common service for audit writes, e.g. http://localhost:8082
+      base-url: 
+      # Optional bearer token for dts-common
+      token: 
+    notify:
+      enabled: false
+      # Base URL of dts-common notify endpoint
+      base-url: 
+      # Optional bearer token for dts-common
+      token: 
+  dev:
+    seed:
+      enabled: true
+  pki:
+    # Feature flag: enable PKI login endpoints in admin service
+    enabled: ${DTS_PKI_ENABLED:false}
+    # Modes: mtls | assertion | disabled
+    mode: ${DTS_PKI_MODE:disabled}
+    # When using reverse proxy to terminate TLS, accept forwarded client cert header (use with caution)
+    accept-forwarded-client-cert: ${DTS_PKI_ACCEPT_FORWARDED_CERT:false}
+    client-cert-header-name: ${DTS_PKI_CLIENT_CERT_HEADER:X-Forwarded-Tls-Client-Cert}
+    # Optional PKI issuer common name filter for additional validation
+    issuer-cn: ${DTS_PKI_ISSUER_CN:}
+    # For assertion mode: PKI verification API base and token
+    api-base-url: ${DTS_PKI_API_BASE:}
+    api-token: ${DTS_PKI_API_TOKEN:}
+    api-timeout-ms: ${DTS_PKI_API_TIMEOUT:3000}
+    # Dev-only: allow mock username during integration testing
+    allow-mock: ${DTS_PKI_ALLOW_MOCK:false}
+    # Gateway verification endpoint (for vendor SVS/统一安全中间件)
+    gateway-host: ${DTS_PKI_GATEWAY_HOST:}
+    gateway-port: ${DTS_PKI_GATEWAY_PORT:0}
+    gateway-alt-port: ${DTS_PKI_GATEWAY_ALT_PORT:10009}
+    gateway-endpoint: ${DTS_PKI_GATEWAY_ENDPOINT:/wglogin}
+    # Digest algorithm hint for PKCS#7 verify (SHA1|MD5|NONE). Default SHA1; adjust per vendor profile
+    digest: ${DTS_PKI_DIGEST:SHA1}
+    # Optional path to vendor client jar (e.g. svs-uk_custom.jar) for runtime loading
+    vendor-jar-path: ${DTS_PKI_VENDOR_JAR:}
+
+  # Admin console specific settings
+  admin:
+    # Comma-separated roles to exclude from the user list views (admin users should not appear in "普通用户"列表)
+    # Default excludes built-in admin roles (sysadmin/authadmin/auditadmin/opadmin) from the generic user list.
+    userlist:
+      exclude-roles: ${DTS_ADMIN_USERLIST_EXCLUDE_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR,ROLE_OP_ADMIN}
+    # Roles allowed to log into the admin console (when using PKI admin login audience)
+    login:
+      allowed-roles: ${DTS_ADMIN_LOGIN_ALLOWED_ROLES:ROLE_SYS_ADMIN,ROLE_AUTH_ADMIN,ROLE_SECURITY_AUDITOR}
+
+  security:
+    ip-allowlist:
+      # Enable/disable triad password-login IP allowlist (PKI login unaffected)
+      enabled: ${DTS_SECURITY_IP_ALLOWLIST_ENABLED:true}
+      # Comma-separated usernames (lowercase) to enforce single-IP allowlist
+      triad-usernames: ${DTS_SECURITY_IP_ALLOWLIST_TRIAD_USERNAMES:sysadmin,authadmin,auditadmin}
+    # Maps governance triad usernames to their canonical role label. Audit views look these up
+    # so renamed accounts (e.g. dts_sys_a) still surface as "系统管理员" in the UI.
+    triad-display:
+      sys-admin: ${DTS_SECURITY_TRIAD_SYS_ADMIN:sysadmin}
+      auth-admin: ${DTS_SECURITY_TRIAD_AUTH_ADMIN:authadmin}
+      auditor-admin: ${DTS_SECURITY_TRIAD_AUDITOR_ADMIN:auditadmin}
+      op-admin: ${DTS_SECURITY_TRIAD_OP_ADMIN:opadmin}

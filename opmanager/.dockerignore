@@ -1,0 +1,9 @@
+target/*
+!target/dts-opmanager-*.jar
+src/main/resources/static/assets/
+src/main/resources/static/index.html
+src/main/webapp/node_modules/
+src/main/webapp/.vite-cache/
+src/main/webapp/dist/
+.git/
+*.log

@@ -1,0 +1,41 @@
+node_id	project_no	subsystem	node_task	node_type	owner	dept	project_manager	plan_date	actual_date	completion_status	risk_level	delay_days	delay_reason_category	major_project_id	major_project_name	subproject_id	subproject_name	incomplete_reason	delay_impact	is_key_node	is_milestone
+node-001	PRJ-A001	导航处理机	完成方案设计评审	里程碑节点	张三	导航室	赵主管	2026-01-15	2026-01-14	按时完成	低	-1	normal	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			true	true
+node-002	PRJ-A001	导航处理机	关键器件到货确认	重大节点	张三	导航室	赵主管	2026-01-20	2026-01-20	按时完成	低	0	supplier	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			true	false
+node-003	PRJ-A001	导航处理机	PCB设计完成	重要节点	李四	导航室	赵主管	2026-02-10	2026-02-08	按时完成	低	-2	normal	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			true	false
+node-004	PRJ-A001	导航处理机	联调测试启动	里程碑节点	张三,李四	导航室	赵主管	2026-03-25		正常待完成	中	0	coordination	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			true	true
+node-005	PRJ-A001	导航处理机	软件需求分析	一般节点	王五	软件室	赵主管	2026-04-15		正常待完成	低	0	normal	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			false	false
+node-006	PRJ-A001	导航处理机	关键算法验证	重大节点	李四	导航室	赵主管	2026-02-28		超期未完成未变更	高	15	technical	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机	算法收敛性不达标，正在优化迭代	影响后续联调节点延期2周	true	false
+node-007	PRJ-A001	导航处理机	可靠性试验	重要节点	赵六	可靠性室	赵主管	2026-02-20		不正常待变更	高	23	quality	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机	试验设备故障待维修	需重新排产	true	false
+node-008	PRJ-A001	导航处理机	初样交付	里程碑节点	张三	导航室	赵主管	2026-01-30	2026-02-15	超期已完成已变更	中	16	change	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机	原计划延误后已变更并完成		true	true
+node-009	PRJ-A001	导航处理机	EMC测试	一般节点	孙七	测试室	赵主管	2026-02-05	2026-02-08	超期已完成未变更	中	3	quality	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机	延误3天完成		false	false
+node-010	PRJ-A001	导航处理机	周报汇总	一般节点	张三	导航室	赵主管	2026-01-10	2026-01-10	按时完成	低	0	archive	major-aurora	苍穹导航综合工程	sub-aurora-nav	导航处理机			false	false
+node-011	PRJ-B002	信号处理分系统	总体方案评审	里程碑节点	钱八	通信室	吴主管	2026-01-10	2026-01-10	按时完成	低	0	normal	major-beacon	北斗信号增强工程	sub-beacon-signal	信号处理分系统			true	true
+node-012	PRJ-B002	信号处理分系统	FPGA代码编写	重要节点	钱八	通信室	吴主管	2026-02-15	2026-02-14	按时完成	低	-1	normal	major-beacon	北斗信号增强工程	sub-beacon-signal	信号处理分系统			true	false
+node-013	PRJ-B002	信号处理分系统	FPGA仿真验证	重大节点	钱八,郑九	通信室	吴主管	2026-02-28		超期未完成未变更	高	15	change	major-beacon	北斗信号增强工程	sub-beacon-signal	信号处理分系统	仿真模型复杂度超预期	影响后续板卡调试	true	false
+node-014	PRJ-B002	信号处理分系统	PCB投板	一般节点	郑九	通信室	吴主管	2026-03-10		正常待完成	中	0	normal	major-beacon	北斗信号增强工程	sub-beacon-signal	信号处理分系统			false	false
+node-015	PRJ-B002	信号处理分系统	整机联调	里程碑节点	钱八	通信室	吴主管	2026-04-30		正常待完成	中	0	coordination	major-beacon	北斗信号增强工程	sub-beacon-signal	信号处理分系统			true	true
+node-016	PRJ-B002	天线分系统	天线样机加工	重要节点	冯十	天线室	吴主管	2026-01-25	2026-02-05	超期已完成未变更	中	11	change	major-beacon	北斗信号增强工程	sub-beacon-antenna	天线分系统	加工周期超预期		true	false
+node-017	PRJ-B002	天线分系统	天线方向图测试	重大节点	冯十	天线室	吴主管	2026-02-20	2026-02-19	按时完成	低	-1	test	major-beacon	北斗信号增强工程	sub-beacon-antenna	天线分系统			true	false
+node-018	PRJ-B002	天线分系统	天线暗室标定	一般节点	冯十	天线室	吴主管	2026-03-05		不正常待变更	中	10	change	major-beacon	北斗信号增强工程	sub-beacon-antenna	天线分系统	暗室排期冲突	标定延期影响后续集成	false	false
+node-019	PRJ-B002	天线分系统	技术归零报告	一般节点	冯十	天线室	吴主管	2026-02-10	2026-02-25	超期已完成已变更	低	15	change	major-beacon	北斗信号增强工程	sub-beacon-antenna	天线分系统	归零项超期后变更完成		false	false
+node-020	PRJ-B002	天线分系统	日常检查	一般节点	冯十	天线室	吴主管	2026-01-05	2026-01-05	按时完成	低	0	normal	major-beacon	北斗信号增强工程	sub-beacon-antenna	天线分系统			false	false
+node-021	PRJ-C003	信号处理	系统方案论证	里程碑节点	陈一	雷达室	林主管	2025-11-15	2025-11-14	按时完成	低	-1	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			true	true
+node-022	PRJ-C003	信号处理	关键技术攻关	重大节点	陈一	雷达室	林主管	2025-12-20	2025-12-30	超期已完成未变更	中	10	technical	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关	技术攻关延期10天		true	false
+node-023	PRJ-C003	信号处理	仿真平台搭建	重要节点	徐二	雷达室	林主管	2026-01-15	2026-01-15	按时完成	低	0	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			true	false
+node-024	PRJ-C003	信号处理	算法原型验证	重要节点	徐二,陈一	雷达室	林主管	2026-02-10	2026-02-10	按时完成	低	0	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			true	false
+node-025	PRJ-C003	信号处理	硬件原型设计	重大节点	何三	雷达室	林主管	2026-02-25		超期未完成未变更	高	18	technical	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关	元器件选型变更	影响硬件交付节点	true	false
+node-026	PRJ-C003	信号处理	软件架构设计	一般节点	徐二	雷达室	林主管	2026-03-01	2026-03-01	按时完成	低	0	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			false	false
+node-027	PRJ-C003	信号处理	正样评审	里程碑节点	陈一	雷达室	林主管	2026-04-20		正常待完成	高	0	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			true	true
+node-028	PRJ-C003	信号处理	硬件调试	重要节点	何三	雷达室	林主管	2026-03-20		正常待完成	中	0	normal	major-cosmos	星链信号攻关工程	sub-cosmos-signal	信号处理攻关			true	false
+node-029	PRJ-C003	数据链路	链路预算分析	一般节点	吕四	雷达室	林主管	2026-01-20	2026-01-20	按时完成	低	0	coordination	major-cosmos	星链信号攻关工程	sub-cosmos-link	数据链路			false	false
+node-030	PRJ-C003	数据链路	接口协议定义	重要节点	吕四	雷达室	林主管	2026-02-05	2026-02-20	超期已完成已变更	中	15	change	major-cosmos	星链信号攻关工程	sub-cosmos-link	数据链路	接口需求变更后重新定义		true	false
+node-031	PRJ-D004	光学分系统	光学设计完成	里程碑节点	周五	光学室	梁主管	2026-01-20	2026-01-18	按时完成	低	-2	normal	major-dragon	龙眼光电探测工程	sub-dragon-optical	光学分系统			true	true
+node-032	PRJ-D004	光学分系统	镜片加工	重大节点	周五	光学室	梁主管	2026-02-15	2026-02-15	按时完成	低	0	supplier	major-dragon	龙眼光电探测工程	sub-dragon-optical	光学分系统			true	false
+node-033	PRJ-D004	光学分系统	光机装调	重大节点	周五,吴六	光学室	梁主管	2026-03-05		不正常待变更	高	10	quality	major-dragon	龙眼光电探测工程	sub-dragon-optical	光学分系统	调试精度未达标需返工	影响整机交付	true	false
+node-034	PRJ-D004	光学分系统	环境适应性测试	重要节点	吴六	光学室	梁主管	2026-03-20		正常待完成	中	0	test	major-dragon	龙眼光电探测工程	sub-dragon-optical	光学分系统			true	false
+node-035	PRJ-D004	光学分系统	交付评审	里程碑节点	周五	光学室	梁主管	2026-04-10		正常待完成	高	0	normal	major-dragon	龙眼光电探测工程	sub-dragon-optical	光学分系统			true	true
+node-036	PRJ-D004	探测器分系统	探测器选型	一般节点	郑七	探测室	梁主管	2026-01-08	2026-01-08	按时完成	低	0	normal	major-dragon	龙眼光电探测工程	sub-dragon-detector	探测器分系统			false	false
+node-037	PRJ-D004	探测器分系统	探测器到货验收	重要节点	郑七	探测室	梁主管	2026-02-01	2026-02-06	超期已完成未变更	中	5	change	major-dragon	龙眼光电探测工程	sub-dragon-detector	探测器分系统	供货延迟5天		true	false
+node-038	PRJ-D004	探测器分系统	探测器标定	重大节点	郑七	探测室	梁主管	2026-02-20	2026-02-18	按时完成	低	-2	test	major-dragon	龙眼光电探测工程	sub-dragon-detector	探测器分系统			true	false
+node-039	PRJ-D004	探测器分系统	探测灵敏度复测	一般节点	郑七	探测室	梁主管	2026-03-08		超期未完成未变更	中	7	change	major-dragon	龙眼光电探测工程	sub-dragon-detector	探测器分系统	标定设备占用	影响较小	false	false
+node-040	PRJ-D004	探测器分系统	文档归档	一般节点	郑七	探测室	梁主管	2026-03-15		正常待完成	低	0	archive	major-dragon	龙眼光电探测工程	sub-dragon-detector	探测器分系统			false	false

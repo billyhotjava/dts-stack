@@ -1,0 +1,12 @@
+[     462ms] [LOG] i18next: languageChanged zh_CN @ http://127.0.0.1:18012/node_modules/.vite/deps/i18next.js?v=0fd9a6d8:203
+[     462ms] [LOG] i18next: initialized {debug: true, initImmediate: true, ns: Array(1), defaultNS: Array(1), fallbackLng: Array(1)} @ http://127.0.0.1:18012/node_modules/.vite/deps/i18next.js?v=0fd9a6d8:203
+[     495ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:18012/node_modules/.vite/deps/chunk-XPBHM44X.js?v=0fd9a6d8:21608
+[     530ms] [WARNING] [global-config] "/workbench" is reserved for backend routing. Falling back to "/workbench" in frontend mode. @ http://127.0.0.1:18012/src/global-config.ts:29
+[    1187ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:18012/api/session/status:0
+[    1189ms] [WARNING] API Response Error: {status: 500, url: /session/status, message: Request failed with status code 500} @ http://127.0.0.1:18012/src/api/apiClient.ts:227
+[  108019ms] [LOG] i18next: languageChanged zh_CN @ http://127.0.0.1:18012/node_modules/.vite/deps/i18next.js?v=0fd9a6d8:203
+[  108019ms] [LOG] i18next: initialized {debug: true, initImmediate: true, ns: Array(1), defaultNS: Array(1), fallbackLng: Array(1)} @ http://127.0.0.1:18012/node_modules/.vite/deps/i18next.js?v=0fd9a6d8:203
+[  108022ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:18012/node_modules/.vite/deps/chunk-XPBHM44X.js?v=0fd9a6d8:21608
+[  108047ms] [WARNING] [global-config] "/workbench" is reserved for backend routing. Falling back to "/workbench" in frontend mode. @ http://127.0.0.1:18012/src/global-config.ts:29
+[  108279ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:18012/api/session/status:0
+[  108280ms] [WARNING] API Response Error: {status: 500, url: /session/status, message: Request failed with status code 500} @ http://127.0.0.1:18012/src/api/apiClient.ts:227

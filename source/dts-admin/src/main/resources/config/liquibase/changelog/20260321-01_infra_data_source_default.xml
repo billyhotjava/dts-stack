@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260321-01-infra-data-source-default" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="infra_data_source"/>
+        </preConditions>
+        <addColumn tableName="infra_data_source">
+            <column name="is_default" type="boolean" defaultValueBoolean="false"/>
+        </addColumn>
+        <sql>
+            update infra_data_source
+            set is_default = true
+            where id = (
+                select id
+                from infra_data_source
+                where upper(type) = 'INCEPTOR'
+                order by updated_at desc nulls last, created_at desc nulls last
+                limit 1
+            )
+            and not exists (select 1 from infra_data_source where is_default = true);
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

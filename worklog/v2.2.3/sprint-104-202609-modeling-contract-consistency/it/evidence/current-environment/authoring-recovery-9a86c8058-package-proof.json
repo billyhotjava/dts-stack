@@ -1,0 +1,39 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/authoring-recovery-9a86c8058.tar.gz",
+  "sha256": "858e40f617c7b3cb9db9a80973fe41a5b098471bd64b009fe6289c9d8aabab31",
+  "sourceCommit": "9a86c805858cfbbf15d51d0e01e6cd2e774f9f5c",
+  "archiveChecksumsVerified": {
+    "dts-platform_s104-9a86c8058-20260908-145658.tar": "0ad08b0f44c5ed07ca8b8b2c5f1e0089f3919080daaf8082f3886e0a2facd467",
+    "dts-platform-webapp_s104-9a86c8058-20260908-145658.tar": "bd75d14c6e752c30d587f7c00fb95dfcac210aab46c065be127eeba849fa1289"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-9a86c8058",
+      "localImageId": "sha256:8329e048864c579d7d488317f9c90120cc9e9030791a90f0d5b86ec10ceeb114",
+      "configImageId": "sha256:8329e048864c579d7d488317f9c90120cc9e9030791a90f0d5b86ec10ceeb114",
+      "sourceRevision": "9a86c805858cfbbf15d51d0e01e6cd2e774f9f5c"
+    },
+    {
+      "tag": "dts-platform:s104-9a86c8058",
+      "localImageId": "sha256:8f483311e36631550b598b3ee136125fc236dbc2d7384cb021e175a3be3fdc0b",
+      "configImageId": "sha256:8f483311e36631550b598b3ee136125fc236dbc2d7384cb021e175a3be3fdc0b",
+      "sourceRevision": "9a86c805858cfbbf15d51d0e01e6cd2e774f9f5c"
+    }
+  ],
+  "runtime": [
+    {
+      "container": "/deploy-dts-platform-1",
+      "image": "dts-platform:s104-9a86c8058",
+      "imageId": "sha256:8f483311e36631550b598b3ee136125fc236dbc2d7384cb021e175a3be3fdc0b",
+      "status": "running",
+      "health": "healthy"
+    },
+    {
+      "container": "/deploy-dts-platform-webapp-1",
+      "image": "dts-platform-webapp:s104-9a86c8058",
+      "imageId": "sha256:8329e048864c579d7d488317f9c90120cc9e9030791a90f0d5b86ec10ceeb114",
+      "status": "running",
+      "health": "not configured"
+    }
+  ]
+}

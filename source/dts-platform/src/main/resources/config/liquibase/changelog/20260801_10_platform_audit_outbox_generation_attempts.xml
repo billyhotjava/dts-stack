@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801_10_platform_audit_outbox_generation_attempts" author="platform">
+        <preConditions onFail="HALT">
+            <tableExists tableName="platform_audit_outbox"/>
+            <not><columnExists tableName="platform_audit_outbox" columnName="generation_attempts"/></not>
+        </preConditions>
+        <addColumn tableName="platform_audit_outbox">
+            <column name="generation_attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <!-- Preserve the active retry-cycle position while keeping dispatch_attempts cumulative forever. -->
+        <sql dbms="postgresql">
+            UPDATE platform_audit_outbox
+               SET generation_attempts = dispatch_attempts;
+            ALTER TABLE platform_audit_outbox
+                ADD CONSTRAINT ck_platform_audit_outbox_generation_attempts
+                CHECK (
+                    generation_attempts &gt;= 0
+                    AND generation_attempts &lt;= dispatch_attempts
+                );
+        </sql>
+        <rollback>
+            <sql dbms="postgresql">
+                ALTER TABLE platform_audit_outbox
+                    DROP CONSTRAINT IF EXISTS ck_platform_audit_outbox_generation_attempts;
+            </sql>
+            <dropColumn tableName="platform_audit_outbox" columnName="generation_attempts"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

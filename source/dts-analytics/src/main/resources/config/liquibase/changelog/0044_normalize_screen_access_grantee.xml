@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+        Normalize analytics_screen_access.grantee_id for USER-type grants:
+        rows created by the backend (before this fix) stored the numeric analytics
+        user id (e.g. "1"), while the frontend has always sent the platformUsername
+        (e.g. "opadmin").  This migration rewrites numeric-id grants to use the
+        platform_username so that the lookup in ScreenPermissionService is consistent.
+
+        Only rows that:
+          1. have grantee_type = 'USER'
+          2. whose grantee_id looks like a plain integer (matches ^[0-9]+$)
+          3. can be joined to an analytics_user with a non-blank platform_username
+        are updated.  Any row that cannot be resolved is left untouched (the service
+        falls back to numeric-id matching for such rows).
+    -->
+    <changeSet id="0044-normalize-screen-access-grantee" author="system">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="analytics_screen_access"/>
+            <tableExists tableName="analytics_user"/>
+            <columnExists tableName="analytics_user" columnName="platform_username"/>
+        </preConditions>
+
+        <sql>
+            UPDATE analytics_screen_access a
+            SET grantee_id = u.platform_username
+            FROM analytics_user u
+            WHERE a.grantee_type = 'USER'
+              AND a.grantee_id ~ '^[0-9]+$'
+              AND a.grantee_id = CAST(u.id AS TEXT)
+              AND u.platform_username IS NOT NULL
+              AND u.platform_username &lt;&gt; '';
+        </sql>
+
+        <rollback>
+            <!-- Reverse: replace username back to numeric id where we can match -->
+            <sql>
+                UPDATE analytics_screen_access a
+                SET grantee_id = CAST(u.id AS TEXT)
+                FROM analytics_user u
+                WHERE a.grantee_type = 'USER'
+                  AND a.grantee_id = u.platform_username
+                  AND u.platform_username IS NOT NULL
+                  AND u.platform_username &lt;&gt; '';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

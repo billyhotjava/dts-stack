@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260501_01_om_asset_cache" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="om_asset_cache"/>
+            </not>
+        </preConditions>
+        <createTable tableName="om_asset_cache">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="om_entity_id" type="varchar(128)"/>
+            <column name="fqn" type="varchar(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_type" type="varchar(32)" defaultValue="TABLE"/>
+            <column name="service_name" type="varchar(128)"/>
+            <column name="database_name" type="varchar(128)"/>
+            <column name="schema_name" type="varchar(128)"/>
+            <column name="table_name" type="varchar(256)"/>
+            <column name="display_name" type="varchar(256)"/>
+            <column name="description" type="text"/>
+            <column name="owner_name" type="varchar(128)"/>
+            <column name="domain_name" type="varchar(128)"/>
+            <column name="tags_json" type="text"/>
+            <column name="profile_json" type="text"/>
+            <column name="raw_json" type="text"/>
+            <column name="column_count" type="int"/>
+            <column name="sync_status" type="varchar(32)" defaultValue="SYNCED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sync_message" type="varchar(512)"/>
+            <column name="last_synced_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_asset_cache_idx" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="om_asset_cache" indexName="uk_om_asset_cache_fqn"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="om_asset_cache" indexName="uk_om_asset_cache_fqn" unique="true">
+            <column name="fqn"/>
+        </createIndex>
+        <createIndex tableName="om_asset_cache" indexName="idx_om_asset_cache_entity">
+            <column name="om_entity_id"/>
+        </createIndex>
+        <createIndex tableName="om_asset_cache" indexName="idx_om_asset_cache_lookup">
+            <column name="service_name"/>
+            <column name="database_name"/>
+            <column name="schema_name"/>
+            <column name="table_name"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_column_cache" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="om_column_cache"/>
+            </not>
+        </preConditions>
+        <createTable tableName="om_column_cache">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="asset_id" type="uuid">
+                <constraints nullable="false"/>
+            </column>
+            <column name="om_column_fqn" type="varchar(1024)"/>
+            <column name="name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_type" type="varchar(128)"/>
+            <column name="description" type="text"/>
+            <column name="ordinal_position" type="int"/>
+            <column name="tags_json" type="text"/>
+            <column name="profile_json" type="text"/>
+            <column name="raw_json" type="text"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_column_cache_idx" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="om_column_cache" indexName="idx_om_column_cache_asset"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="om_column_cache" indexName="idx_om_column_cache_asset">
+            <column name="asset_id"/>
+            <column name="ordinal_position"/>
+        </createIndex>
+        <addForeignKeyConstraint
+            baseTableName="om_column_cache"
+            baseColumnNames="asset_id"
+            constraintName="fk_om_column_cache_asset"
+            referencedTableName="om_asset_cache"
+            referencedColumnNames="id"
+            onDelete="CASCADE"/>
+    </changeSet>
+
+    <changeSet id="20260501_01_catalog_asset_extension" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="catalog_asset_extension"/>
+            </not>
+        </preConditions>
+        <createTable tableName="catalog_asset_extension">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="om_asset_id" type="uuid"/>
+            <column name="legacy_dataset_id" type="uuid"/>
+            <column name="domain_id" type="uuid"/>
+            <column name="classification" type="varchar(32)"/>
+            <column name="warehouse_layer" type="varchar(32)"/>
+            <column name="owner_dept" type="varchar(64)"/>
+            <column name="business_owner" type="varchar(128)"/>
+            <column name="lifecycle_status" type="varchar(32)"/>
+            <column name="governance_status" type="varchar(32)" defaultValue="PENDING_GOVERNANCE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="security_policy_refs" type="text"/>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_asset_cache_source_type" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="om_asset_cache" columnName="source_type"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="om_asset_cache">
+            <column name="source_type" type="varchar(32)" defaultValue="TABLE"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260501_01_catalog_asset_extension_warehouse_layer" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_asset_extension" columnName="warehouse_layer"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_asset_extension">
+            <column name="warehouse_layer" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260501_01_catalog_asset_extension_idx" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="catalog_asset_extension" indexName="idx_catalog_asset_extension_om"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="catalog_asset_extension" indexName="idx_catalog_asset_extension_om">
+            <column name="om_asset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_extension" indexName="idx_catalog_asset_extension_legacy">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_extension" indexName="idx_catalog_asset_extension_governance">
+            <column name="governance_status"/>
+            <column name="classification"/>
+            <column name="owner_dept"/>
+        </createIndex>
+        <addForeignKeyConstraint
+            baseTableName="catalog_asset_extension"
+            baseColumnNames="om_asset_id"
+            constraintName="fk_catalog_asset_extension_om_asset"
+            referencedTableName="om_asset_cache"
+            referencedColumnNames="id"
+            onDelete="SET NULL"/>
+    </changeSet>
+
+    <changeSet id="20260501_01_catalog_asset_mapping" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="catalog_asset_mapping"/>
+            </not>
+        </preConditions>
+        <createTable tableName="catalog_asset_mapping">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="om_entity_id" type="varchar(128)"/>
+            <column name="fqn" type="varchar(1024)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="legacy_dataset_id" type="uuid"/>
+            <column name="source_id" type="uuid"/>
+            <column name="match_status" type="varchar(32)" defaultValue="UNMATCHED">
+                <constraints nullable="false"/>
+            </column>
+            <column name="match_reason" type="varchar(512)"/>
+            <column name="confidence" type="int"/>
+            <column name="last_checked_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260501_01_catalog_asset_mapping_idx" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="catalog_asset_mapping" indexName="uk_catalog_asset_mapping_fqn"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="catalog_asset_mapping" indexName="uk_catalog_asset_mapping_fqn" unique="true">
+            <column name="fqn"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_mapping" indexName="idx_catalog_asset_mapping_legacy">
+            <column name="legacy_dataset_id"/>
+        </createIndex>
+        <createIndex tableName="catalog_asset_mapping" indexName="idx_catalog_asset_mapping_status">
+            <column name="match_status"/>
+            <column name="confidence"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_lineage_cache" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="om_lineage_cache"/>
+            </not>
+        </preConditions>
+        <createTable tableName="om_lineage_cache">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="from_om_entity_id" type="varchar(128)"/>
+            <column name="to_om_entity_id" type="varchar(128)"/>
+            <column name="from_fqn" type="varchar(1024)"/>
+            <column name="to_fqn" type="varchar(1024)"/>
+            <column name="edge_type" type="varchar(32)" defaultValue="TABLE"/>
+            <column name="source" type="varchar(64)" defaultValue="openmetadata"/>
+            <column name="raw_json" type="text"/>
+            <column name="last_synced_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260501_01_om_lineage_cache_idx" author="dts">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="om_lineage_cache" indexName="idx_om_lineage_cache_from"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="om_lineage_cache" indexName="idx_om_lineage_cache_from">
+            <column name="from_om_entity_id"/>
+            <column name="from_fqn"/>
+        </createIndex>
+        <createIndex tableName="om_lineage_cache" indexName="idx_om_lineage_cache_to">
+            <column name="to_om_entity_id"/>
+            <column name="to_fqn"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

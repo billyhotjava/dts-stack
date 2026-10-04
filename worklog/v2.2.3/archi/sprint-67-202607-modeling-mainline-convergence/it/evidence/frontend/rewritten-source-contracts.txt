@@ -1,0 +1,13 @@
+F5 rewritten source contracts
+
+Command environment: Node 24, node --test
+Result: 35/35 PASS.
+
+Covered assertions:
+- retired object route is compatibility-only;
+- canonical metric workbench has no object creation/node dependency;
+- new routes and menu copy do not restore retired customer terminology;
+- old context is normalized to canonical planId/modelSpecId;
+- metric/model actions use ModelSpec and metric projections.
+
+Chrome 95 legacy production build: PASS, 10,585 modules transformed.

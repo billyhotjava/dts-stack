@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+    <changeSet id="20260925-02-model-execution-activation" author="codex" dbms="postgresql">
+        <comment>Existing runtime bindings retain their behavior; new explicit deployments require operator activation.</comment>
+        <addColumn tableName="modeling_plan_execution_binding">
+            <column name="activation_required" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback><dropColumn tableName="modeling_plan_execution_binding" columnName="activation_required"/></rollback>
+    </changeSet>
+</databaseChangeLog>

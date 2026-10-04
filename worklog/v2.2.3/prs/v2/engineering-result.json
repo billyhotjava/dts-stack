@@ -1,0 +1,13 @@
+{
+  "http": 409,
+  "body": {
+    "status": -1,
+    "message": "质量验证工作流启动失败，请修复规则绑定或执行服务后重试",
+    "code": "MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED",
+    "data": {
+      "candidateId": "e029a70f-0e2d-4d0e-a6c1-72c4ec5187df",
+      "errorType": "ModelReleaseCandidateException",
+      "retriable": true
+    }
+  }
+}

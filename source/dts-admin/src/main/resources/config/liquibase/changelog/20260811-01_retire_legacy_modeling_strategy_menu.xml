@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260811-01-retire-legacy-modeling-strategy-menu" author="xiezm" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="name"/>
+            <columnExists tableName="portal_menu" columnName="metadata"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_by"/>
+            <columnExists tableName="portal_menu" columnName="last_modified_date"/>
+        </preConditions>
+        <comment>
+            Retire the warehouse-plan-owned modeling strategy entry. Platform warehouse planning now exposes only
+            the global architecture dictionaries; the old deep link is handled by a frontend compatibility redirect.
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            UPDATE portal_menu
+               SET deleted = TRUE,
+                   last_modified_by = '20260811-retire-legacy-modeling-strategy-menu',
+                   last_modified_date = now()
+             WHERE deleted = FALSE
+               AND (
+                   name = 'sys.nav.portal.planningSystem'
+                   OR COALESCE(NULLIF(metadata, '')::jsonb ->> 'key', '') = 'planning-system'
+                   OR COALESCE(NULLIF(metadata, '')::jsonb ->> 'titleKey', '') = 'sys.nav.portal.planningSystem'
+                   OR COALESCE(NULLIF(metadata, '')::jsonb ->> 'externalLink', '') = '/data-modeling/planning/system'
+               );
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                UPDATE portal_menu
+                   SET deleted = FALSE,
+                       last_modified_by = '20260811-retire-legacy-modeling-strategy-menu-rollback',
+                       last_modified_date = now()
+                 WHERE deleted = TRUE
+                   AND last_modified_by = '20260811-retire-legacy-modeling-strategy-menu';
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

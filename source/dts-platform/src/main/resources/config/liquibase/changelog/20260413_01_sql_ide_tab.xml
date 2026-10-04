@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260413_01_sql_ide_tab" author="platform">
+        <createTable tableName="sql_ide_tab">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_login" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="title" type="varchar(200)"/>
+            <column name="sql_text" type="text"/>
+            <column name="engine" type="varchar(50)"/>
+            <column name="datasource_id" type="${uuidType}"/>
+            <column name="schema_ctx" type="varchar(500)"/>
+            <column name="cursor_line" type="integer"/>
+            <column name="cursor_col" type="integer"/>
+            <column name="selection_json" type="text"/>
+            <column name="last_execution_id" type="${uuidType}"/>
+            <column name="sort_order" type="integer" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex tableName="sql_ide_tab" indexName="idx_sql_ide_tab_user">
+            <column name="user_login"/>
+        </createIndex>
+        <createIndex tableName="sql_ide_tab" indexName="idx_sql_ide_tab_user_updated">
+            <column name="user_login"/>
+            <column name="last_modified_date" descending="true"/>
+        </createIndex>
+
+        <rollback>
+            <dropTable tableName="sql_ide_tab"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

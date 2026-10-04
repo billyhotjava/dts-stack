@@ -1,0 +1,22 @@
+Sprint-67 F2-T03 canonical source-business mapping dependency audit
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS for canonical baseline removal; legacy compatibility remains intentionally present
+Implementation commit: 72300c2ce
+
+Source audit:
+- WarehousePlanApplicationService.loadBaseline delegates to
+  WarehousePlanContract.evaluateBaseline(categoryScope, sourceInventory, planningPolicy, onboardingMode).
+- The canonical overload has no SourceBusinessMapping argument and computes readiness from category, source inventory, policy and onboarding mode only.
+- WarehousePlanSourceInventoryApplicationServiceIT.businessFirstConceptualDesignCanProceedWithoutSourcesOrLegacyMappings
+  asserts a BUSINESS_FIRST plan reaches the conceptual baseline with zero mapping rows.
+- WarehousePlanSourcesTab registers catalog assets directly as source bindings and never requests a business object or business process.
+
+Compatibility boundary intentionally retained:
+- PUT /api/modeling/warehouse-plans/{id}/baseline/source-mappings still exists for legacy callers;
+- SourceBusinessMapping and the old evaluateBaseline overload remain readable during the F5 controlled-retirement window;
+- no table, column or compatibility API was dropped in F2-T03 Phase A.
+
+Conclusion:
+- source-business mapping is no longer a canonical baseline prerequisite;
+- the legacy surface is compatibility-only and must be frozen/audited/removed under F5, not silently deleted here;
+- candidate preview/confirm Phase B must call the objectless ModelSpec API and must not revive mapping as a gate.

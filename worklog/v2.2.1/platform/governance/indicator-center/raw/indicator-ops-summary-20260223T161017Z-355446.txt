@@ -1,0 +1,16 @@
+run_at_utc=20260223T161017Z-355446
+mode=normal
+arch=x86_64
+hours=168
+metric_source_table=gov_indicator_definition
+collect_failed=1
+collect_error=psql_not_found
+total_indicators=0
+published=0
+draft=0
+archived=0
+validation_success=0
+validation_failed=0
+validation_never=0
+success_rate=0.00
+failed_rate=0.00

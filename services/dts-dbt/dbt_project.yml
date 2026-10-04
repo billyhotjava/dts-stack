@@ -1,0 +1,21 @@
+name: "dts"
+version: "1.0.0"
+config-version: 2
+
+profile: "dts"
+
+on-run-start:
+  - "{{ ensure_date_helpers() }}"
+
+model-paths: ["models", "dbt_model/models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+log-path: "/opt/dbt-logs"
+
+models:
+  dts:
+    +materialized: table
+
+seeds:
+  dts:
+    +quote_columns: false

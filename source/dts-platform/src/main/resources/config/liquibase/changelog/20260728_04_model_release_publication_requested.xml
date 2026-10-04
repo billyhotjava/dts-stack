@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260728-04-model-release-publication-requested" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_release_candidate_command"/>
+        </preConditions>
+        <comment>
+            Record a publish intent as the single append-only event that atomically advances a BUILT
+            candidate into QUALITY_RUNNING.
+        </comment>
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_release_candidate_command
+                DROP CONSTRAINT ck_model_release_candidate_command_payload;
+
+            ALTER TABLE modeling_model_release_candidate_command
+                ADD CONSTRAINT ck_model_release_candidate_command_payload
+                CHECK (
+                    candidate_version > 0
+                    AND event_type IN (
+                        'CREATED', 'SCOPE_REPLACED', 'STATUS_CHANGED',
+                        'PUBLICATION_REQUESTED', 'STALE_DETECTED'
+                    )
+                    AND to_status IN (
+                        'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                        'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                        'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK',
+                        'CANCELLED', 'STALE'
+                    )
+                    AND (
+                        from_status IS NULL
+                        OR from_status IN (
+                            'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                            'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                            'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK',
+                            'CANCELLED', 'STALE'
+                        )
+                    )
+                    AND ((event_type = 'CREATED' AND from_status IS NULL)
+                        OR (event_type <> 'CREATED' AND from_status IS NOT NULL))
+                    AND (
+                        event_type <> 'PUBLICATION_REQUESTED'
+                        OR (from_status = 'BUILT' AND to_status = 'QUALITY_RUNNING')
+                    )
+                    AND btrim(actor_id) <> ''
+                    AND actor_id = btrim(actor_id)
+                    AND btrim(reason) <> ''
+                    AND octet_length(reason) <= 4096
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_key = btrim(idempotency_key)
+                    AND request_hash ~ '^[0-9a-f]{64}$'
+                    AND jsonb_typeof(response_snapshot) = 'object'
+                    AND octet_length(response_snapshot::text) <= 1048576
+                );
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="true" endDelimiter=";"><![CDATA[
+                ALTER TABLE modeling_model_release_candidate_command
+                    DROP CONSTRAINT ck_model_release_candidate_command_payload;
+
+                ALTER TABLE modeling_model_release_candidate_command
+                    ADD CONSTRAINT ck_model_release_candidate_command_payload
+                    CHECK (
+                        candidate_version > 0
+                        AND event_type IN (
+                            'CREATED', 'SCOPE_REPLACED', 'STATUS_CHANGED', 'STALE_DETECTED'
+                        )
+                        AND to_status IN (
+                            'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                            'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                            'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK',
+                            'CANCELLED', 'STALE'
+                        )
+                        AND (
+                            from_status IS NULL
+                            OR from_status IN (
+                                'DRAFT', 'BUILDING', 'BUILD_FAILED', 'BUILT', 'QUALITY_RUNNING',
+                                'QUALITY_FAILED', 'QUALITY_PASSED', 'REVIEW_PENDING', 'REJECTED',
+                                'APPROVED', 'PUBLISHING', 'PARTIAL', 'PUBLISHED', 'ROLLED_BACK',
+                                'CANCELLED', 'STALE'
+                            )
+                        )
+                        AND ((event_type = 'CREATED' AND from_status IS NULL)
+                            OR (event_type <> 'CREATED' AND from_status IS NOT NULL))
+                        AND btrim(actor_id) <> ''
+                        AND actor_id = btrim(actor_id)
+                        AND btrim(reason) <> ''
+                        AND octet_length(reason) <= 4096
+                        AND btrim(idempotency_key) <> ''
+                        AND idempotency_key = btrim(idempotency_key)
+                        AND request_hash ~ '^[0-9a-f]{64}$'
+                        AND jsonb_typeof(response_snapshot) = 'object'
+                        AND octet_length(response_snapshot::text) <= 1048576
+                    );
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

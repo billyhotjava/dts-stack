@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260730-01-sprint79-modeling-workspace-menu-convergence" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+            <columnExists tableName="portal_menu" columnName="deleted"/>
+        </preConditions>
+
+        <comment>
+            Converge planning, dimension, model and metric navigation on the unified modeling workbench.
+            Existing menu ids and portal_menu_visibility bindings remain intact for rollback and observation.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            UPDATE portal_menu
+            SET deleted = TRUE,
+                last_modified_by = 'sprint79-menu-convergence',
+                last_modified_date = now()
+            WHERE name IN (
+                'sys.nav.portal.warehousePlans',
+                'sys.nav.portal.studioSemanticObjects',
+                'sys.nav.portal.studioSemanticModels',
+                'sys.nav.portal.studioMetricWorkbench',
+                'sys.nav.portal.dataMetrics'
+            )
+              AND deleted = FALSE;
+        ]]></sql>
+
+        <rollback>
+            UPDATE portal_menu
+            SET deleted = FALSE,
+                last_modified_by = 'system',
+                last_modified_date = now()
+            WHERE name IN (
+                'sys.nav.portal.warehousePlans',
+                'sys.nav.portal.studioSemanticObjects',
+                'sys.nav.portal.studioSemanticModels',
+                'sys.nav.portal.studioMetricWorkbench',
+                'sys.nav.portal.dataMetrics'
+            )
+              AND deleted = TRUE
+              AND last_modified_by = 'sprint79-menu-convergence';
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

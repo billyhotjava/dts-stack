@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-06-warehouse-plan-governance-policy" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan_policy"/>
+            <not>
+                <columnExists tableName="modeling_warehouse_plan_policy" columnName="standard_coverage"/>
+            </not>
+            <not>
+                <columnExists tableName="modeling_warehouse_plan_policy" columnName="quality_gate"/>
+            </not>
+        </preConditions>
+        <comment>
+            Keep existing plans on strict release governance while new planning-policy rows default to
+            key-and-measure standard coverage with blocking quality evidence.
+        </comment>
+
+        <addColumn tableName="modeling_warehouse_plan_policy">
+            <column name="standard_coverage" type="varchar(32)"/>
+            <column name="quality_gate" type="varchar(32)"/>
+        </addColumn>
+        <sql>
+            update modeling_warehouse_plan_policy
+               set standard_coverage = 'ALL_FIELDS',
+                   quality_gate = 'BLOCKING'
+             where standard_coverage is null
+                or quality_gate is null;
+        </sql>
+        <addDefaultValue
+            tableName="modeling_warehouse_plan_policy"
+            columnName="standard_coverage"
+            columnDataType="varchar(32)"
+            defaultValue="KEY_AND_MEASURE"/>
+        <addDefaultValue
+            tableName="modeling_warehouse_plan_policy"
+            columnName="quality_gate"
+            columnDataType="varchar(32)"
+            defaultValue="BLOCKING"/>
+        <addNotNullConstraint
+            tableName="modeling_warehouse_plan_policy"
+            columnName="standard_coverage"
+            columnDataType="varchar(32)"/>
+        <addNotNullConstraint
+            tableName="modeling_warehouse_plan_policy"
+            columnName="quality_gate"
+            columnDataType="varchar(32)"/>
+        <sql>
+            alter table modeling_warehouse_plan_policy
+                add constraint ck_warehouse_plan_standard_coverage
+                check (standard_coverage in ('NONE','KEY_AND_MEASURE','ALL_FIELDS'));
+            alter table modeling_warehouse_plan_policy
+                add constraint ck_warehouse_plan_quality_gate
+                check (quality_gate in ('ADVISORY','BLOCKING'));
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan_policy
+                         WHERE standard_coverage <> 'ALL_FIELDS'
+                            OR quality_gate <> 'BLOCKING'
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_WAREHOUSE_GOVERNANCE_POLICY_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <sql>
+                alter table modeling_warehouse_plan_policy drop constraint ck_warehouse_plan_quality_gate;
+                alter table modeling_warehouse_plan_policy drop constraint ck_warehouse_plan_standard_coverage;
+            </sql>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="quality_gate"/>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="standard_coverage"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

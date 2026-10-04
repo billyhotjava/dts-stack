@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- 确保所有配置项可编辑（包括敏感配置） -->
+    <changeSet id="20260127-ops-06-force-all-editable" author="dts-admin">
+        <!-- 无条件将所有配置设为可编辑 -->
+        <update tableName="system_config">
+            <column name="editable" valueBoolean="true"/>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

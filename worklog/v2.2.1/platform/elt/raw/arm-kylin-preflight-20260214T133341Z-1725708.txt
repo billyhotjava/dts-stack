@@ -1,0 +1,14 @@
+run_at_utc=20260214T133341Z-1725708
+status=FAIL
+host_arch=x86_64
+expect_arch=aarch64
+host_kernel=Linux 6.17.9-76061709-generic
+os_id=pop
+os_name=Pop!_OS
+os_like=ubuntu debian
+is_kylin=0
+require_kylin=1
+docker_ok=1
+check_containers=1
+required_containers=dts-stack-dts-pg-1 dts-stack-dts-ingestion-1
+missing_containers=

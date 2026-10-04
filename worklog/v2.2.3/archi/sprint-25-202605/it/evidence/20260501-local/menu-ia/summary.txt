@@ -1,0 +1,4 @@
+Sprint-25 menu IA smoke passed
+menu=/opt/prod/s10/v2.2.3/source/dts-admin/src/main/resources/config/data/portal-menu-seed.json
+roles=/opt/prod/s10/v2.2.3/source/dts-admin/src/main/resources/config/data/role-menu-defaults.json
+evidence=worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/menu-ia

@@ -1,0 +1,10 @@
+field_name_cn,field_name_en,data_type,data_length,data_precision,data_scale,nullable,domain,description,source_system,code_set,default_value,is_pk,security_level
+是否标志,yes_no_flag,VARCHAR,1,,,Y,通用基础,是或否的通用业务标志,,BOOLEAN_YN_DTS,,N,INTERNAL
+记录状态代码,record_status_code,VARCHAR,16,,,N,通用基础,记录启用或停用的状态代码,,RECORD_STATUS_DTS,ACTIVE,N,INTERNAL
+生效日期,effective_from,DATE,,,,Y,通用基础,记录或标准内容开始生效的日期,,,,N,INTERNAL
+失效日期,effective_to,DATE,,,,Y,通用基础,记录或标准内容停止生效的日期,,,,N,INTERNAL
+创建时间,created_at,TIMESTAMP,,,,N,审计追溯,记录首次持久化的时间戳,,,,N,INTERNAL
+更新时间,updated_at,TIMESTAMP,,,,Y,审计追溯,记录最近一次持久化变更的时间戳,,,,N,INTERNAL
+创建人标识,created_by,VARCHAR,128,,,Y,审计追溯,创建该记录的主体标识,,,,N,INTERNAL
+更新人标识,updated_by,VARCHAR,128,,,Y,审计追溯,最近更新该记录的主体标识,,,,N,INTERNAL
+来源系统标识,source_system_code,VARCHAR,128,,,Y,审计追溯,客户环境中产生该业务记录的来源系统稳定标识,,,,N,INTERNAL

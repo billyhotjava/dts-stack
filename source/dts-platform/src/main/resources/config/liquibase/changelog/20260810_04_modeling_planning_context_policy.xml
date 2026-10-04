@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260810-04a-modeling-planning-context-policy" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan_policy"/>
+            <not><columnExists tableName="modeling_warehouse_plan_policy" columnName="business_category_mode"/></not>
+            <not><columnExists tableName="modeling_warehouse_plan_policy" columnName="default_business_category_id"/></not>
+            <not><columnExists tableName="modeling_warehouse_plan_policy" columnName="business_process_mode"/></not>
+        </preConditions>
+        <comment>
+            Add compatible planning-context defaults to the canonical warehouse policy. A default category is
+            backfilled only when the plan has exactly one confirmed category; ambiguous plans remain explicit.
+        </comment>
+
+        <addColumn tableName="modeling_warehouse_plan_policy">
+            <column name="business_category_mode" type="varchar(32)" defaultValue="SINGLE_DEFAULT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="default_business_category_id" type="${uuidType}"/>
+            <column name="business_process_mode" type="varchar(32)" defaultValue="AUTO_SELECT_SINGLE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            update modeling_warehouse_plan_policy policy
+               set default_business_category_id = candidates.domain_id
+              from (
+                    select tenant_id, plan_id, max(domain_id::text)::uuid as domain_id
+                      from modeling_warehouse_plan_domain
+                     where confirmation_status = 'CONFIRMED'
+                     group by tenant_id, plan_id
+                    having count(distinct domain_id) = 1
+                   ) candidates
+             where policy.tenant_id = candidates.tenant_id
+               and policy.plan_id = candidates.plan_id
+               and policy.default_business_category_id is null;
+        </sql>
+        <sql>
+            alter table modeling_warehouse_plan_policy
+                add constraint ck_warehouse_plan_business_category_mode
+                check (business_category_mode in ('SINGLE_DEFAULT','MULTI_SELECT'));
+            alter table modeling_warehouse_plan_policy
+                add constraint ck_warehouse_plan_business_process_mode
+                check (business_process_mode in ('AUTO_SELECT_SINGLE','MANAGED'));
+        </sql>
+        <createIndex tableName="modeling_warehouse_plan_policy" indexName="idx_warehouse_plan_policy_default_category">
+            <column name="tenant_id"/>
+            <column name="default_business_category_id"/>
+        </createIndex>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan_policy
+                         WHERE default_business_category_id IS NOT NULL
+                            OR business_category_mode <> 'SINGLE_DEFAULT'
+                            OR business_process_mode <> 'AUTO_SELECT_SINGLE'
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODELING_PLANNING_CONTEXT_POLICY_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropIndex tableName="modeling_warehouse_plan_policy" indexName="idx_warehouse_plan_policy_default_category"/>
+            <sql>
+                alter table modeling_warehouse_plan_policy drop constraint ck_warehouse_plan_business_process_mode;
+                alter table modeling_warehouse_plan_policy drop constraint ck_warehouse_plan_business_category_mode;
+            </sql>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="business_process_mode"/>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="default_business_category_id"/>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="business_category_mode"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="20260810-04b-business-process-lifecycle" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="sprint64_business_process"/>
+            <not><columnExists tableName="sprint64_business_process" columnName="lifecycle_status"/></not>
+        </preConditions>
+        <comment>
+            Preserve stable process identifiers and references when a confirmed business process is retired.
+        </comment>
+
+        <addColumn tableName="sprint64_business_process">
+            <column name="lifecycle_status" type="varchar(16)" defaultValue="ACTIVE">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <sql>
+            alter table sprint64_business_process
+                add constraint ck_sprint64_business_process_lifecycle
+                check (lifecycle_status in ('ACTIVE','RETIRED'));
+        </sql>
+        <createIndex tableName="sprint64_business_process" indexName="idx_sprint64_process_domain_lifecycle">
+            <column name="domain_id"/>
+            <column name="lifecycle_status"/>
+            <column name="confirmed"/>
+        </createIndex>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM sprint64_business_process WHERE lifecycle_status = 'RETIRED') THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_RETIRED_BUSINESS_PROCESS_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropIndex tableName="sprint64_business_process" indexName="idx_sprint64_process_domain_lifecycle"/>
+            <sql>
+                alter table sprint64_business_process drop constraint ck_sprint64_business_process_lifecycle;
+            </sql>
+            <dropColumn tableName="sprint64_business_process" columnName="lifecycle_status"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

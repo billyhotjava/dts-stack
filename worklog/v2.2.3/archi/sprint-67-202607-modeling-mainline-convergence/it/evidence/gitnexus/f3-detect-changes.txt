@@ -1,0 +1,9 @@
+Sprint-67 F3 GitNexus 变更范围审计
+时间：2026-07-19 +08:00
+范围：unstaged
+
+结果：LOW
+- affected execution processes: 0
+- 变更集中在 canonical ModelSpec contract/persistence/stage-gate、modeling webapp editor/detail、测试和 Sprint-67 证据。
+- AGENTS.md、CLAUDE.md 是进入本批前已存在的用户修改，不属于 F3 实现。
+- 无 compiler 重写、无符号重命名、无旧业务对象物理删除。

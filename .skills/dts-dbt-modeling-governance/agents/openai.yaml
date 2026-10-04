@@ -1,0 +1,4 @@
+interface:
+  display_name: "DTS dbt Modeling Governance"
+  short_description: "Govern DTS dbt models and lineage"
+  default_prompt: "Use $dts-dbt-modeling-governance to review this DTS dbt modeling change."

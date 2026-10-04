@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20251024-02-infra-data-source-repair" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="infra_data_source"/>
+            </not>
+        </preConditions>
+        <comment>Recreate infra_data_source table when missing (dev resets)</comment>
+        <createTable tableName="infra_data_source">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="type" type="varchar(32)"/>
+            <column name="jdbc_url" type="varchar(512)"/>
+            <column name="username" type="varchar(128)"/>
+            <column name="props" type="varchar(2048)"/>
+            <column name="description" type="varchar(512)"/>
+            <column name="secure_props" type="bytea"/>
+            <column name="secure_iv" type="bytea"/>
+            <column name="secure_key_version" type="varchar(32)"/>
+            <column name="status" type="varchar(32)"/>
+            <column name="last_verified_at" type="timestamp"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <createIndex indexName="idx_infra_ds_name" tableName="infra_data_source">
+            <column name="name"/>
+        </createIndex>
+        <createIndex indexName="idx_infra_data_source_status" tableName="infra_data_source">
+            <column name="status"/>
+        </createIndex>
+        <createIndex indexName="idx_infra_data_source_type" tableName="infra_data_source">
+            <column name="type"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

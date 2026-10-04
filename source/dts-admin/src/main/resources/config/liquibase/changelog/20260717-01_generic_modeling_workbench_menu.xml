@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260717-01-generic-modeling-workbench-menu" author="codex">
+        <preConditions onFail="MARK_RAN" onError="MARK_RAN">
+            <tableExists tableName="portal_menu"/>
+        </preConditions>
+
+        <comment>
+            Promote the existing business-process menu row to the generic modeling workbench while preserving
+            its id and all portal_menu_visibility bindings. Specialist modeling entries remain available below it.
+        </comment>
+        <sql dbms="postgresql" splitStatements="false"><![CDATA[
+            DO $do$
+            DECLARE
+                modeling_id BIGINT;
+                workbench_id BIGINT;
+            BEGIN
+                SELECT id INTO modeling_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (name = 'sys.nav.portal.studioDataModeling' OR metadata LIKE '%"key":"modeling"%')
+                ORDER BY id
+                LIMIT 1;
+
+                SELECT id INTO workbench_id
+                FROM portal_menu
+                WHERE deleted = FALSE
+                  AND (
+                      name = 'sys.nav.portal.studioBusinessProcesses'
+                      OR metadata LIKE '%"titleKey":"sys.nav.portal.studioBusinessProcesses"%'
+                      OR metadata LIKE '%"key":"business-processes"%'
+                      OR metadata LIKE '%"key":"modeling-workbench"%'
+                  )
+                ORDER BY CASE WHEN name = 'sys.nav.portal.studioBusinessProcesses' THEN 0 ELSE 1 END, id
+                LIMIT 1;
+
+                IF modeling_id IS NOT NULL AND workbench_id IS NOT NULL THEN
+                    UPDATE portal_menu
+                    SET name = 'sys.nav.portal.studioBusinessProcesses',
+                        parent_id = modeling_id,
+                        path = 'studio/modeling/modeling-workbench',
+                        sort_order = 1,
+                        metadata = '{"key":"modeling-workbench","sectionKey":"studio","entryKey":"modeling-workbench","titleKey":"sys.nav.portal.studioBusinessProcesses","title":"建模工作台","icon":"solar:layers-minimalistic-bold-duotone","externalLink":"/modeling/workbench"}',
+                        icon = 'solar:layers-minimalistic-bold-duotone',
+                        component = NULL,
+                        deleted = FALSE,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE id = workbench_id;
+
+                    UPDATE portal_menu
+                    SET sort_order = 2,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id = modeling_id
+                      AND (name = 'sys.nav.portal.warehousePlanning' OR metadata LIKE '%"key":"warehouse-planning"%');
+
+                    UPDATE portal_menu
+                    SET sort_order = 3,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id = modeling_id
+                      AND (name = 'sys.nav.portal.dataStandards' OR metadata LIKE '%"key":"standards"%');
+
+                    UPDATE portal_menu
+                    SET sort_order = 4,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id = modeling_id
+                      AND (name = 'sys.nav.portal.dimensionalModeling' OR metadata LIKE '%"key":"dimensional-modeling"%');
+
+                    UPDATE portal_menu
+                    SET sort_order = 5,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id = modeling_id
+                      AND (name = 'sys.nav.portal.studioLowCodeDevelopment' OR metadata LIKE '%"key":"low-code-development"%');
+
+                    UPDATE portal_menu
+                    SET sort_order = 6,
+                        last_modified_by = 'system',
+                        last_modified_date = now()
+                    WHERE parent_id = modeling_id
+                      AND (name = 'sys.nav.portal.dataMetrics' OR metadata LIKE '%"key":"data-metrics"%');
+                END IF;
+            END;
+            $do$;
+        ]]></sql>
+    </changeSet>
+</databaseChangeLog>

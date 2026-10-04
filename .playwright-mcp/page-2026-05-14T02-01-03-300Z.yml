@@ -1,0 +1,253 @@
+- generic [ref=e4]:
+  - complementary [ref=e5]:
+    - menu [ref=e7]:
+      - menuitem "总览图表" [ref=e8] [cursor=pointer]:
+        - generic [ref=e9]: 总览图表
+      - menuitem "流水线进度" [ref=e10] [cursor=pointer]:
+        - generic [ref=e11]: 流水线进度
+      - menuitem "一键重跑" [active] [ref=e12] [cursor=pointer]:
+        - generic [ref=e13]: 一键重跑
+      - menuitem "最近运行" [ref=e14] [cursor=pointer]:
+        - generic [ref=e15]: 最近运行
+      - menuitem "演进路线" [ref=e16] [cursor=pointer]:
+        - generic [ref=e17]: 演进路线
+      - menuitem "批次重算" [ref=e18] [cursor=pointer]:
+        - generic [ref=e19]: 批次重算
+      - menuitem "批次结果" [ref=e20] [cursor=pointer]:
+        - generic [ref=e21]: 批次结果
+  - main [ref=e22]:
+    - generic [ref=e23]:
+      - generic [ref=e27]:
+        - generic [ref=e28]:
+          - heading "Metro AppPack · 算法运行面板" [level=3] [ref=e30]
+          - generic [ref=e31]: LSTM-AE 异常检测 · 阈值调优 · 反馈驱动评估（一键重跑 + 数据上传）
+          - generic [ref=e33]:
+            - generic [ref=e35]: 包标识：metro-pack
+            - generic [ref=e37]: 版本：3.0.1
+            - generic [ref=e39]: 行业：地铁
+        - button "reload 刷新" [ref=e40] [cursor=pointer]:
+          - img "reload" [ref=e198]:
+            - img [ref=e199]
+          - generic [ref=e45]: 刷新
+      - generic [ref=e47]:
+        - generic [ref=e51]:
+          - generic [ref=e52]: 目标分（target_score）
+          - generic [ref=e54]: 67.7%
+        - generic [ref=e57]:
+          - generic [ref=e58]:
+            - generic [ref=e60]:
+              - generic [ref=e62]: 当前最佳代理F1
+              - img "info-circle" [ref=e64]:
+                - img [ref=e65]
+            - generic [ref=e69]: 100.0%
+          - generic [ref=e70]: 差距：0.3230
+        - generic [ref=e73]:
+          - generic [ref=e74]:
+            - generic [ref=e75]: 最新离线事件数
+            - generic [ref=e77]: "2"
+          - generic [ref=e78]: 训练阈值：3.030
+        - generic [ref=e81]:
+          - generic [ref=e82]:
+            - generic [ref=e83]: 训练验证损失
+            - generic [ref=e85]: "0.299009"
+          - generic [ref=e86]: 最佳候选：trial-01
+      - tabpanel [ref=e201]:
+        - generic [ref=e202]:
+          - alert [ref=e204]:
+            - img "info-circle" [ref=e205]:
+              - img [ref=e206]
+            - generic [ref=e209]: 所有 skill 在选定批次的上下文中执行（共享同一份数据与产物目录），保证流水线一致性
+          - generic [ref=e213]:
+            - strong [ref=e216]: 活跃批次：
+            - generic [ref=e218] [cursor=pointer]:
+              - generic [ref=e220]:
+                - combobox [ref=e222]
+                - generic: 请选择一个批次作为数据源与产物目录
+              - generic:
+                - img:
+                  - img
+          - generic [ref=e224]:
+            - generic [ref=e226]:
+              - generic [ref=e228]:
+                - generic [ref=e229]: 数据合约校验
+                - generic [ref=e231]:
+                  - generic [ref=e233]: 需要数据
+                  - generic [ref=e235]: P0-01
+              - generic [ref=e236]: 校验地铁信号原始文件的字段、类型与必填项，作为流水线的第一道质量门。
+              - list [ref=e237]:
+                - listitem [ref=e238]:
+                  - button "play-circle 执行" [disabled] [ref=e240]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e241]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e243]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e245]:
+              - generic [ref=e247]:
+                - generic [ref=e248]: 数据集构建
+                - generic [ref=e250]:
+                  - generic [ref=e252]: 需要数据
+                  - generic [ref=e254]: P0-02
+              - generic [ref=e255]: 把原始数据切分为滑动窗口、归一化，并划分训练/验证集，供 LSTM-AE 使用。
+              - list [ref=e256]:
+                - listitem [ref=e257]:
+                  - button "play-circle 执行" [disabled] [ref=e259]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e260]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e262]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e264]:
+              - generic [ref=e266]:
+                - generic [ref=e267]: LSTM-AE 模型训练
+                - generic [ref=e271]: P0-03
+              - generic [ref=e272]: 训练 LSTM AutoEncoder 学习正常模式，输出模型权重与默认阈值（分位数法）。
+              - list [ref=e273]:
+                - listitem [ref=e274]:
+                  - button "play-circle 执行" [disabled] [ref=e276]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e277]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e279]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e281]:
+              - generic [ref=e283]:
+                - generic [ref=e284]: 离线告警评分
+                - generic [ref=e288]: P0-04
+              - generic [ref=e289]: 用训练好的模型给验证集打分，产出告警窗口、事件聚合与 score 分布。
+              - list [ref=e290]:
+                - listitem [ref=e291]:
+                  - button "play-circle 执行" [disabled] [ref=e293]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e294]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e296]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e298]:
+              - generic [ref=e300]:
+                - generic [ref=e301]: 阈值与策略调优
+                - generic [ref=e305]: P1-02
+              - generic [ref=e306]: 对比 static / EWMA / POT 三种阈值策略，叠加滞回逻辑，按 weak_f1 选最佳。
+              - list [ref=e307]:
+                - listitem [ref=e308]:
+                  - button "play-circle 执行" [disabled] [ref=e310]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e311]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e313]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e315]:
+              - generic [ref=e317]:
+                - generic [ref=e318]: 漂移检测与重训
+                - generic [ref=e322]: P2-03
+              - generic [ref=e323]: 检测线上数据分布是否偏离训练分布，必要时触发候选模型重训。
+              - list [ref=e324]:
+                - listitem [ref=e325]:
+                  - button "play-circle 执行" [disabled] [ref=e327]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e328]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e330]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e332]:
+              - generic [ref=e334]:
+                - generic [ref=e335]: 根因解释
+                - generic [ref=e339]: P3-01
+              - generic [ref=e340]: 为已检出的异常事件生成根因说明，列出贡献最大的特征与偏离程度。
+              - list [ref=e341]:
+                - listitem [ref=e342]:
+                  - button "play-circle 执行" [disabled] [ref=e344]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e345]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e347]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e349]:
+              - generic [ref=e351]:
+                - generic [ref=e352]: 运维反馈回流
+                - generic [ref=e356]: P3-02
+              - generic [ref=e357]: 把工单系统中的人工处置结果写回弱标签库，驱动下一轮调优。
+              - list [ref=e358]:
+                - listitem [ref=e359]:
+                  - button "play-circle 执行" [disabled] [ref=e361]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e362]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e364]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e366]:
+              - generic [ref=e368]:
+                - generic [ref=e369]: 多线路容量规划
+                - generic [ref=e373]: P3-03
+              - generic [ref=e374]: 评估多线路、多设备铺开时所需的算力、并发与存储预算。
+              - list [ref=e375]:
+                - listitem [ref=e376]:
+                  - button "play-circle 执行" [disabled] [ref=e378]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e379]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e381]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO
+            - generic [ref=e383]:
+              - generic [ref=e385]:
+                - generic [ref=e386]: 版本验收门
+                - generic [ref=e390]: P3-04
+              - generic [ref=e391]: 跑 v3.0.1 验收 checklist，给出是否允许发布的硬性结论。
+              - list [ref=e392]:
+                - listitem [ref=e393]:
+                  - button "play-circle 执行" [disabled] [ref=e395]:
+                    - generic:
+                      - img "play-circle":
+                        - img
+                    - generic: 执行
+                - listitem [ref=e396]:
+                  - button "info-circle 查看 IO" [disabled] [ref=e398]:
+                    - generic:
+                      - img "info-circle":
+                        - img
+                    - generic: 查看 IO

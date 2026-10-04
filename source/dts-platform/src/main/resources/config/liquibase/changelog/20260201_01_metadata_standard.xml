@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260201_01_metadata_standard" author="platform">
+        <createTable tableName="metadata_standard">
+            <column name="id" type="uuid">
+                <constraints primaryKey="true"/>
+            </column>
+            <column name="field_name_cn" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="field_name_en" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_length" type="int"/>
+            <column name="data_precision" type="int"/>
+            <column name="data_scale" type="int"/>
+            <column name="nullable" type="boolean">
+                <constraints nullable="false"/>
+            </column>
+            <column name="domain" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(2048)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_system" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="code_set" type="varchar(128)"/>
+            <column name="default_value" type="varchar(256)"/>
+            <column name="is_pk" type="boolean"/>
+            <column name="security_level" type="varchar(32)" defaultValue="INTERNAL">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamp"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamp"/>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="metadata_standard"
+            columnNames="field_name_en,domain"
+            constraintName="uk_metadata_standard_key"
+        />
+
+        <createIndex tableName="metadata_standard" indexName="idx_metadata_standard_domain">
+            <column name="domain"/>
+        </createIndex>
+        <createIndex tableName="metadata_standard" indexName="idx_metadata_standard_field_en">
+            <column name="field_name_en"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

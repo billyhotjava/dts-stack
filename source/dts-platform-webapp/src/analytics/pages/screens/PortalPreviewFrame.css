@@ -1,0 +1,17 @@
+.portal-preview-frame:fullscreen {
+	display: flex;
+	flex-direction: column;
+	border-radius: 0;
+}
+.portal-preview-frame:fullscreen > div:first-child {
+	flex-shrink: 0;
+}
+.portal-preview-frame:fullscreen > div:last-child {
+	flex: 1;
+	min-height: 0;
+	height: auto;
+	overflow: auto;
+}
+.portal-preview-frame:fullscreen iframe {
+	min-height: 0;
+}

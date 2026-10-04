@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd"
+>
+    <changeSet id="20260212-02-bi-report-security-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <tableExists tableName="bi_report_link"/>
+        </preConditions>
+
+        <createIndex indexName="idx_bi_report_link_sec_enabled_type" tableName="bi_report_link">
+            <column name="classification"/>
+            <column name="enabled"/>
+            <column name="report_type"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

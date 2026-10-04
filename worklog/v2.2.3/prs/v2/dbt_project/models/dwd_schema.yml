@@ -1,0 +1,2954 @@
+version: 2
+models:
+- name: prs_v2_dwd_customer
+  description: 客户当前维度
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: DIMENSION
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 客户当前维度；唯一粒度：customer_id
+          keys:
+          - customer_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_customer
+          layer: ODS
+        fieldRoles:
+          customer_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          customer_code: ATTRIBUTE
+          customer_name: ATTRIBUTE
+          customer_abbreviation: ATTRIBUTE
+          customer_type: ATTRIBUTE
+          customer_status: ATTRIBUTE
+          del_flag: ATTRIBUTE
+          update_time: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 客户当前维度
+        technicalOnly: false
+        dimensionStrategy: TYPE1
+        dimensionDefinitionCode: dim_1deff20612f0b87b6634aa06ff55d0c6
+        dimensionDefinition:
+          name: 客户当前维度
+          abbreviation: customer
+          definition: 客户当前维度。随本次全量物化更新当前属性，不保留历史版本。
+          attributes:
+          - code: CUSTOMER_ID
+            name: 客户编号
+            definition: 客户编号
+            primaryKey: true
+            order: 1
+          - code: TENANT_ID
+            name: 租户编号
+            definition: 租户编号
+            primaryKey: false
+            order: 2
+          - code: CUSTOMER_CODE
+            name: 客户编码
+            definition: 客户编码
+            primaryKey: false
+            order: 3
+          - code: CUSTOMER_NAME
+            name: 客户名称
+            definition: 客户名称
+            primaryKey: false
+            order: 4
+          - code: CUSTOMER_ABBREVIATION
+            name: 客户简称
+            definition: 客户简称
+            primaryKey: false
+            order: 5
+          - code: CUSTOMER_TYPE
+            name: 客户类型原码
+            definition: 客户类型原码
+            primaryKey: false
+            order: 6
+          - code: CUSTOMER_STATUS
+            name: 客户状态原码
+            definition: 客户状态原码
+            primaryKey: false
+            order: 7
+          - code: DEL_FLAG
+            name: 删除标记
+            definition: 删除标记
+            primaryKey: false
+            order: 8
+          - code: UPDATE_TIME
+            name: 源更新时间
+            definition: 源更新时间
+            primaryKey: false
+            order: 9
+          - code: DTS_SOURCE_SYSTEM
+            name: 来源系统
+            definition: 来源系统
+            primaryKey: false
+            order: 10
+          - code: DTS_SOURCE_TABLE
+            name: 来源表
+            definition: 来源表
+            primaryKey: false
+            order: 11
+          - code: DTS_IMPORT_TIME
+            name: 接入时间
+            definition: 接入时间
+            primaryKey: false
+            order: 12
+          - code: DTS_BATCH_ID
+            name: 接入批次
+            definition: 接入批次
+            primaryKey: false
+            order: 13
+          - code: DTS_EXECUTION_ID
+            name: 接入执行编号
+            definition: 接入执行编号
+            primaryKey: false
+            order: 14
+          - code: DTS_TASK_ID
+            name: 接入任务编号
+            definition: 接入任务编号
+            primaryKey: false
+            order: 15
+    alias: prs_v2_dwd_customer
+  columns:
+  - name: customer_id
+    description: 客户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_ID
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: TENANT_ID
+  - name: customer_code
+    description: 客户编码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_CODE
+  - name: customer_name
+    description: 客户名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_NAME
+  - name: customer_abbreviation
+    description: 客户简称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_ABBREVIATION
+  - name: customer_type
+    description: 客户类型原码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_TYPE
+  - name: customer_status
+    description: 客户状态原码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_STATUS
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DEL_FLAG
+  - name: update_time
+    description: 源更新时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: UPDATE_TIME
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_SYSTEM
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_TABLE
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_IMPORT_TIME
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_BATCH_ID
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_EXECUTION_ID
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_TASK_ID
+- name: prs_v2_dwd_contract
+  description: 合同当前维度
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: DIMENSION
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 合同当前维度；唯一粒度：contract_id
+          keys:
+          - contract_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        fieldRoles:
+          contract_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          contract_code: ATTRIBUTE
+          contract_name: ATTRIBUTE
+          contract_status: ATTRIBUTE
+          start_date: TIME
+          end_date: TIME
+          signing_time: TIME
+          month_settlement_money: MEASURE
+          amount_including_tax: MEASURE
+          del_flag: ATTRIBUTE
+          update_time: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 合同当前维度
+        technicalOnly: false
+        dimensionStrategy: TYPE1
+        dimensionDefinitionCode: dim_6bff2f1ee110f72a8d481ff910219c00
+        dimensionDefinition:
+          name: 合同当前维度
+          abbreviation: contract
+          definition: 合同当前维度。随本次全量物化更新当前属性，不保留历史版本。
+          attributes:
+          - code: CONTRACT_ID
+            name: 合同编号
+            definition: 合同编号
+            primaryKey: true
+            order: 1
+          - code: TENANT_ID
+            name: 租户编号
+            definition: 租户编号
+            primaryKey: false
+            order: 2
+          - code: CUSTOMER_ID
+            name: 客户编号
+            definition: 客户编号
+            primaryKey: false
+            order: 3
+          - code: CONTRACT_CODE
+            name: 合同编码
+            definition: 合同编码
+            primaryKey: false
+            order: 4
+          - code: CONTRACT_NAME
+            name: 合同名称
+            definition: 合同名称
+            primaryKey: false
+            order: 5
+          - code: CONTRACT_STATUS
+            name: 合同状态原码
+            definition: 合同状态原码
+            primaryKey: false
+            order: 6
+          - code: START_DATE
+            name: 合同开始日期
+            definition: 合同开始日期
+            primaryKey: false
+            order: 7
+          - code: END_DATE
+            name: 合同结束日期
+            definition: 合同结束日期
+            primaryKey: false
+            order: 8
+          - code: SIGNING_TIME
+            name: 签约日期
+            definition: 签约日期
+            primaryKey: false
+            order: 9
+          - code: MONTH_SETTLEMENT_MONEY
+            name: 合同月度结算金额
+            definition: 合同月度结算金额
+            primaryKey: false
+            order: 10
+          - code: AMOUNT_INCLUDING_TAX
+            name: 含税合同金额
+            definition: 含税合同金额
+            primaryKey: false
+            order: 11
+          - code: DEL_FLAG
+            name: 删除标记
+            definition: 删除标记
+            primaryKey: false
+            order: 12
+          - code: UPDATE_TIME
+            name: 源更新时间
+            definition: 源更新时间
+            primaryKey: false
+            order: 13
+          - code: DTS_SOURCE_SYSTEM
+            name: 来源系统
+            definition: 来源系统
+            primaryKey: false
+            order: 14
+          - code: DTS_SOURCE_TABLE
+            name: 来源表
+            definition: 来源表
+            primaryKey: false
+            order: 15
+          - code: DTS_IMPORT_TIME
+            name: 接入时间
+            definition: 接入时间
+            primaryKey: false
+            order: 16
+          - code: DTS_BATCH_ID
+            name: 接入批次
+            definition: 接入批次
+            primaryKey: false
+            order: 17
+          - code: DTS_EXECUTION_ID
+            name: 接入执行编号
+            definition: 接入执行编号
+            primaryKey: false
+            order: 18
+          - code: DTS_TASK_ID
+            name: 接入任务编号
+            definition: 接入任务编号
+            primaryKey: false
+            order: 19
+    alias: prs_v2_dwd_contract
+  columns:
+  - name: contract_id
+    description: 合同编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_ID
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: TENANT_ID
+  - name: customer_id
+    description: 客户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_ID
+  - name: contract_code
+    description: 合同编码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_CODE
+  - name: contract_name
+    description: 合同名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_NAME
+  - name: contract_status
+    description: 合同状态原码
+    data_type: integer
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_STATUS
+  - name: start_date
+    description: 合同开始日期
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: START_DATE
+  - name: end_date
+    description: 合同结束日期
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: END_DATE
+  - name: signing_time
+    description: 签约日期
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: SIGNING_TIME
+  - name: month_settlement_money
+    description: 合同月度结算金额
+    data_type: numeric
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: MONTH_SETTLEMENT_MONEY
+  - name: amount_including_tax
+    description: 含税合同金额
+    data_type: numeric
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: AMOUNT_INCLUDING_TAX
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DEL_FLAG
+  - name: update_time
+    description: 源更新时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: UPDATE_TIME
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_SYSTEM
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_TABLE
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_IMPORT_TIME
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_BATCH_ID
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_EXECUTION_ID
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_TASK_ID
+- name: prs_v2_dwd_project
+  description: 项目当前维度
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: DIMENSION
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 项目当前维度；唯一粒度：project_id
+          keys:
+          - project_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        fieldRoles:
+          project_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          contract_id: ATTRIBUTE
+          project_code: ATTRIBUTE
+          project_name: ATTRIBUTE
+          project_status: ATTRIBUTE
+          manager_id: ATTRIBUTE
+          biz_user_id: ATTRIBUTE
+          curing_director: ATTRIBUTE
+          start_time: TIME
+          end_time: TIME
+          del_flag: ATTRIBUTE
+          update_time: TIME
+          customer_id: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 项目当前维度
+        technicalOnly: false
+        dimensionStrategy: TYPE1
+        dimensionDefinitionCode: dim_f46f76f8c5bc75ed153c3582e81f6509
+        dimensionDefinition:
+          name: 项目当前维度
+          abbreviation: project
+          definition: 项目当前维度。随本次全量物化更新当前属性，不保留历史版本。
+          attributes:
+          - code: PROJECT_ID
+            name: 项目编号
+            definition: 项目编号
+            primaryKey: true
+            order: 1
+          - code: TENANT_ID
+            name: 租户编号
+            definition: 租户编号
+            primaryKey: false
+            order: 2
+          - code: CONTRACT_ID
+            name: 合同编号
+            definition: 合同编号
+            primaryKey: false
+            order: 3
+          - code: PROJECT_CODE
+            name: 项目编码
+            definition: 项目编码
+            primaryKey: false
+            order: 4
+          - code: PROJECT_NAME
+            name: 项目名称
+            definition: 项目名称
+            primaryKey: false
+            order: 5
+          - code: PROJECT_STATUS
+            name: 项目状态原码
+            definition: 项目状态原码
+            primaryKey: false
+            order: 6
+          - code: MANAGER_ID
+            name: 项目经理编号
+            definition: 项目经理编号
+            primaryKey: false
+            order: 7
+          - code: BIZ_USER_ID
+            name: 业务人员编号
+            definition: 业务人员编号
+            primaryKey: false
+            order: 8
+          - code: CURING_DIRECTOR
+            name: 养护主管编号
+            definition: 养护主管编号
+            primaryKey: false
+            order: 9
+          - code: START_TIME
+            name: 项目开始时间
+            definition: 项目开始时间
+            primaryKey: false
+            order: 10
+          - code: END_TIME
+            name: 项目结束时间
+            definition: 项目结束时间
+            primaryKey: false
+            order: 11
+          - code: DEL_FLAG
+            name: 删除标记
+            definition: 删除标记
+            primaryKey: false
+            order: 12
+          - code: UPDATE_TIME
+            name: 源更新时间
+            definition: 源更新时间
+            primaryKey: false
+            order: 13
+          - code: CUSTOMER_ID
+            name: 合同关联客户编号
+            definition: 合同关联客户编号
+            primaryKey: false
+            order: 14
+          - code: DTS_SOURCE_SYSTEM
+            name: 来源系统
+            definition: 来源系统
+            primaryKey: false
+            order: 15
+          - code: DTS_SOURCE_TABLE
+            name: 来源表
+            definition: 来源表
+            primaryKey: false
+            order: 16
+          - code: DTS_IMPORT_TIME
+            name: 接入时间
+            definition: 接入时间
+            primaryKey: false
+            order: 17
+          - code: DTS_BATCH_ID
+            name: 接入批次
+            definition: 接入批次
+            primaryKey: false
+            order: 18
+          - code: DTS_EXECUTION_ID
+            name: 接入执行编号
+            definition: 接入执行编号
+            primaryKey: false
+            order: 19
+          - code: DTS_TASK_ID
+            name: 接入任务编号
+            definition: 接入任务编号
+            primaryKey: false
+            order: 20
+    alias: prs_v2_dwd_project
+  columns:
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: PROJECT_ID
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: TENANT_ID
+  - name: contract_id
+    description: 合同编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_ID
+  - name: project_code
+    description: 项目编码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: PROJECT_CODE
+  - name: project_name
+    description: 项目名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: PROJECT_NAME
+  - name: project_status
+    description: 项目状态原码
+    data_type: integer
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: PROJECT_STATUS
+  - name: manager_id
+    description: 项目经理编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: MANAGER_ID
+  - name: biz_user_id
+    description: 业务人员编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: BIZ_USER_ID
+  - name: curing_director
+    description: 养护主管编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CURING_DIRECTOR
+  - name: start_time
+    description: 项目开始时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: START_TIME
+  - name: end_time
+    description: 项目结束时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: END_TIME
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DEL_FLAG
+  - name: update_time
+    description: 源更新时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: UPDATE_TIME
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_ID
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_SYSTEM
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_TABLE
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_IMPORT_TIME
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_BATCH_ID
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_EXECUTION_ID
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_TASK_ID
+- name: prs_v2_dwd_goods
+  description: 商品规格当前维度
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: DIMENSION
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 商品规格当前维度；唯一粒度：goods_price_id
+          keys:
+          - goods_price_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsb_goods
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsb_goods_price
+          layer: ODS
+        fieldRoles:
+          goods_price_id: BUSINESS_KEY
+          goods_id: ATTRIBUTE
+          goods_code: ATTRIBUTE
+          goods_name: ATTRIBUTE
+          specifications: ATTRIBUTE
+          goods_type: ATTRIBUTE
+          unit: ATTRIBUTE
+          guidance_price: MEASURE
+          cost_price: MEASURE
+          status: ATTRIBUTE
+          del_flag: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          goods_classify_id: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 商品规格当前维度
+        technicalOnly: false
+        dimensionStrategy: TYPE1
+        dimensionDefinitionCode: dim_5a3b13960af97ed9cb926ab4348c93a9
+        dimensionDefinition:
+          name: 商品规格当前维度
+          abbreviation: goods
+          definition: 商品规格当前维度。随本次全量物化更新当前属性，不保留历史版本。
+          attributes:
+          - code: GOODS_PRICE_ID
+            name: 商品规格编号
+            definition: 商品规格编号
+            primaryKey: true
+            order: 1
+          - code: GOODS_ID
+            name: 商品编号
+            definition: 商品编号
+            primaryKey: false
+            order: 2
+          - code: GOODS_CODE
+            name: 商品编码
+            definition: 商品编码
+            primaryKey: false
+            order: 3
+          - code: GOODS_NAME
+            name: 商品名称
+            definition: 商品名称
+            primaryKey: false
+            order: 4
+          - code: SPECIFICATIONS
+            name: 商品规格
+            definition: 商品规格
+            primaryKey: false
+            order: 5
+          - code: GOODS_TYPE
+            name: 商品类型原码
+            definition: 商品类型原码
+            primaryKey: false
+            order: 6
+          - code: UNIT
+            name: 商品单位
+            definition: 商品单位
+            primaryKey: false
+            order: 7
+          - code: GUIDANCE_PRICE
+            name: 指导价格
+            definition: 指导价格
+            primaryKey: false
+            order: 8
+          - code: COST_PRICE
+            name: 参考成本
+            definition: 参考成本
+            primaryKey: false
+            order: 9
+          - code: STATUS
+            name: 规格状态原码
+            definition: 规格状态原码
+            primaryKey: false
+            order: 10
+          - code: DEL_FLAG
+            name: 删除标记
+            definition: 删除标记
+            primaryKey: false
+            order: 11
+          - code: TENANT_ID
+            name: 租户编号
+            definition: 租户编号
+            primaryKey: false
+            order: 12
+          - code: GOODS_CLASSIFY_ID
+            name: 商品分类编号
+            definition: 商品分类编号
+            primaryKey: false
+            order: 13
+          - code: DTS_SOURCE_SYSTEM
+            name: 来源系统
+            definition: 来源系统
+            primaryKey: false
+            order: 14
+          - code: DTS_SOURCE_TABLE
+            name: 来源表
+            definition: 来源表
+            primaryKey: false
+            order: 15
+          - code: DTS_IMPORT_TIME
+            name: 接入时间
+            definition: 接入时间
+            primaryKey: false
+            order: 16
+          - code: DTS_BATCH_ID
+            name: 接入批次
+            definition: 接入批次
+            primaryKey: false
+            order: 17
+          - code: DTS_EXECUTION_ID
+            name: 接入执行编号
+            definition: 接入执行编号
+            primaryKey: false
+            order: 18
+          - code: DTS_TASK_ID
+            name: 接入任务编号
+            definition: 接入任务编号
+            primaryKey: false
+            order: 19
+    alias: prs_v2_dwd_goods
+  columns:
+  - name: goods_price_id
+    description: 商品规格编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_PRICE_ID
+  - name: goods_id
+    description: 商品编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_ID
+  - name: goods_code
+    description: 商品编码
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_CODE
+  - name: goods_name
+    description: 商品名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_NAME
+  - name: specifications
+    description: 商品规格
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: SPECIFICATIONS
+  - name: goods_type
+    description: 商品类型原码
+    data_type: integer
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_TYPE
+  - name: unit
+    description: 商品单位
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: UNIT
+  - name: guidance_price
+    description: 指导价格
+    data_type: numeric
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GUIDANCE_PRICE
+  - name: cost_price
+    description: 参考成本
+    data_type: numeric
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: COST_PRICE
+  - name: status
+    description: 规格状态原码
+    data_type: integer
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: STATUS
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DEL_FLAG
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: TENANT_ID
+  - name: goods_classify_id
+    description: 商品分类编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: GOODS_CLASSIFY_ID
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_SYSTEM
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_TABLE
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_IMPORT_TIME
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_BATCH_ID
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_EXECUTION_ID
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_TASK_ID
+- name: prs_v2_dwd_position
+  description: 摆放位置当前维度
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: DIMENSION
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 摆放位置当前维度；唯一粒度：position_id
+          keys:
+          - position_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_position
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        fieldRoles:
+          position_id: BUSINESS_KEY
+          project_id: ATTRIBUTE
+          floor_number_name: ATTRIBUTE
+          floor_layer_name: ATTRIBUTE
+          region_full: ATTRIBUTE
+          alias_name: ATTRIBUTE
+          contract_dept_id: ATTRIBUTE
+          curing_user_id: ATTRIBUTE
+          curing_user_name: ATTRIBUTE
+          status: ATTRIBUTE
+          del_flag: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 摆放位置当前维度
+        technicalOnly: false
+        dimensionStrategy: TYPE1
+        dimensionDefinitionCode: dim_4b6c45e604685f4ae568a55b11e1880d
+        dimensionDefinition:
+          name: 摆放位置当前维度
+          abbreviation: position
+          definition: 摆放位置当前维度。随本次全量物化更新当前属性，不保留历史版本。
+          attributes:
+          - code: POSITION_ID
+            name: 摆放位置编号
+            definition: 摆放位置编号
+            primaryKey: true
+            order: 1
+          - code: PROJECT_ID
+            name: 项目编号
+            definition: 项目编号
+            primaryKey: false
+            order: 2
+          - code: FLOOR_NUMBER_NAME
+            name: 楼栋名称
+            definition: 楼栋名称
+            primaryKey: false
+            order: 3
+          - code: FLOOR_LAYER_NAME
+            name: 楼层名称
+            definition: 楼层名称
+            primaryKey: false
+            order: 4
+          - code: REGION_FULL
+            name: 完整位置名称
+            definition: 完整位置名称
+            primaryKey: false
+            order: 5
+          - code: ALIAS_NAME
+            name: 位置别名
+            definition: 位置别名
+            primaryKey: false
+            order: 6
+          - code: CONTRACT_DEPT_ID
+            name: 合同部门编号
+            definition: 合同部门编号
+            primaryKey: false
+            order: 7
+          - code: CURING_USER_ID
+            name: 养护人员编号
+            definition: 养护人员编号
+            primaryKey: false
+            order: 8
+          - code: CURING_USER_NAME
+            name: 养护人员名称
+            definition: 养护人员名称
+            primaryKey: false
+            order: 9
+          - code: STATUS
+            name: 位置状态原码
+            definition: 位置状态原码
+            primaryKey: false
+            order: 10
+          - code: DEL_FLAG
+            name: 删除标记
+            definition: 删除标记
+            primaryKey: false
+            order: 11
+          - code: TENANT_ID
+            name: 项目所属租户
+            definition: 项目所属租户
+            primaryKey: false
+            order: 12
+          - code: CUSTOMER_ID
+            name: 合同关联客户编号
+            definition: 合同关联客户编号
+            primaryKey: false
+            order: 13
+          - code: DTS_SOURCE_SYSTEM
+            name: 来源系统
+            definition: 来源系统
+            primaryKey: false
+            order: 14
+          - code: DTS_SOURCE_TABLE
+            name: 来源表
+            definition: 来源表
+            primaryKey: false
+            order: 15
+          - code: DTS_IMPORT_TIME
+            name: 接入时间
+            definition: 接入时间
+            primaryKey: false
+            order: 16
+          - code: DTS_BATCH_ID
+            name: 接入批次
+            definition: 接入批次
+            primaryKey: false
+            order: 17
+          - code: DTS_EXECUTION_ID
+            name: 接入执行编号
+            definition: 接入执行编号
+            primaryKey: false
+            order: 18
+          - code: DTS_TASK_ID
+            name: 接入任务编号
+            definition: 接入任务编号
+            primaryKey: false
+            order: 19
+    alias: prs_v2_dwd_position
+  columns:
+  - name: position_id
+    description: 摆放位置编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: POSITION_ID
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: PROJECT_ID
+  - name: floor_number_name
+    description: 楼栋名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: FLOOR_NUMBER_NAME
+  - name: floor_layer_name
+    description: 楼层名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: FLOOR_LAYER_NAME
+  - name: region_full
+    description: 完整位置名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: REGION_FULL
+  - name: alias_name
+    description: 位置别名
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: ALIAS_NAME
+  - name: contract_dept_id
+    description: 合同部门编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CONTRACT_DEPT_ID
+  - name: curing_user_id
+    description: 养护人员编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CURING_USER_ID
+  - name: curing_user_name
+    description: 养护人员名称
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CURING_USER_NAME
+  - name: status
+    description: 位置状态原码
+    data_type: integer
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: STATUS
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DEL_FLAG
+  - name: tenant_id
+    description: 项目所属租户
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: TENANT_ID
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: CUSTOMER_ID
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_SYSTEM
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_SOURCE_TABLE
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_IMPORT_TIME
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_BATCH_ID
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_EXECUTION_ID
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+    config:
+      meta:
+        dts:
+          dimensionAttributeCode: DTS_TASK_ID
+- name: prs_v2_dwd_flower_order
+  description: 报花业务单头明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 报花业务单头明细；唯一粒度：order_id
+          keys:
+          - order_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_biz_info
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_project
+          layer: DWD
+        fieldRoles:
+          order_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          project_name: ATTRIBUTE
+          order_code: ATTRIBUTE
+          order_type: ATTRIBUTE
+          order_status: ATTRIBUTE
+          apply_use_id: ATTRIBUTE
+          apply_use_name: ATTRIBUTE
+          apply_time: TIME
+          finish_time: TIME
+          curing_user_id: ATTRIBUTE
+          curing_user_name: ATTRIBUTE
+          rent_change_amount: MEASURE
+          order_cost_amount: MEASURE
+          sale_order_amount: MEASURE
+          labor_cost: MEASURE
+          cleaning_fee: MEASURE
+          total_extra_cost: MEASURE
+          total_extra_price: MEASURE
+          del_flag: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          business_time: TIME
+          is_effective: ATTRIBUTE
+          is_finished: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 报花业务单头明细
+        technicalOnly: false
+        factShape: ACCUMULATING_SNAPSHOT
+        timeSemantics:
+          type: MILESTONE_DATES
+          fields:
+          - business_time
+          - apply_time
+          - finish_time
+    alias: prs_v2_dwd_flower_order
+  columns:
+  - name: order_id
+    description: 报花单编号
+    data_type: bigint
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: project_name
+    description: 单据项目名称
+    data_type: text
+  - name: order_code
+    description: 报花单编码
+    data_type: text
+  - name: order_type
+    description: 报花业务类型原码
+    data_type: integer
+  - name: order_status
+    description: 报花状态原码
+    data_type: integer
+  - name: apply_use_id
+    description: 申请人编号
+    data_type: bigint
+  - name: apply_use_name
+    description: 申请人名称
+    data_type: text
+  - name: apply_time
+    description: 申请时间
+    data_type: timestamp
+  - name: finish_time
+    description: 完成时间
+    data_type: timestamp
+  - name: curing_user_id
+    description: 养护人员编号
+    data_type: bigint
+  - name: curing_user_name
+    description: 养护人员名称
+    data_type: text
+  - name: rent_change_amount
+    description: 源单据租金变动额保留原符号
+    data_type: numeric
+  - name: order_cost_amount
+    description: 源单据业务成本
+    data_type: numeric
+  - name: sale_order_amount
+    description: 源单据销售金额
+    data_type: numeric
+  - name: labor_cost
+    description: 人工费用
+    data_type: numeric
+  - name: cleaning_fee
+    description: 清理费用
+    data_type: numeric
+  - name: total_extra_cost
+    description: 附加成本合计
+    data_type: numeric
+  - name: total_extra_price
+    description: 附加报价合计
+    data_type: numeric
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: business_time
+    description: 业务日期优先起租时间其次申请时间
+    data_type: timestamp
+  - name: is_effective
+    description: 未删除且状态为审核中至已结束
+    data_type: boolean
+  - name: is_finished
+    description: 未删除且单据已结束
+    data_type: boolean
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_flower_item
+  description: 报花业务行明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 报花业务行明细；唯一粒度：order_item_id
+          keys:
+          - order_item_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_biz_info
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_biz_item
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_flower_order
+          layer: DWD
+        fieldRoles:
+          order_item_id: BUSINESS_KEY
+          order_id: ATTRIBUTE
+          position_id: ATTRIBUTE
+          goods_price_id: ATTRIBUTE
+          project_green_id: ATTRIBUTE
+          item_type: ATTRIBUTE
+          item_status: ATTRIBUTE
+          parent_id: ATTRIBUTE
+          plant_type: ATTRIBUTE
+          green_name: ATTRIBUTE
+          requested_quantity: MEASURE
+          finished_quantity: MEASURE
+          source_rent: MEASURE
+          source_cost: MEASURE
+          start_time: TIME
+          end_time: TIME
+          del_flag: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          business_time: TIME
+          is_effective: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 报花业务行明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - business_time
+    alias: prs_v2_dwd_flower_item
+  columns:
+  - name: order_item_id
+    description: 报花明细编号
+    data_type: bigint
+  - name: order_id
+    description: 报花单编号
+    data_type: bigint
+  - name: position_id
+    description: 摆放位置编号
+    data_type: bigint
+  - name: goods_price_id
+    description: 商品规格编号
+    data_type: bigint
+  - name: project_green_id
+    description: 实摆记录编号
+    data_type: bigint
+  - name: item_type
+    description: 明细业务类型原码
+    data_type: integer
+  - name: item_status
+    description: 明细状态原码
+    data_type: integer
+  - name: parent_id
+    description: 父级组合明细编号
+    data_type: bigint
+  - name: plant_type
+    description: 绿植类型原码
+    data_type: integer
+  - name: green_name
+    description: 绿植名称
+    data_type: text
+  - name: requested_quantity
+    description: 申请数量
+    data_type: integer
+  - name: finished_quantity
+    description: 完成数量
+    data_type: integer
+  - name: source_rent
+    description: 源明细租金不推断总价
+    data_type: numeric
+  - name: source_cost
+    description: 源明细成本不推断总价
+    data_type: numeric
+  - name: start_time
+    description: 开始时间
+    data_type: timestamp
+  - name: end_time
+    description: 结束时间
+    data_type: timestamp
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+  - name: tenant_id
+    description: 单头租户编号
+    data_type: bigint
+  - name: project_id
+    description: 单头项目编号
+    data_type: bigint
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: business_time
+    description: 单头业务日期
+    data_type: timestamp
+  - name: is_effective
+    description: 明细未删除且单头有效
+    data_type: boolean
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_placement
+  description: 项目当前摆放快照
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 项目当前摆放快照；唯一粒度：placement_id
+          keys:
+          - placement_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project_green
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_project
+          layer: DWD
+        fieldRoles:
+          placement_id: BUSINESS_KEY
+          project_id: ATTRIBUTE
+          position_id: ATTRIBUTE
+          goods_price_id: ATTRIBUTE
+          good_name: ATTRIBUTE
+          good_type: ATTRIBUTE
+          parent_id: ATTRIBUTE
+          placement_status: ATTRIBUTE
+          import_status: ATTRIBUTE
+          rent_mode: ATTRIBUTE
+          placement_quantity: MEASURE
+          good_number: ATTRIBUTE
+          unit_rent: MEASURE
+          unit_cost: MEASURE
+          pose_time: TIME
+          del_flag: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          is_placed: ATTRIBUTE
+          snapshot_time: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 项目当前摆放快照
+        technicalOnly: false
+        factShape: PERIODIC_SNAPSHOT
+        timeSemantics:
+          type: SNAPSHOT_DATE
+          fields:
+          - snapshot_time
+    alias: prs_v2_dwd_placement
+  columns:
+  - name: placement_id
+    description: 实摆记录编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: position_id
+    description: 摆放位置编号
+    data_type: bigint
+  - name: goods_price_id
+    description: 商品规格编号
+    data_type: bigint
+  - name: good_name
+    description: 商品名称
+    data_type: text
+  - name: good_type
+    description: 商品类型原码
+    data_type: integer
+  - name: parent_id
+    description: 父级组合记录编号
+    data_type: bigint
+  - name: placement_status
+    description: 摆放状态原码
+    data_type: integer
+  - name: import_status
+    description: 导入确认状态原码
+    data_type: integer
+  - name: rent_mode
+    description: 租金模式原码
+    data_type: integer
+  - name: placement_quantity
+    description: 源实摆总数量
+    data_type: integer
+  - name: good_number
+    description: 单组物品数量
+    data_type: integer
+  - name: unit_rent
+    description: 源单位租金
+    data_type: numeric
+  - name: unit_cost
+    description: 源单位成本
+    data_type: numeric
+  - name: pose_time
+    description: 摆放时间
+    data_type: timestamp
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+  - name: tenant_id
+    description: 项目所属租户
+    data_type: bigint
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: is_placed
+    description: 未删除且状态为摆放中
+    data_type: boolean
+  - name: snapshot_time
+    description: 本次接入快照时间
+    data_type: timestamp
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_change
+  description: 报花变更明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 报花变更明细；唯一粒度：change_id
+          keys:
+          - change_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_change_info
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_biz_info
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_flower_order
+          layer: DWD
+        fieldRoles:
+          change_id: BUSINESS_KEY
+          order_id: ATTRIBUTE
+          change_code: ATTRIBUTE
+          change_type: ATTRIBUTE
+          change_status: ATTRIBUTE
+          change_quantity: MEASURE
+          before_good_price_id: ATTRIBUTE
+          after_good_price_id: ATTRIBUTE
+          before_total_amount: MEASURE
+          after_total_amount: MEASURE
+          apply_time: TIME
+          confirmed_time: TIME
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 报花变更明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - apply_time
+    alias: prs_v2_dwd_change
+  columns:
+  - name: change_id
+    description: 变更记录编号
+    data_type: bigint
+  - name: order_id
+    description: 报花单编号
+    data_type: bigint
+  - name: change_code
+    description: 变更编码
+    data_type: text
+  - name: change_type
+    description: 变更类型原码
+    data_type: integer
+  - name: change_status
+    description: 变更状态原码
+    data_type: integer
+  - name: change_quantity
+    description: 变更数量
+    data_type: integer
+  - name: before_good_price_id
+    description: 变更前商品规格编号
+    data_type: bigint
+  - name: after_good_price_id
+    description: 变更后商品规格编号
+    data_type: bigint
+  - name: before_total_amount
+    description: 变更前金额
+    data_type: numeric
+  - name: after_total_amount
+    description: 变更后金额
+    data_type: numeric
+  - name: apply_time
+    description: 申请时间
+    data_type: timestamp
+  - name: confirmed_time
+    description: 确认时间
+    data_type: timestamp
+  - name: tenant_id
+    description: 单头租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: customer_id
+    description: 客户编号
+    data_type: bigint
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_recovery
+  description: 回收业务行明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 回收业务行明细；唯一粒度：recovery_item_id
+          keys:
+          - recovery_item_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_recovery_info
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_recovery_info_item
+          layer: ODS
+        fieldRoles:
+          recovery_item_id: BUSINESS_KEY
+          recovery_id: ATTRIBUTE
+          order_item_id: ATTRIBUTE
+          goods_price_id: ATTRIBUTE
+          good_name: ATTRIBUTE
+          recovery_type: ATTRIBUTE
+          planned_quantity: MEASURE
+          actual_quantity: MEASURE
+          good_cost: MEASURE
+          item_status: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          order_id: ATTRIBUTE
+          recovery_status: ATTRIBUTE
+          recovery_user_id: ATTRIBUTE
+          recovery_user_name: ATTRIBUTE
+          plan_recovery_time: TIME
+          recovery_time: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 回收业务行明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - recovery_time
+    alias: prs_v2_dwd_recovery
+  columns:
+  - name: recovery_item_id
+    description: 回收明细编号
+    data_type: bigint
+  - name: recovery_id
+    description: 回收单编号
+    data_type: bigint
+  - name: order_item_id
+    description: 报花明细编号
+    data_type: bigint
+  - name: goods_price_id
+    description: 商品规格编号
+    data_type: bigint
+  - name: good_name
+    description: 商品名称
+    data_type: text
+  - name: recovery_type
+    description: 回收类型原码
+    data_type: integer
+  - name: planned_quantity
+    description: 计划回收数量
+    data_type: integer
+  - name: actual_quantity
+    description: 实际回收数量
+    data_type: integer
+  - name: good_cost
+    description: 商品成本原值
+    data_type: numeric
+  - name: item_status
+    description: 回收明细状态原码
+    data_type: integer
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: order_id
+    description: 报花单编号
+    data_type: bigint
+  - name: recovery_status
+    description: 回收单状态原码
+    data_type: integer
+  - name: recovery_user_id
+    description: 回收人员编号
+    data_type: bigint
+  - name: recovery_user_name
+    description: 回收人员名称
+    data_type: text
+  - name: plan_recovery_time
+    description: 计划回收时间
+    data_type: timestamp
+  - name: recovery_time
+    description: 实际回收时间优先明细其次单头
+    data_type: timestamp
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_curing
+  description: 养护记录单头明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 养护记录单头明细；唯一粒度：curing_id
+          keys:
+          - curing_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_curing_record
+          layer: ODS
+        fieldRoles:
+          curing_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          curing_user_id: ATTRIBUTE
+          curing_user_name: ATTRIBUTE
+          curing_time: TIME
+          position_quantity: MEASURE
+          record_type: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 养护记录单头明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - curing_time
+    alias: prs_v2_dwd_curing
+  columns:
+  - name: curing_id
+    description: 养护记录编号
+    data_type: bigint
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: curing_user_id
+    description: 养护人员编号
+    data_type: bigint
+  - name: curing_user_name
+    description: 养护人员名称
+    data_type: text
+  - name: curing_time
+    description: 养护时间
+    data_type: timestamp
+  - name: position_quantity
+    description: 单头养护位置数量
+    data_type: integer
+  - name: record_type
+    description: 养护类型原码
+    data_type: integer
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_curing_item
+  description: 养护楼层行明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 养护楼层行明细；唯一粒度：curing_item_id
+          keys:
+          - curing_item_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_curing_record
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_curing_record_item
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_curing
+          layer: DWD
+        fieldRoles:
+          curing_item_id: BUSINESS_KEY
+          curing_id: ATTRIBUTE
+          floor_layer_id: ATTRIBUTE
+          floor_layer_full_name: ATTRIBUTE
+          curing_content: ATTRIBUTE
+          remarks: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          curing_user_id: ATTRIBUTE
+          curing_time: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 养护楼层行明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - curing_time
+    alias: prs_v2_dwd_curing_item
+  columns:
+  - name: curing_item_id
+    description: 养护明细编号
+    data_type: bigint
+  - name: curing_id
+    description: 养护记录编号
+    data_type: bigint
+  - name: floor_layer_id
+    description: 楼层编号
+    data_type: bigint
+  - name: floor_layer_full_name
+    description: 完整楼层名称
+    data_type: text
+  - name: curing_content
+    description: 养护内容
+    data_type: text
+  - name: remarks
+    description: 养护备注
+    data_type: text
+  - name: tenant_id
+    description: 单头租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: curing_user_id
+    description: 养护人员编号
+    data_type: bigint
+  - name: curing_time
+    description: 单头养护时间
+    data_type: timestamp
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_extra_cost
+  description: 报花附加费用明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 报花附加费用明细；唯一粒度：extra_cost_id
+          keys:
+          - extra_cost_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_biz_info
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prst_flower_extra_cost
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_flower_order
+          layer: DWD
+        fieldRoles:
+          extra_cost_id: BUSINESS_KEY
+          order_id: ATTRIBUTE
+          biz_type: ATTRIBUTE
+          cost_type: ATTRIBUTE
+          title: ATTRIBUTE
+          cost_amount: MEASURE
+          quoted_amount: MEASURE
+          pay_time: TIME
+          create_time: TIME
+          del_flag: ATTRIBUTE
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 报花附加费用明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - create_time
+    alias: prs_v2_dwd_extra_cost
+  columns:
+  - name: extra_cost_id
+    description: 附加费用编号
+    data_type: bigint
+  - name: order_id
+    description: 报花单编号
+    data_type: bigint
+  - name: biz_type
+    description: 源业务类型
+    data_type: integer
+  - name: cost_type
+    description: 费用类型原码
+    data_type: integer
+  - name: title
+    description: 费用名称
+    data_type: text
+  - name: cost_amount
+    description: 源费用成本
+    data_type: numeric
+  - name: quoted_amount
+    description: 源费用报价
+    data_type: numeric
+  - name: pay_time
+    description: 支付时间
+    data_type: timestamp
+  - name: create_time
+    description: 创建时间
+    data_type: timestamp
+  - name: del_flag
+    description: 删除标记
+    data_type: text
+  - name: tenant_id
+    description: 单头租户编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_finance_month_settlement
+  description: 月度结算单明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 月度结算单明细；唯一粒度：settlement_id
+          keys:
+          - settlement_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsa_month_accounting
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_project
+          layer: DWD
+        fieldRoles:
+          settlement_id: BUSINESS_KEY
+          project_id: ATTRIBUTE
+          project_name: ATTRIBUTE
+          contract_id: ATTRIBUTE
+          department_id: ATTRIBUTE
+          settlement_year: ATTRIBUTE
+          settlement_month: ATTRIBUTE
+          year_and_month: ATTRIBUTE
+          settlement_status: ATTRIBUTE
+          rent_type: ATTRIBUTE
+          start_time: TIME
+          end_time: TIME
+          receivable_before_discount: MEASURE
+          discounted_receivable: MEASURE
+          current_rent_amount: MEASURE
+          ledger_received_amount: MEASURE
+          opening_receivable: MEASURE
+          add_receivable: MEASURE
+          cut_receivable: MEASURE
+          adjust_receivable: MEASURE
+          sale_bill_amount: MEASURE
+          update_time: TIME
+          tenant_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          finance_month: TIME
+          is_confirmed: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 月度结算单明细
+        technicalOnly: false
+        factShape: PERIODIC_SNAPSHOT
+        timeSemantics:
+          type: PERIOD
+          fields:
+          - finance_month
+    alias: prs_v2_dwd_finance_month_settlement
+  columns:
+  - name: settlement_id
+    description: 月结记录编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: project_name
+    description: 月结项目名称
+    data_type: text
+  - name: contract_id
+    description: 月结合同编号
+    data_type: bigint
+  - name: department_id
+    description: 结算部门编号
+    data_type: bigint
+  - name: settlement_year
+    description: 源结算年
+    data_type: integer
+  - name: settlement_month
+    description: 源结算月
+    data_type: integer
+  - name: year_and_month
+    description: 源结算年月文本
+    data_type: text
+  - name: settlement_status
+    description: 月结状态原码
+    data_type: integer
+  - name: rent_type
+    description: 收租类型原码
+    data_type: integer
+  - name: start_time
+    description: 应收开始时间
+    data_type: timestamp
+  - name: end_time
+    description: 应收结束时间
+    data_type: timestamp
+  - name: receivable_before_discount
+    description: 月结应收折前金额
+    data_type: numeric
+  - name: discounted_receivable
+    description: 月结折后应收金额
+    data_type: numeric
+  - name: current_rent_amount
+    description: 月结实时租金非现金实收
+    data_type: numeric
+  - name: ledger_received_amount
+    description: 月结账面实收原值
+    data_type: numeric
+  - name: opening_receivable
+    description: 期初应收租金
+    data_type: numeric
+  - name: add_receivable
+    description: 加花应收金额
+    data_type: numeric
+  - name: cut_receivable
+    description: 减花应收金额保留原符号
+    data_type: numeric
+  - name: adjust_receivable
+    description: 调花应收金额保留原符号
+    data_type: numeric
+  - name: sale_bill_amount
+    description: 销售账单金额非确认回款
+    data_type: numeric
+  - name: update_time
+    description: 源更新时间
+    data_type: timestamp
+  - name: tenant_id
+    description: 项目所属租户
+    data_type: bigint
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: finance_month
+    description: 结算月首日无效年月保留空值
+    data_type: date
+  - name: is_confirmed
+    description: 已对账至已回款月结记录
+    data_type: boolean
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_rent_snapshot
+  description: 月度租金快照明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 月度租金快照明细；唯一粒度：rent_snapshot_id
+          keys:
+          - rent_snapshot_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsa_month_rent_snapshot
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_project
+          layer: DWD
+        fieldRoles:
+          rent_snapshot_id: BUSINESS_KEY
+          project_id: ATTRIBUTE
+          department_id: ATTRIBUTE
+          rent_type: ATTRIBUTE
+          receivable_amount: MEASURE
+          receivable_after_discount: MEASURE
+          regular_rent: MEASURE
+          snapshot_time: TIME
+          tenant_id: ATTRIBUTE
+          customer_id: ATTRIBUTE
+          finance_month: TIME
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 月度租金快照明细
+        technicalOnly: false
+        factShape: PERIODIC_SNAPSHOT
+        timeSemantics:
+          type: SNAPSHOT_DATE
+          fields:
+          - snapshot_time
+    alias: prs_v2_dwd_rent_snapshot
+  columns:
+  - name: rent_snapshot_id
+    description: 租金快照编号
+    data_type: bigint
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: department_id
+    description: 部门编号
+    data_type: bigint
+  - name: rent_type
+    description: 收租类型原码
+    data_type: integer
+  - name: receivable_amount
+    description: 快照折前应收
+    data_type: numeric
+  - name: receivable_after_discount
+    description: 快照折后应收
+    data_type: numeric
+  - name: regular_rent
+    description: 固定租金
+    data_type: numeric
+  - name: snapshot_time
+    description: 业务快照时间
+    data_type: timestamp
+  - name: tenant_id
+    description: 项目所属租户
+    data_type: bigint
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: finance_month
+    description: 快照结算月首日
+    data_type: date
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_finance_collection
+  description: 现金收款单明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 现金收款单明细；唯一粒度：collection_id
+          keys:
+          - collection_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsa_collection_record
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_project
+          layer: DWD
+        fieldRoles:
+          collection_id: BUSINESS_KEY
+          tenant_id: ATTRIBUTE
+          collection_code: ATTRIBUTE
+          project_id: ATTRIBUTE
+          project_name: ATTRIBUTE
+          income_type: ATTRIBUTE
+          collection_status: ATTRIBUTE
+          payment_type: ATTRIBUTE
+          pay_mode: ATTRIBUTE
+          pay_time: TIME
+          collection_amount: MEASURE
+          update_time: TIME
+          customer_id: ATTRIBUTE
+          collection_month: TIME
+          is_confirmed: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 现金收款单明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - pay_time
+    alias: prs_v2_dwd_finance_collection
+  columns:
+  - name: collection_id
+    description: 收款记录编号
+    data_type: bigint
+  - name: tenant_id
+    description: 租户编号
+    data_type: bigint
+  - name: collection_code
+    description: 收入流水号
+    data_type: text
+  - name: project_id
+    description: 项目编号
+    data_type: bigint
+  - name: project_name
+    description: 收款项目名称
+    data_type: text
+  - name: income_type
+    description: 收入类型原码
+    data_type: integer
+  - name: collection_status
+    description: 收款状态原码
+    data_type: integer
+  - name: payment_type
+    description: 收款账户类型原码
+    data_type: integer
+  - name: pay_mode
+    description: 收款方式原码
+    data_type: text
+  - name: pay_time
+    description: 收款时间
+    data_type: timestamp
+  - name: collection_amount
+    description: 收款单金额
+    data_type: numeric
+  - name: update_time
+    description: 源更新时间
+    data_type: timestamp
+  - name: customer_id
+    description: 合同关联客户编号
+    data_type: bigint
+  - name: collection_month
+    description: 按实际收款日期归属的月首日
+    data_type: date
+  - name: is_confirmed
+    description: 已确认收款单
+    data_type: boolean
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text
+- name: prs_v2_dwd_collection_allocation
+  description: 收款关联分摊明细
+  config:
+    materialized: table
+    contract:
+      enforced: true
+    tags:
+    - prs
+    - v2
+    - dwd
+    meta:
+      dts:
+        modelType: FACT
+        layer: DWD
+        domainCode: DATA_PRS
+        grain:
+          statement: 收款关联分摊明细；唯一粒度：allocation_id
+          keys:
+          - allocation_id
+        sourceRefs:
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsa_collection_item
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsa_collection_record
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_contract
+          layer: ODS
+        - kind: TABLE
+          ref: source.prs_flower_v2.public.ods_prsp_project
+          layer: ODS
+        - kind: DBT_MODEL
+          ref: model.prs_flower_v2.prs_v2_dwd_finance_collection
+          layer: DWD
+        fieldRoles:
+          allocation_id: BUSINESS_KEY
+          collection_id: ATTRIBUTE
+          linked_bill_id: ATTRIBUTE
+          linked_bill_type: ATTRIBUTE
+          allocated_amount: MEASURE
+          tenant_id: ATTRIBUTE
+          project_id: ATTRIBUTE
+          pay_time: TIME
+          is_confirmed: ATTRIBUTE
+          dts_source_system: ATTRIBUTE
+          dts_source_table: ATTRIBUTE
+          dts_import_time: TIME
+          dts_batch_id: ATTRIBUTE
+          dts_execution_id: ATTRIBUTE
+          dts_task_id: ATTRIBUTE
+        consumptionScenarios:
+        - 收款关联分摊明细
+        technicalOnly: false
+        factShape: TRANSACTION
+        timeSemantics:
+          type: EVENT_TIME
+          fields:
+          - pay_time
+    alias: prs_v2_dwd_collection_allocation
+  columns:
+  - name: allocation_id
+    description: 收款分摊明细编号
+    data_type: bigint
+  - name: collection_id
+    description: 收款记录编号
+    data_type: bigint
+  - name: linked_bill_id
+    description: 关联发票或销售账单编号
+    data_type: bigint
+  - name: linked_bill_type
+    description: 关联类型1发票2销售账单
+    data_type: integer
+  - name: allocated_amount
+    description: 分摊金额
+    data_type: numeric
+  - name: tenant_id
+    description: 单头租户编号
+    data_type: bigint
+  - name: project_id
+    description: 单头项目编号
+    data_type: bigint
+  - name: pay_time
+    description: 单头收款时间
+    data_type: timestamp
+  - name: is_confirmed
+    description: 单头已确认状态
+    data_type: boolean
+  - name: dts_source_system
+    description: 来源系统
+    data_type: text
+  - name: dts_source_table
+    description: 来源表
+    data_type: text
+  - name: dts_import_time
+    description: 接入时间
+    data_type: timestamp
+  - name: dts_batch_id
+    description: 接入批次
+    data_type: text
+  - name: dts_execution_id
+    description: 接入执行编号
+    data_type: text
+  - name: dts_task_id
+    description: 接入任务编号
+    data_type: text

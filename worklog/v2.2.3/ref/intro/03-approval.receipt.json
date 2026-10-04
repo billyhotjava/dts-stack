@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/03-approval.workflow.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/03-approval.html",
+  "specification": {
+    "sha256": "c825dbbad03d618adb17d003c9ab7ed5bd9f87eb59f5c19fafeb49330f3d84ee",
+    "bytes": 3774
+  },
+  "artifact": {
+    "sha256": "79f481e0bea49c01602b608a9c5ca8ce7f5c8e29818ff15f22f260e760b451cd",
+    "bytes": 708628
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

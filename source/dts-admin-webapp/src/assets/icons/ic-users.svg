@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none">
+  <!-- Primary user (front) -->
+  <path fill="currentColor" d="M8 12c2.21 0 4-1.79 4-4S10.21 4 8 4 4 5.79 4 8s1.79 4 4 4Z"/>
+  <path fill="currentColor" d="M2 21v-1c0-3.31 2.69-6 6-6s6 2.69 6 6v1H2Z"/>
+  <!-- Secondary user (back) -->
+  <path fill="currentColor" opacity=".6" d="M16 11c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4Z"/>
+  <path fill="currentColor" opacity=".6" d="M14 21v-1c0-1.97 1.23-3.64 3-4.29 2.51.35 5 2.2 5 4.29v1h-8Z"/>
+</svg>

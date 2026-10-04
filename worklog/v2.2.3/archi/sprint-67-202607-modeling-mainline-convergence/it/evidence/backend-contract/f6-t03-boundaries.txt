@@ -1,0 +1,27 @@
+Sprint-67 F6-T03 boundary verification
+verifiedAt=2026-07-20
+
+Real deployed browser/API/DB evidence
+- Chrome 95.0.4638.0, authenticated opadmin session, deployed APIs and PostgreSQL.
+- Journey A/B/C: 3/3 passed without Playwright API route mocks.
+- Record IDs and database states: ../runtime/e2e-record-ids.json.
+
+Spring/PostgreSQL integration boundaries
+- Command: ./mvnw -ntp -Dtest=LegacyObjectMigrationServiceIT,ModelingAuthorizationIT,ModelLifecycleServiceTest test
+- Result: BUILD SUCCESS; tests=4, failures=0, errors=0.
+- LegacyObjectMigrationServiceIT: automatic DIMENSION mapping, foreign-tenant rejection, checksum validation, persisted approval state, tenant-isolated projection, idempotent replay; random transaction-scoped fixture rolled back after test.
+- ModelingAuthorizationIT: real Spring Security filter chain; ROLE_EMPLOYEE reads canonical models but receives 403 for model creation and migration dry-run. This is not a fabricated production login account.
+- ModelLifecycleServiceTest: partial professional-module registration fails closed; retry skips successful catalog/lineage work and transitions PARTIAL to PUBLISHED after BI recovery.
+
+Backend gate boundaries
+- Command: ./mvnw -ntp -Dtest=WarehousePlanSourceInventoryContractTest,ModelSpecStageGateServiceTest,ModelSpecResourceTest test
+- Result: BUILD SUCCESS; tests=21, failures=0, errors=0.
+- Covers source invalidation, standard drift, revision conflict and resource boundary responses.
+
+Chrome 95 UI failure recovery
+- Test: exact plan survives list failure.
+- Result: 1 passed on Chrome 95.0.4638.0.
+- The API error is injected through a precise Playwright route interception. It proves UI recovery only; it does not claim a deployed backend outage occurred.
+
+Truth boundary
+- External runtime submission is disabled by deployment property RUNTIME_DISABLED. Run-record persistence and repair navigation are verified; Airflow/dbt submission success is not claimed.

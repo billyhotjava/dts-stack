@@ -1,0 +1,1010 @@
+package com.yuzhi.dts.platform.web.rest;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import com.yuzhi.dts.platform.security.session.PortalSessionInactivityFilter;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryAuditView;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryEvidenceType;
+import com.yuzhi.dts.platform.service.modeling.ModelLifecycleContract.DeliveryStatus;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService;
+import com.yuzhi.dts.platform.service.modeling.CandidateGovernanceQualityRerunService.RerunResult;
+import com.yuzhi.dts.platform.service.modeling.GovernanceQualityRerunPort.QualityRunRef;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateApplicationService;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.BlockerView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CandidateView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.CommandResult;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EntryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.EvidenceSummaryView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchState;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkbenchView;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateContract.WorkspaceAction;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidateException;
+import com.yuzhi.dts.platform.service.modeling.ModelReleaseCandidatePreflightService.BatchPreflightView;
+import com.yuzhi.dts.platform.service.modeling.ModelSpecContract.ImplementationMode;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider;
+import com.yuzhi.dts.platform.service.modeling.warehouse.WarehousePlanActorProvider.WarehousePlanActor;
+import com.yuzhi.dts.platform.web.filter.AuditLoggingFilter;
+import java.time.Instant;
+import java.lang.reflect.Method;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+
+@WebMvcTest(
+    value = ModelReleaseCandidateResource.class,
+    excludeAutoConfiguration = OAuth2ClientAutoConfiguration.class,
+    properties = {
+        "spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration",
+        "dts.platform.modeling.default-tenant-id=server-tenant",
+    }
+)
+@AutoConfigureMockMvc(addFilters = false)
+class ModelReleaseCandidateResourceTest {
+
+    private static final UUID PLAN_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
+    private static final UUID CANDIDATE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final String ETAG = "\"release-candidate:" + CANDIDATE_ID + ":4\"";
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private ModelReleaseCandidateApplicationService service;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.CandidateQualityRuleContextService qualityContext;
+
+    @MockBean
+    private CandidateGovernanceQualityRerunService governanceQualityReruns;
+
+    @MockBean
+    private WarehousePlanActorProvider actorProvider;
+
+    @MockBean
+    private PortalSessionInactivityFilter portalSessionInactivityFilter;
+
+    @MockBean
+    private AuditLoggingFilter auditLoggingFilter;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.modeling.dbtdraft.DbtImplementationDraftRejectionAudit dbtImplementationDraftRejectionAudit;
+
+    @MockBean
+    private com.yuzhi.dts.platform.service.audit.AuditService auditService;
+
+    @Test
+    void governanceQualityRerunUsesCandidateCasAndReturnsCreatedRuns() throws Exception {
+        UUID runId = UUID.fromString("90000000-0000-0000-0000-000000000001");
+        UUID ruleId = UUID.fromString("90000000-0000-0000-0000-000000000002");
+        UUID versionId = UUID.fromString("90000000-0000-0000-0000-000000000003");
+        UUID bindingId = UUID.fromString("90000000-0000-0000-0000-000000000004");
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(governanceQualityReruns.rerun("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID, 4, "retry-1", "INST"))
+            .thenReturn(
+                new RerunResult(
+                    CANDIDATE_ID,
+                    false,
+                    List.of(new QualityRunRef(ruleId, versionId, bindingId, runId, "QUEUED"))
+                )
+            );
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/governance-quality/runs",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "retry-1")
+                    .header("X-Active-Dept", "INST")
+            )
+            .andExpect(status().isCreated())
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.replayed").value(false))
+            .andExpect(jsonPath("$.data.runs[0].runId").value(runId.toString()));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "retry-1",
+            "INST"
+        );
+    }
+
+    @Test
+    void enteringQualityStageAutomaticallyStartsTheGovernanceWorkflow() throws Exception {
+        CandidateView qualityRunning = candidateAtVersion(5);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.runQuality(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "quality-1",
+                "validate release quality"
+            )
+        )
+            .thenReturn(new CommandResult(qualityRunning, false, List.of()));
+        when(
+            governanceQualityReruns.rerun(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                5,
+                "quality-1:governance",
+                "INST"
+            )
+        )
+            .thenReturn(new RerunResult(CANDIDATE_ID, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "quality-1")
+                    .header("X-Active-Dept", "INST")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"validate release quality\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            5,
+            "quality-1:governance",
+            "INST"
+        );
+    }
+
+    @Test
+    void replayedQualityCommandRetriesWorkflowStartAndReturnsStableFailure() throws Exception {
+        CandidateView qualityRunning = candidateAtVersion(5);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.runQuality(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "quality-replay-1",
+                "retry quality workflow"
+            )
+        )
+            .thenReturn(new CommandResult(qualityRunning, true, List.of()));
+        when(
+            governanceQualityReruns.rerun(
+                "server-tenant",
+                "xiezm",
+                PLAN_ID,
+                CANDIDATE_ID,
+                5,
+                "quality-replay-1:governance",
+                "INST"
+            )
+        )
+            .thenThrow(new IllegalStateException("executor unavailable"));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "quality-replay-1")
+                    .header("X-Active-Dept", "INST")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"retry quality workflow\"}")
+            )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MODEL_SPEC_GOVERNANCE_QUALITY_START_FAILED"))
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.retriable").value(true));
+
+        verify(governanceQualityReruns).rerun(
+            "server-tenant",
+            "xiezm",
+            PLAN_ID,
+            CANDIDATE_ID,
+            5,
+            "quality-replay-1:governance",
+            "INST"
+        );
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "MODEL_SPEC_GOVERNANCE_QUALITY_BINDING_REQUIRED, UNPROCESSABLE, 422",
+        "MODEL_RELEASE_CANDIDATE_PLAN_FORBIDDEN, FORBIDDEN, 403",
+        "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT, CONFLICT, 409"
+    })
+    void qualityStartPreservesBusinessFailureInsteadOfReportingExecutorFailure(
+        String code, ModelReleaseCandidateException.Kind kind, int httpStatus
+    ) throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(service.runQuality("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID, 4, "quality-business", "validate"))
+            .thenReturn(new CommandResult(candidateAtVersion(5), false, List.of()));
+        String message = "请在配置质量规则中检查规则发布状态和资产关联";
+        when(governanceQualityReruns.rerun("server-tenant", "xiezm", PLAN_ID, CANDIDATE_ID,
+            5, "quality-business:governance", "INST"))
+            .thenThrow(new ModelReleaseCandidateException(code, message, kind, Map.of("candidateId", CANDIDATE_ID)));
+
+        mockMvc.perform(post("/api/modeling/plans/{planId}/release-candidates/{candidateId}/quality", PLAN_ID, CANDIDATE_ID)
+                .header("If-Match", ETAG)
+                .header("Idempotency-Key", "quality-business")
+                .header("X-Active-Dept", "INST")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"validate\"}"))
+            .andExpect(status().is(httpStatus))
+            .andExpect(jsonPath("$.code").value(code))
+            .andExpect(jsonPath("$.message").value(message))
+            .andExpect(jsonPath("$.data.candidateId").value(CANDIDATE_ID.toString()));
+    }
+
+    @Test
+    void workspaceUsesServerTenantAndReturnsOneAggregateWithStrongEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.workspace("server-tenant", "alice", PLAN_ID)).thenReturn(workbench());
+
+        mockMvc
+            .perform(
+                get("/api/modeling/plans/{planId}/release-candidates/workspace", PLAN_ID)
+                    .header("X-Tenant-Id", "request-tenant-must-not-win")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.state").value("READY"))
+            .andExpect(jsonPath("$.data.candidate.id").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.evidence.length()").value(7))
+            .andExpect(jsonPath("$.data.allowedActions[0]").value("UPDATE_SCOPE"))
+            .andExpect(jsonPath("$.data.allowedActions[1]").value("START_BUILD"));
+
+        verify(service).workspace("server-tenant", "alice", PLAN_ID);
+    }
+
+    @Test
+    void scopedWorkspaceUsesServerTenantAndRequestedEnvironmentAndModels() throws Exception {
+        UUID modelId = UUID.randomUUID();
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.workspaceForScope("server-tenant", "alice", PLAN_ID, "dev", List.of(modelId))).thenReturn(workbench());
+        mockMvc.perform(get("/api/modeling/plans/{planId}/release-candidates/workspace/scope", PLAN_ID)
+                .param("environment", "dev").param("modelSpecIds", modelId.toString())
+                .header("X-Tenant-Id", "untrusted"))
+            .andExpect(status().isOk()).andExpect(header().string("ETag", ETAG));
+        verify(service).workspaceForScope("server-tenant", "alice", PLAN_ID, "dev", List.of(modelId));
+    }
+
+    @Test
+    void candidateLocationIsResolvableWithinTheSamePlanBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", "department"));
+        when(service.get("server-tenant", "alice", PLAN_ID, CANDIDATE_ID)).thenReturn(candidate());
+
+        mockMvc
+            .perform(
+                get("/api/modeling/plans/{planId}/release-candidates/{candidateId}", PLAN_ID, CANDIDATE_ID)
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.id").value(CANDIDATE_ID.toString()));
+    }
+
+    @Test
+    void createUsesHeaderIdempotencyAndReturnsLocationAndEtag() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.create(eq("server-tenant"), eq("alice"), eq(PLAN_ID), any()))
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates", PLAN_ID)
+                    .header("Idempotency-Key", "create-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"environment":"prod","entries":[],"reason":"prepare first release"}
+                        """
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(header().string("Location", "/api/modeling/plans/" + PLAN_ID + "/release-candidates/" + CANDIDATE_ID))
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.candidate.id").value(CANDIDATE_ID.toString()))
+            .andExpect(jsonPath("$.data.allowedActions.length()").value(0));
+    }
+
+    @Test
+    void checksumBoundCreatePassesTheDependencyPlanFenceToTheApplicationBoundary() throws Exception {
+        String checksum = "a".repeat(64);
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("xiezm", "INST"));
+        when(
+            service.create(
+                eq("server-tenant"),
+                eq("xiezm"),
+                eq(PLAN_ID),
+                any(),
+                eq(checksum),
+                eq(com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS)
+            )
+        )
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates", PLAN_ID)
+                    .header("Idempotency-Key", "planned-create-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "environment":"dev",
+                          "entries":[{"modelSpecId":"40000000-0000-0000-0000-000000000001","sortOrder":0}],
+                          "reason":"dependency-aware materialization",
+                          "materializationPlanChecksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                          "strategy":"WITH_MISSING_UPSTREAMS"
+                        }
+                        """
+                    )
+            )
+            .andExpect(status().isCreated());
+
+        verify(service).create(
+            eq("server-tenant"),
+            eq("xiezm"),
+            eq(PLAN_ID),
+            any(),
+            eq(checksum),
+            eq(com.yuzhi.dts.platform.service.modeling.ModelMaterializationPlanContract.Strategy.WITH_MISSING_UPSTREAMS)
+        );
+    }
+
+    @Test
+    void lockRequiresStrongEtagBeforeCallingTheService() throws Exception {
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates/{candidateId}/lock", PLAN_ID, CANDIDATE_ID)
+                    .header("Idempotency-Key", "lock-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"scope confirmed\"}")
+            )
+            .andExpect(status().isPreconditionRequired())
+            .andExpect(jsonPath("$.code").value("MODEL_RELEASE_CANDIDATE_IF_MATCH_REQUIRED"));
+
+        verify(service, never()).lock(any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void driftRefreshPassesStrongEtagAndIdempotencyToTheServerOwnedCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView stale = new CandidateView(
+            candidate().id(),
+            candidate().tenantId(),
+            candidate().planId(),
+            candidate().environment(),
+            DeliveryStatus.STALE,
+            5,
+            candidate().idempotencyKey(),
+            candidate().requestHash(),
+            candidate().audit(),
+            "alice",
+            candidate().lastModifiedAt().plusSeconds(1),
+            List.of()
+        );
+        when(service.refreshDrift(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "refresh-1",
+            "confirm canonical drift"
+        ))
+            .thenReturn(new CommandResult(stale, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/refresh",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "refresh-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"confirm canonical drift\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""))
+            .andExpect(jsonPath("$.data.candidate.status").value("STALE"));
+    }
+
+    @Test
+    void scopeUpdatePassesStrongEtagAndReturnsTheNextCandidateVersion() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView updated = candidateAtVersion(5);
+        when(service.replaceScope(eq("server-tenant"), eq("alice"), eq(PLAN_ID), eq(CANDIDATE_ID), any()))
+            .thenReturn(new CommandResult(updated, false, List.of()));
+
+        mockMvc
+            .perform(
+                put(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/scope",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "scope-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"entries\":[],\"reason\":\"adjust release scope\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""))
+            .andExpect(jsonPath("$.data.replayed").value(false));
+    }
+
+    @Test
+    void retryReturnsTheOriginalReplayWithoutChangingTheHttpContract() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.retry(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "retry-1",
+            "retry failed build"
+        ))
+            .thenReturn(new CommandResult(candidate(), true, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/retry",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "retry-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"retry failed build\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", ETAG))
+            .andExpect(jsonPath("$.data.replayed").value(true));
+    }
+
+    @Test
+    void registrationRetryUsesItsOwnCandidateCommandInsteadOfBuildRetry() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView published = candidateAtVersion(5);
+        when(
+            service.retryPublication(
+                "server-tenant",
+                "alice",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "registration-retry-1",
+                "retry atomic local publication"
+            )
+        )
+            .thenReturn(new CommandResult(published, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/publication/retry",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "registration-retry-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"retry atomic local publication\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).retryPublication(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "registration-retry-1",
+            "retry atomic local publication"
+        );
+        verify(service, never()).retry(any(), any(), any(), any(), anyInt(), any(), any());
+    }
+
+    @Test
+    void rollbackDelegatesToCandidateOwnedAtomicRollback() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView rolledBack = candidateAtVersion(5);
+        when(
+            service.rollback(
+                "server-tenant",
+                "alice",
+                PLAN_ID,
+                CANDIDATE_ID,
+                4,
+                "rollback-1",
+                "withdraw published release"
+            )
+        )
+            .thenReturn(new CommandResult(rolledBack, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/rollback",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "rollback-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"withdraw published release\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).rollback(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "rollback-1",
+            "withdraw published release"
+        );
+    }
+
+    @Test
+    void cancelRequiresStrongEtagAndDelegatesOnlyTheServerOwnedCancelCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        CandidateView cancelled = new CandidateView(
+            candidate().id(),
+            candidate().tenantId(),
+            candidate().planId(),
+            candidate().environment(),
+            DeliveryStatus.CANCELLED,
+            5,
+            candidate().idempotencyKey(),
+            candidate().requestHash(),
+            candidate().audit(),
+            "alice",
+            candidate().lastModifiedAt().plusSeconds(1),
+            List.of()
+        );
+        when(service.cancel(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "cancel-1",
+            "abandon failed build"
+        ))
+            .thenReturn(new CommandResult(cancelled, false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/cancel",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "cancel-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"abandon failed build\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""))
+            .andExpect(jsonPath("$.data.candidate.status").value("CANCELLED"));
+    }
+
+    @Test
+    void missingIdempotencyKeyIsRejectedBeforeCallingTheService() throws Exception {
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates", PLAN_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"environment\":\"prod\",\"entries\":[],\"reason\":\"prepare\"}")
+            )
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.code").value("MODEL_RELEASE_CANDIDATE_IDEMPOTENCY_KEY_REQUIRED"));
+
+        verify(service, never()).create(any(), any(), any(), any());
+    }
+
+    @Test
+    void versionConflictAndForbiddenUseStableHttpContracts() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.lock(
+            "server-tenant",
+            "alice",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "lock-1",
+            "scope confirmed"
+        ))
+            .thenThrow(
+                new ModelReleaseCandidateException(
+                    "MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT",
+                    "Candidate version changed",
+                    ModelReleaseCandidateException.Kind.CONFLICT,
+                    Map.of("currentVersion", 5)
+                )
+            );
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates/{candidateId}/lock", PLAN_ID, CANDIDATE_ID)
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "lock-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"scope confirmed\"}")
+            )
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.code").value("MODEL_RELEASE_CANDIDATE_VERSION_CONFLICT"))
+            .andExpect(jsonPath("$.data.currentVersion").value(5));
+
+        when(service.workspace("server-tenant", "alice", PLAN_ID)).thenThrow(
+            new ModelReleaseCandidateException(
+                "MODEL_RELEASE_CANDIDATE_PLAN_FORBIDDEN",
+                "Plan is not available",
+                ModelReleaseCandidateException.Kind.FORBIDDEN
+            )
+        );
+        mockMvc
+            .perform(get("/api/modeling/plans/{planId}/release-candidates/workspace", PLAN_ID))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.code").value("MODEL_RELEASE_CANDIDATE_PLAN_FORBIDDEN"));
+    }
+
+    @Test
+    void replacementPassesIfMatchVersionAndIdempotencyAndReturnsResolvableLocation() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.createReplacement(
+            eq("server-tenant"),
+            eq("alice"),
+            eq(PLAN_ID),
+            eq(CANDIDATE_ID),
+            eq(4),
+            any()
+        ))
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/replacement",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "replacement-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"environment":"prod","entries":[],"reason":"replace stale scope"}
+                        """
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(
+                header().string(
+                    "Location",
+                    "/api/modeling/plans/" + PLAN_ID + "/release-candidates/" + CANDIDATE_ID
+                )
+            )
+            .andExpect(header().string("ETag", ETAG));
+
+        verify(service).createReplacement(
+            eq("server-tenant"),
+            eq("alice"),
+            eq(PLAN_ID),
+            eq(CANDIDATE_ID),
+            eq(4),
+            any()
+        );
+    }
+
+    @Test
+    void rematerializationUsesTheSamePlanAuthorizationEtagAndIdempotencyBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.rematerialize(eq("server-tenant"), eq("alice"), eq(PLAN_ID), eq(CANDIDATE_ID), eq(4), any()))
+            .thenReturn(new CommandResult(candidate(), false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/rematerialize",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "rematerialize-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {"environment":"dev","entries":[],"reason":"rebuild selected relations"}
+                        """
+                    )
+            )
+            .andExpect(status().isCreated())
+            .andExpect(header().string("ETag", ETAG));
+
+        verify(service).rematerialize(eq("server-tenant"), eq("alice"), eq(PLAN_ID), eq(CANDIDATE_ID), eq(4), any());
+    }
+
+    @Test
+    void materializationStatusQueryUsesTheServerTenantAndPlanBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        UUID modelId = UUID.fromString("40000000-0000-0000-0000-000000000001");
+        when(service.materializationStatuses("server-tenant", "alice", PLAN_ID, List.of(modelId))).thenReturn(List.of());
+
+        mockMvc
+            .perform(
+                get("/api/modeling/plans/{planId}/release-candidates/materializations", PLAN_ID)
+                    .param("modelSpecIds", modelId.toString())
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(0));
+
+        verify(service).materializationStatuses("server-tenant", "alice", PLAN_ID, List.of(modelId));
+    }
+
+    @Test
+    void materializationAttemptHistoryUsesTheExistingCandidateBoundary() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        when(service.materializationHistory("server-tenant", "alice", PLAN_ID, CANDIDATE_ID)).thenReturn(List.of());
+
+        mockMvc
+            .perform(
+                get(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/materialization-attempts",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.length()").value(0));
+
+        verify(service).materializationHistory("server-tenant", "alice", PLAN_ID, CANDIDATE_ID);
+    }
+
+    @Test
+    void batchPreflightUsesTheExistingPlanBoundaryAndReturnsAllBlockers() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("alice", null));
+        BatchPreflightView preview = new BatchPreflightView(
+            PLAN_ID,
+            "dev",
+            true,
+            1,
+            1,
+            1,
+            0,
+            List.of(),
+            List.of(),
+            List.of()
+        );
+        when(service.preflight(eq("server-tenant"), eq("alice"), eq(PLAN_ID), any())).thenReturn(preview);
+
+        mockMvc
+            .perform(
+                post("/api/modeling/plans/{planId}/release-candidates/preflight", PLAN_ID)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """
+                        {
+                          "environment":"dev",
+                          "entries":[{"modelSpecId":"40000000-0000-0000-0000-000000000001","sortOrder":0,"selectedReason":"selected"}],
+                          "reason":"preview batch materialization"
+                        }
+                        """
+                    )
+            )
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.eligible").value(true))
+            .andExpect(jsonPath("$.data.rootCount").value(1));
+
+        verify(service).preflight(eq("server-tenant"), eq("alice"), eq(PLAN_ID), any());
+    }
+
+    @Test
+    void approveRouteUsesCandidatePreconditionsAndDedicatedCommand() throws Exception {
+        when(actorProvider.currentActor()).thenReturn(new WarehousePlanActor("reviewer", null));
+        when(service.approve(
+            "server-tenant",
+            "reviewer",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "approve-1",
+            "quality evidence accepted"
+        ))
+            .thenReturn(new CommandResult(candidateAtVersion(5), false, List.of()));
+
+        mockMvc
+            .perform(
+                post(
+                    "/api/modeling/plans/{planId}/release-candidates/{candidateId}/reviews/approve",
+                    PLAN_ID,
+                    CANDIDATE_ID
+                )
+                    .header("If-Match", ETAG)
+                    .header("Idempotency-Key", "approve-1")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"quality evidence accepted\"}")
+            )
+            .andExpect(status().isOk())
+            .andExpect(header().string("ETag", "\"release-candidate:" + CANDIDATE_ID + ":5\""));
+
+        verify(service).approve(
+            "server-tenant",
+            "reviewer",
+            PLAN_ID,
+            CANDIDATE_ID,
+            4,
+            "approve-1",
+            "quality evidence accepted"
+        );
+    }
+
+    @Test
+    void everyCandidateRouteRequiresOneOfTheDedicatedReleaseDuties() {
+        String expected =
+            "hasAnyAuthority(T(com.yuzhi.dts.platform.security.AuthoritiesConstants).MODEL_RELEASE_DUTIES)";
+
+        assertThat(
+            Arrays
+                .stream(ModelReleaseCandidateResource.class.getDeclaredMethods())
+                .filter(ModelReleaseCandidateResourceTest::isMappedRoute)
+                .map(method -> method.getAnnotation(PreAuthorize.class))
+        )
+            .isNotEmpty()
+            .allSatisfy(annotation -> assertThat(annotation).isNotNull().extracting(PreAuthorize::value).isEqualTo(expected));
+    }
+
+    private static boolean isMappedRoute(Method method) {
+        return method.isAnnotationPresent(GetMapping.class) ||
+            method.isAnnotationPresent(PostMapping.class) ||
+            method.isAnnotationPresent(PutMapping.class);
+    }
+
+    private static WorkbenchView workbench() {
+        return new WorkbenchView(
+            PLAN_ID,
+            WorkbenchState.READY,
+            scopedCandidate(),
+            Arrays.stream(DeliveryEvidenceType.values())
+                .map(type ->
+                    new EvidenceSummaryView(
+                        type,
+                        EvidenceState.UNAVAILABLE,
+                        "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+                        "No current evidence is available"
+                    )
+                )
+                .toList(),
+            null,
+            List.of(WorkspaceAction.UPDATE_SCOPE, WorkspaceAction.START_BUILD),
+            ETAG
+        );
+    }
+
+    private static CandidateView candidate() {
+        Instant now = Instant.parse("2026-07-24T10:00:00Z");
+        return new CandidateView(
+            CANDIDATE_ID,
+            "server-tenant",
+            PLAN_ID,
+            "prod",
+            DeliveryStatus.DRAFT,
+            4,
+            "create-1",
+            "a".repeat(64),
+            new DeliveryAuditView("alice", now.minusSeconds(60), null, null, null, null, null, null),
+            "alice",
+            now,
+            List.of()
+        );
+    }
+
+    private static CandidateView candidateAtVersion(int version) {
+        CandidateView candidate = candidate();
+        return new CandidateView(
+            candidate.id(),
+            candidate.tenantId(),
+            candidate.planId(),
+            candidate.environment(),
+            candidate.status(),
+            version,
+            candidate.idempotencyKey(),
+            candidate.requestHash(),
+            candidate.audit(),
+            candidate.lastModifiedBy(),
+            candidate.lastModifiedAt().plusSeconds(version - candidate.version()),
+            candidate.entries()
+        );
+    }
+
+    private static CandidateView scopedCandidate() {
+        CandidateView candidate = candidate();
+        return new CandidateView(
+            candidate.id(),
+            candidate.tenantId(),
+            candidate.planId(),
+            candidate.environment(),
+            candidate.status(),
+            candidate.version(),
+            candidate.idempotencyKey(),
+            candidate.requestHash(),
+            candidate.audit(),
+            candidate.lastModifiedBy(),
+            candidate.lastModifiedAt(),
+            List.of(
+                new EntryView(
+                    UUID.fromString("30000000-0000-0000-0000-000000000001"),
+                    candidate.tenantId(),
+                    candidate.id(),
+                    candidate.planId(),
+                    UUID.fromString("40000000-0000-0000-0000-000000000001"),
+                    2,
+                    "b".repeat(64),
+                    null,
+                    ImplementationMode.DBT_MANAGED,
+                    candidate.status(),
+                    0,
+                    "primary"
+                )
+            )
+        );
+    }
+}

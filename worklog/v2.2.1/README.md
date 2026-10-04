@@ -1,0 +1,117 @@
+# DTS v2.2.1 Worklog
+
+## 文件索引
+- 审查结论：`worklog/v2.2.1/review-findings.md`
+- 未完成任务总清单：`worklog/v2.2.1/platform-analytics-v2.2.1-task-list.md`
+- P0 回归清单：`worklog/v2.2.1/p0-regression-checklist.md`
+- P0 回归矩阵：`worklog/v2.2.1/p0-regression-matrix.md`
+- Platform 证据索引：`worklog/v2.2.1/platform/README.md`
+- Platform 任务清单：`worklog/v2.2.1/platform/tasks/README.md`
+- BI 商用化分解（P0/P1/P2）：`worklog/v2.2.1/BI/screen-designer-commercialization-p0-p2-breakdown.md`
+- 前端统一重构 Sprint 01：`worklog/v2.2.1/frontend-refactor-sprint-01/README.md`
+- Sprint-13 项目管理专用大屏模板：`worklog/v2.2.1/sprint-13/README.md`
+
+## 说明
+- 本目录用于承接 v2.2.0 的剩余工作与 review 新增修复项。
+- 默认按 `P0 -> P1 -> P2 -> RV` 顺序推进。
+
+## Progress (2026-02-13)
+- Completed: `V221-P1-001` first implementation (admin user search no longer triggers full snapshot refresh on empty keyword hits; user list role aggregation switched to batch query to avoid per-row N+1).
+- Added tests: `AdminUserServiceListSnapshotsTest` (keyword-empty fast path + first-page empty full refresh fallback).
+- Completed: `V221-P1-002` first implementation (Airflow failure sync now captures failed task/log excerpt and writes classified failure context to execution/audit; retry audit now carries previous failure category/advice).
+- Completed: `V221-P1-002` second implementation (execution records persist `failure_category`/`failure_advice`; `/api/ingestion/tasks/{id}/executions` supports `status` + `failureCategory` filtering).
+- Added tests: `AirflowExecutionSyncServiceTest` (failed/success sync paths).
+- Verified: `mvn -f source/dts-admin/pom.xml -DskipTests compile` passed.
+- Verified: `mvn -f source/dts-admin/pom.xml -Dtest=AdminUserServiceListSnapshotsTest test` passed.
+- Verified: `mvn -f source/dts-ingestion/pom.xml -DskipTests compile` passed.
+- Verified: `mvn -f source/dts-ingestion/pom.xml -Dtest=AirflowExecutionSyncServiceTest,AirflowAdapterTest,AddaxJobServiceTest test` passed.
+- Completed: `V221-RV-001` first implementation (`QueryDataset` dept visibility no longer depends on exact `owner_dept` match).
+- Completed: `V221-RV-002` first implementation (`QueryDataset`/`BI Link` global manage scope aligned to `CATALOG_MAINTAINERS`).
+- Completed: `V221-P0-002` hardening (`generate-from-ods` now catches per-mapping runtime errors and continues processing remaining mappings).
+- Completed: `V221-P0-002` regression tests (`ModelingSqlModelServiceTest`: source fallback to dataset source + per-mapping skip/continue behavior).
+- Completed: `V221-P0-001` regression tests (`IngestionTaskFullRefreshExecutionTest`: non-file full refresh calls target provisioner + file full refresh skips provisioner).
+- Completed: execution hardening in `IngestionTaskService` (invalid Addax container path now returns readable error; success audit meta is null-safe and no longer risks `Map.of` NPE).
+- Verified: `mvn -f source/dts-ingestion/pom.xml -Dtest=IngestionTaskFullRefreshExecutionTest,AirflowAdapterTest,AirflowExecutionSyncServiceTest,AddaxJobServiceTest test` passed.
+- In progress: `V221-P0-003` first-pass (`AirflowAdapter` adds second-stage wait/retry after DAG 404, and task-log 404 noise downgraded to debug).
+- Added tests: `AirflowAdapterTest` (3 cases, includes DAG 404 recovery path).
+- Added tests: `AddaxJobServiceTest` full-refresh semantics (file path uses DROP+CREATE, RDBMS path keeps TRUNCATE when preSql is absent).
+- Verified: `mvn -f source/dts-platform/pom.xml -DskipTests compile` passed.
+- Verified: `mvn -f source/dts-platform/pom.xml -Dtest=QueryDatasetServiceTest test` passed.
+- Verified: `mvn -f source/dts-ingestion/pom.xml -Dtest=AirflowAdapterTest test` passed.
+- Verified: `mvn -f source/dts-ingestion/pom.xml -DskipTests compile` passed.
+- Completed: `V221-P1-003` first implementation (report center classification visibility and maintainer-vs-employee permission guard regression coverage).
+- Added tests: `BiReportLinkServiceTest` (classification filter + role matching), `ReportsResourceWebMvcTest` (employee read-only, maintainer create allowed).
+- Verified: `mvn -f source/dts-platform/pom.xml -Dtest=ReportsResourceWebMvcTest,BiReportLinkServiceTest,QueryDatasetServiceTest test` passed.
+- Verified: `mvn -f source/dts-ingestion/pom.xml -Dtest=AirflowExecutionSyncServiceTest,AirflowAdapterTest,AddaxJobServiceTest,IngestionTaskFullRefreshExecutionTest,IngestionTaskExecutionFilterTest,IngestionExecutionMapperTest test` passed.
+- Completed: `V221-P2-001` done (SQL modeling supports project-level ZIP import; backend `import-project` endpoint now supports `skip/overwrite/fail`, manifest/folder auto-detect, `dryRun` precheck, and package fingerprint).
+- Completed: `V221-P2-002` first-pass (project ZIP import now supports `manifest/indicators.tsv`, converting indicator definitions into ADS SQL models for offline delivery compatibility).
+- Added tests: `ModelingSqlProjectImportServiceTest` (manifest create path + conflict skip path + dry-run no-write path + indicators manifest path).
+- Verified: `mvn -f source/dts-platform/pom.xml -Dtest=ModelingSqlProjectImportServiceTest,ModelingSqlModelServiceTest,QueryDatasetServiceTest test` passed.
+- Verified: `pnpm -C source/dts-platform-webapp build` passed.
+- Completed: `V221-P2-003` first implementation (`QueryWorkbenchPage` added dataset-management tab; new `QueryDatasetManager` supports list/filter, version create/publish/archive, BI-link dependency view, and SQL preview).
+- Verified: `pnpm -C source/dts-platform-webapp build` passed (includes `QueryDatasetManager` and `QueryWorkbenchPage` tab integration).
+- Completed: `V221-RV-003` first-pass evidence landing (`platform` added 24h stability, Addax/Airbyte semantic compare, and isolation/lineage regression templates).
+- Pending: fill现场实测数据并形成最终审计结论（x86/ARM + legacy/normal/dev）。
+- Refactor: `rv-003` renamed to `platform`; task cards added under `worklog/v2.2.1/platform/tasks` following `P0-01` style naming.
+- Completed: `platform/scripts/collect-evidence.sh` + `platform/scripts/backfill-first-run.sh` landed and executed (sample window 168h), generating `platform/first-run-report.md` and raw evidence under `platform/raw/`.
+- Completed: `platform/scripts/update-env-matrix.sh` first-pass landed; environment matrix section is now auto-generated in `platform/stability-24h.md` and raw snapshot is persisted at `platform/raw/env-matrix.csv`.
+- Completed: `V221-RV-003` follow-up (`platform/scripts/isolation-lineage-check.sh` + `platform/scripts/package-report.sh` landed; task cards `P1-01..P2-02` switched to `done-first-pass`).
+- Completed: `V221-RV-003` docs enrichment (`platform/k8s-airbyte-readiness.md` + `platform/arm-kylin-hardening.md` added).
+- Completed: `V221-RV-003` p0-doc automation (`platform/scripts/update-p0-regression.sh` added; `p0-regression-matrix.md` and `p0-regression-checklist.md` now support auto backfill section).
+- Completed: `V221-SD-PLAN-001` first-pass landing (BI commercialization breakdown + execution board + `BI/tasks` status matrix completed).
+- Completed: BI P0-05 observability hardening first-pass (`source/dts-analytics-webapp/modern/src/api/analyticsApi.ts` now attaches requestId from response headers into client-side HttpError message).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed.
+- Completed: BI P1-04 datasource unification first-pass (database data source upgraded to name-based selector + manual ID fallback via `DatabaseIdPicker`; protocol document added at `worklog/v2.2.1/BI/datasource-execution-protocol.md`).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-04 updates.
+- In progress: BI P1-05 performance first-pass (`useCardDataSource` now has inflight dedupe + 5s TTL cache for `card/api/database` sources).
+- Completed: BI P1-05 backend cache governance first-pass (native query cache toggle effective in `QueryCacheService`; dataset cache policy/warmup endpoints added in `DatasetResource`).
+- Completed: BI P1-05 preview rendering optimization first-pass (`ScreenPreviewPage` switched to batched component mount).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-05 updates.
+- Completed: BI P1-05 first-pass closed (`ScreenWarmupService` auto warmup on publish + dataset cache policy/warmup APIs + cache observability panel in designer header).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after cache observability updates.
+- Completed: BI P1-03 asset center first-pass (`analytics_screen_template` + `ScreenTemplateResource` landed; supports template CRUD, save-from-screen, create-screen-from-template).
+- Completed: BI P1-03 template market first-pass (`TemplateGallery` supports builtin/asset scopes, search, category filter, and refresh).
+- Completed: BI P1-03 designer entry (`ScreensPage` adds `保存为模板`; `TemplateGallery` adds template-package import/export).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed after P1-03 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P1-03 updates.
+- Completed: BI P2-01 first-pass (`ScreenAiGenerationService` + `/api/screens/ai/generate` landed; offline rule-based draft generation without external LLM dependency).
+- Completed: BI P2-01 UI entry (`ScreensPage` adds `🤖 AI生成`; prompt -> screenSpec -> create editable screen flow).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests compile` passed after P2-01 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-01 updates.
+- Completed: BI P2-02 first-pass (`/api/screen-plugins` + `/api/screen-plugins/validate` landed; plugin manifest contract with demo pack).
+- Completed: BI P2-02 UI entry (`ComponentLibraryPanel` now loads plugin categories and maps plugin components via `baseType` into kernel component palette).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-02 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-02 updates.
+- Completed: BI P2-03 first-pass (`/api/screen-packs/export` + `/api/screen-packs/import` landed; industry pack uses template-centric offline bundle format).
+- Completed: BI P2-03 UI entry (`TemplateGallery` adds `导入行业包` / `导出行业包` one-click flow).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-03 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-03 updates.
+- Completed: BI P2-04 first-pass (`/api/screen-compliance/policy` + `/api/screen-compliance/report` landed; strategy center + audit report model for enterprise compliance baseline).
+- Completed: BI P2-04 UI entry (`ScreenHeader` adds `合规` panel; supports policy management, report query by scope/days/limit, and JSON export).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after P2-04 updates.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after P2-04 updates.
+- Completed: BI P2-04 hardening (`ScreenComplianceService` now enforces column masking on card query/export results; default sensitive key rules + custom `maskRules` supported).
+- Completed: Analytics query stability hardening (`CardResource` query/pivot/export endpoints moved to `Propagation.NOT_SUPPORTED` to avoid rollback-only commit failures on external DB connection errors).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after compliance hardening.
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after compliance hardening.
+- Added tests: `ScreenComplianceServiceTest` (3 cases: disabled pass-through, default rule masking, custom rule masking).
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed.
+- Confirmed: BI task ownership locked to current session via `worklog/v2.2.1/BI/.session-lock.md`.
+- Completed: BI P2-04 second-pass hardening (masking applied to `PublicResource`/`DashboardResource`/`EmbedResource`/`DatasetResource` in addition to `CardResource`).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after cross-resource masking refactor.
+- Added: BI R1 refactor wave plan at `worklog/v2.2.1/BI/tasks/R1-refactor-wave.md`.
+- In progress: BI R1-01 query-kernel unification (`QueryExecutionFacade` landed; `EmbedResource` switched to facade execution path).
+- In progress: BI R1-02 AI entry convergence (`/api/screens/ai/draft` is now compatibility adapter over `ScreenAiGenerationService`, with deprecate hints to `/api/screens/ai/generate`).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1 updates.
+- Completed: BI R1-01 second-pass (`QueryExecutionFacade` unified execution path in `CardResource`/`PublicResource`/`DashboardResource`/`DatasetResource`/`EmbedResource`, including card export + metadata probing path).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after full R1-01 rollout.
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed after full R1-01 rollout.
+- Completed: BI R1-03 first-pass (template/industry-pack ACL+audit hardening: new `analytics_screen_asset_audit_log` + `ScreenAssetAuditService`, audit endpoints for templates/packs, role boundary on pack export and protected categories).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1-03 first-pass.
+- Completed: BI R1-04 first-pass (screen compliance policy persistence/versioning: new `analytics_screen_compliance_policy`, `ScreenComplianceService` now supports history/rollback, and policy write APIs require superuser).
+- Verified: `mvn -f source/dts-analytics/pom.xml -DskipTests clean compile` passed after R1-04 first-pass.
+- Verified: `mvn -f source/dts-analytics/pom.xml -Dtest=ScreenComplianceServiceTest test` passed after R1-04 first-pass.
+- Completed: BI R1-05 first-pass (route-level lazy loading + `ComponentRenderer` dependency lazy loading + `echarts/core` runtime extraction + Vite chunk warning governance).
+- Verified: `pnpm -C source/dts-analytics-webapp/modern build` passed after R1-05 first-pass (chunk warning removed; max chunk `EChartsRuntime` 615.26 kB under configured threshold 700).

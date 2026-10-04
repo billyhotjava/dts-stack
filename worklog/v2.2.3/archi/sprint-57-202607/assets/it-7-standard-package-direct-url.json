@@ -1,0 +1,31 @@
+{
+  "checkedAt": "2026-07-04T07:29:31.236Z",
+  "url": "http://localhost:3001/#/foundation/standard-package",
+  "hash": "#/foundation/standard-package",
+  "title": "BI数智平台",
+  "hasStandardPackageText": true,
+  "hasBuiltinPackageText": true,
+  "hasTemplateText": true,
+  "hasHistoryText": true,
+  "fellBackToWorkbench": false,
+  "evidence": [
+    "it-7-standard-package-direct-url.png",
+    "it-5-builtin-install-page.png",
+    "it-3-standard-package-history-rollback-page.png"
+  ],
+  "responseErrors": [
+    {
+      "status": 401,
+      "url": "http://localhost:3001/api/menu/tree"
+    },
+    {
+      "status": 401,
+      "url": "http://localhost:3001/api/menu/tree"
+    }
+  ],
+  "consoleErrors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "note": "Page smoke uses route-level API fixtures; backend preview/apply/rollback/builtin evidence is stored in IT JSON files."
+}

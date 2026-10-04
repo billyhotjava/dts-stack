@@ -1,0 +1,34 @@
+{
+  "when": "2026-05-09T04:12:29.522Z",
+  "baseUrl": "https://bi.yuzhicloud.com",
+  "browserKind": "chrome-channel",
+  "steps": [
+    {
+      "step": "open",
+      "ok": true,
+      "url": "https://bi.yuzhicloud.com/#/auth/login",
+      "title": "BI数智平台"
+    },
+    {
+      "step": "detect-login",
+      "ok": true,
+      "needsLogin": true,
+      "visibleHints": [],
+      "inputs": []
+    },
+    {
+      "step": "fatal",
+      "ok": false,
+      "error": "Error: Cannot find username input\n    at fillFirst ([stdin]:27:9)\n    at async [stdin]:105:28",
+      "url": "https://bi.yuzhicloud.com/#/auth/login",
+      "title": "BI数智平台"
+    }
+  ],
+  "events": {
+    "consoleErrors": [],
+    "pageErrors": [],
+    "requestFailures": [],
+    "responses4xx5xx": []
+  },
+  "outDir": "Z:/opt/prod/s10/v2.2.3/reports/prod-smoke-20260509"
+}

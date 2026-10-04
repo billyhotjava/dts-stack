@@ -1,0 +1,16 @@
+Sprint-67 F6-T01 GitNexus change-scope evidence
+Verified: 2026-07-20
+
+Command:
+gitnexus_detect_changes(repo=s10-stack, scope=unstaged)
+
+Result:
+- Workspace summary: 114 changed files / 483 indexed changed symbols.
+- Risk: MEDIUM.
+- Affected indexed processes: 2, both existing SqlModelingPage normalization flows.
+- No HIGH or CRITICAL affected execution flow was reported.
+
+Interpretation:
+- The worktree is intentionally shared and already contains completed Sprint-67 F1-F5 changes plus unrelated user-owned edits, so this report is broader than F6-T01.
+- Pre-edit symbol checks were performed separately: MetadataStandard MEDIUM; MetadataStandardService/Mapper/ReferenceCodeService LOW; the new evidence adapter was not yet indexed.
+- A proposed StdCodeDirectory schema revision was not made after its impact check returned HIGH; F6-T01 instead reuses the existing stable codeTypeId/version/status owner contract.

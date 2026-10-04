@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260316-10-create-topic-template" author="codex">
+        <createTable tableName="topic_template">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_code" type="varchar(128)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="template_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="description" type="varchar(1024)"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="binding_scope" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enabled" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="20260316-11-create-topic-template-entity" author="codex">
+        <createTable tableName="topic_template_entity">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_code" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_name" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="required_flag" type="boolean" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="table_name" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expected_schema" type="varchar(128)"/>
+            <column name="description" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="topic_template_entity"
+            baseColumnNames="template_id"
+            referencedTableName="topic_template"
+            referencedColumnNames="id"
+            constraintName="fk_topic_template_entity_template"
+        />
+        <createIndex tableName="topic_template_entity" indexName="uidx_topic_template_entity_code" unique="true">
+            <column name="template_id"/>
+            <column name="entity_code"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260316-12-create-topic-binding" author="codex">
+        <createTable tableName="topic_binding">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="entity_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="scope_key" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="binding_mode" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_source_id" type="${uuidType}"/>
+            <column name="database_name" type="varchar(128)"/>
+            <column name="schema_name" type="varchar(128)"/>
+            <column name="table_name" type="varchar(128)"/>
+            <column name="view_name" type="varchar(128)"/>
+            <column name="ods_mapping_id" type="${uuidType}"/>
+            <column name="batch_id" type="${uuidType}"/>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="bound_by" type="varchar(128)"/>
+            <column name="bound_at" type="${datetimeType}"/>
+            <column name="last_verified_at" type="${datetimeType}"/>
+            <column name="notes" type="varchar(1024)"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="${datetimeType}"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="${datetimeType}"/>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="topic_binding"
+            baseColumnNames="template_id"
+            referencedTableName="topic_template"
+            referencedColumnNames="id"
+            constraintName="fk_topic_binding_template"
+        />
+        <addForeignKeyConstraint
+            baseTableName="topic_binding"
+            baseColumnNames="entity_id"
+            referencedTableName="topic_template_entity"
+            referencedColumnNames="id"
+            constraintName="fk_topic_binding_entity"
+        />
+        <createIndex tableName="topic_binding" indexName="uidx_topic_binding_scope" unique="true">
+            <column name="template_id"/>
+            <column name="entity_id"/>
+            <column name="scope_key"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,254 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!-- 
+        运维配置功能增强
+        - 为 system_config 表添加分类、敏感标识、数据类型等字段
+        - 添加预置功能开关配置种子数据
+    -->
+
+    <changeSet id="20260127-ops-01-extend-system-config" author="dts-admin">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="system_config" columnName="category"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="system_config">
+            <column name="category" type="VARCHAR(50)" defaultValue="SYSTEM">
+                <constraints nullable="true"/>
+            </column>
+            <column name="sensitive" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_type" type="VARCHAR(20)" defaultValue="STRING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="editable" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="display_name" type="VARCHAR(100)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <createIndex tableName="system_config" indexName="idx_system_config_category">
+            <column name="category"/>
+        </createIndex>
+    </changeSet>
+
+    <!-- 功能开关预置数据 -->
+    <changeSet id="20260127-ops-02-feature-toggle-seed" author="dts-admin">
+        <!-- OpenMetadata 集成 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="feature.openmetadata.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用 OpenMetadata 元数据管理集成"/>
+            <column name="category" value="FEATURE_TOGGLE"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="display_name" value="OpenMetadata 集成"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- Airflow 调度 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="feature.airflow.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用 Airflow 工作流调度"/>
+            <column name="category" value="FEATURE_TOGGLE"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="display_name" value="Airflow 调度"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- PKI 认证 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="security.pki.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用 PKI 数字证书认证登录"/>
+            <column name="category" value="SECURITY"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="display_name" value="PKI 数字证书认证"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- 密码登录 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="security.password_login.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用密码登录方式（生产环境建议禁用）"/>
+            <column name="category" value="SECURITY"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="display_name" value="密码登录"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- IP 白名单 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="security.ip_allowlist.enabled"/>
+            <column name="cfg_value" value="false"/>
+            <column name="description" value="启用 IP 白名单限制（仅允许白名单内 IP 访问管理后台）"/>
+            <column name="category" value="SECURITY"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="display_name" value="IP 白名单"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- MDM 主数据同步 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="feature.mdm_gateway.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用 MDM 主数据网关同步组织人员"/>
+            <column name="category" value="FEATURE_TOGGLE"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="display_name" value="MDM 主数据同步"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- 三员分立模式 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="security.triad_mode.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用三员分立管理模式（系统/授权/审计管理员职责隔离）"/>
+            <column name="category" value="SECURITY"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="false"/>
+            <column name="sort_order" valueNumeric="5"/>
+            <column name="display_name" value="三员分立模式"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- 会话超时时间 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="security.session.timeout_minutes"/>
+            <column name="cfg_value" value="30"/>
+            <column name="description" value="用户会话超时时间（分钟）"/>
+            <column name="category" value="SECURITY"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="INTEGER"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="display_name" value="会话超时时间"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- Hetu BI 集成 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="feature.hetu_bi.enabled"/>
+            <column name="cfg_value" value="true"/>
+            <column name="description" value="启用河图 BI 可视化集成"/>
+            <column name="category" value="FEATURE_TOGGLE"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="BOOLEAN"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="display_name" value="河图 BI 集成"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+
+        <!-- 审计日志保留天数 -->
+        <insert tableName="system_config">
+            <column name="cfg_key" value="system.audit_log.retention_days"/>
+            <column name="cfg_value" value="365"/>
+            <column name="description" value="审计日志保留天数"/>
+            <column name="category" value="SYSTEM"/>
+            <column name="sensitive" valueBoolean="false"/>
+            <column name="data_type" value="INTEGER"/>
+            <column name="editable" valueBoolean="true"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="display_name" value="审计日志保留天数"/>
+            <column name="created_by" value="system"/>
+            <column name="created_date" valueDate="CURRENT_TIMESTAMP"/>
+        </insert>
+    </changeSet>
+
+    <!-- 审计操作映射：运维配置相关接口 -->
+    <changeSet id="20260127-ops-03-audit-button-codes" author="dts-admin">
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/configs"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看运维配置列表"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="order_value" valueNumeric="30"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/configs/{key}"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看运维配置: {key|未知}"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/configs/{key}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="修改运维配置: {key|未知}"/>
+            <column name="source_table_template" value="运维配置"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/feature-toggles"/>
+            <column name="http_method" value="GET"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="READ"/>
+            <column name="description_template" value="查看功能开关列表"/>
+            <column name="source_table_template" value="功能开关"/>
+            <column name="order_value" valueNumeric="30"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+        <insert tableName="audit_operation_mapping">
+            <column name="url_pattern" value="/api/admin/ops/feature-toggles/{key}"/>
+            <column name="http_method" value="PUT"/>
+            <column name="module_name" value="运维配置"/>
+            <column name="operation_type" value="UPDATE"/>
+            <column name="description_template" value="切换功能开关: {key|未知}"/>
+            <column name="source_table_template" value="功能开关"/>
+            <column name="param_extractors" value="{&quot;key&quot;:&quot;path.key&quot;}"/>
+            <column name="order_value" valueNumeric="29"/>
+            <column name="enabled" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

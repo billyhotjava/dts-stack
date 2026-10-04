@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-06-measurement-unit-owner" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <not><tableExists tableName="governance_measurement_unit"/></not>
+            <not><tableExists tableName="governance_measurement_unit_revision"/></not>
+        </preConditions>
+        <comment>Create the stable measurement-unit head and immutable revision ledger.</comment>
+
+        <createTable tableName="governance_measurement_unit">
+            <column name="id" type="${uuidType}"><constraints primaryKey="true" nullable="false"/></column>
+            <column name="code" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="name" type="varchar(256)"><constraints nullable="false"/></column>
+            <column name="symbol" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="quantity_kind" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="conversion_factor" type="numeric(38,18)"><constraints nullable="false"/></column>
+            <column name="base_unit_ref" type="${uuidType}"/>
+            <column name="precision" type="int"><constraints nullable="false"/></column>
+            <column name="status" type="varchar(16)"><constraints nullable="false"/></column>
+            <column name="version" type="int"><constraints nullable="false"/></column>
+            <column name="checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="last_modified_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+            <column name="last_modified_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+
+        <createTable tableName="governance_measurement_unit_revision">
+            <column name="measurement_unit_id" type="${uuidType}"><constraints nullable="false"/></column>
+            <column name="version" type="int"><constraints nullable="false"/></column>
+            <column name="checksum" type="varchar(64)"><constraints nullable="false"/></column>
+            <column name="snapshot_json" type="jsonb"><constraints nullable="false"/></column>
+            <column name="created_by" type="varchar(128)"><constraints nullable="false"/></column>
+            <column name="created_date" type="timestamp"><constraints nullable="false"/></column>
+        </createTable>
+
+        <addPrimaryKey
+            tableName="governance_measurement_unit_revision"
+            columnNames="measurement_unit_id, version"
+            constraintName="pk_measurement_unit_revision"/>
+        <addForeignKeyConstraint
+            baseTableName="governance_measurement_unit"
+            baseColumnNames="base_unit_ref"
+            constraintName="fk_measurement_unit_base"
+            referencedTableName="governance_measurement_unit"
+            referencedColumnNames="id"/>
+        <addForeignKeyConstraint
+            baseTableName="governance_measurement_unit_revision"
+            baseColumnNames="measurement_unit_id"
+            constraintName="fk_measurement_unit_revision_owner"
+            referencedTableName="governance_measurement_unit"
+            referencedColumnNames="id"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_factor_positive CHECK (conversion_factor > 0);
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_precision CHECK (precision BETWEEN 0 AND 18);
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_status CHECK (status IN ('ACTIVE', 'INACTIVE'));
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_version CHECK (version > 0);
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_checksum CHECK (checksum ~ '^[0-9a-f]{64}$');
+            ALTER TABLE governance_measurement_unit
+                ADD CONSTRAINT ck_measurement_unit_base_not_self CHECK (base_unit_ref IS NULL OR base_unit_ref <> id);
+            ALTER TABLE governance_measurement_unit_revision
+                ADD CONSTRAINT ck_measurement_unit_revision_version CHECK (version > 0);
+            ALTER TABLE governance_measurement_unit_revision
+                ADD CONSTRAINT ck_measurement_unit_revision_checksum CHECK (checksum ~ '^[0-9a-f]{64}$');
+            ALTER TABLE governance_measurement_unit_revision
+                ADD CONSTRAINT ck_measurement_unit_revision_snapshot CHECK (jsonb_typeof(snapshot_json) = 'object');
+            CREATE UNIQUE INDEX uk_measurement_unit_code_ci ON governance_measurement_unit (lower(code));
+            CREATE INDEX idx_measurement_unit_base_ref ON governance_measurement_unit (base_unit_ref)
+                WHERE base_unit_ref IS NOT NULL;
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION governance_measurement_unit_revision_immutable() RETURNS trigger AS $$
+            BEGIN
+                RAISE EXCEPTION 'MEASUREMENT_UNIT_REVISION_IMMUTABLE';
+            END;
+            $$ LANGUAGE plpgsql;
+        ]]></sql>
+        <sql>
+            CREATE TRIGGER trg_measurement_unit_revision_immutable
+                BEFORE UPDATE OR DELETE ON governance_measurement_unit_revision
+                FOR EACH ROW EXECUTE FUNCTION governance_measurement_unit_revision_immutable()
+        </sql>
+        <sql>
+            CREATE TRIGGER trg_measurement_unit_revision_truncate_immutable
+                BEFORE TRUNCATE ON governance_measurement_unit_revision
+                FOR EACH STATEMENT EXECUTE FUNCTION governance_measurement_unit_revision_immutable()
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM governance_measurement_unit)
+                       OR EXISTS (SELECT 1 FROM governance_measurement_unit_revision) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MEASUREMENT_UNIT_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="governance_measurement_unit_revision"/>
+            <sql>DROP FUNCTION IF EXISTS governance_measurement_unit_revision_immutable()</sql>
+            <dropTable tableName="governance_measurement_unit"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

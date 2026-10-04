@@ -1,0 +1,1523 @@
+import type { MenuProps } from "antd";
+import { Dropdown, message, Modal, Select, Spin, Tree } from "antd";
+import type { ColumnsType } from "antd/es/table";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { getDomainTree } from "@/api/platformApi";
+import { actionColumn, CompactTable } from "@/components/table";
+import { useUserRoles } from "@/store/userStore";
+import { analyticsApi, type ScreenAiGenerationResponse, type ScreenListItem } from "../../api/analyticsApi";
+import { resolveRouteForOpen } from "../../helpers/resolveAnalyticsUrl";
+import { writeTextToClipboard } from "../../hooks/clipboard";
+import { ScreenAclPanel, TemplateGallery, type TemplateSelection } from "./components";
+import { ClassificationTag } from "./components/ClassificationTag";
+import { CreateScreenIntakeModal, type CreateScreenIntakePayload } from "./components/CreateScreenIntakeModal";
+import { ImportPreviewModal } from "./components/ImportPreviewModal";
+import { ScreenListPreview, ScreenPreviewName } from "./components/ScreenListPreview";
+import { UnclassifiedScreensModal } from "./components/UnclassifiedScreensModal";
+import { createConfigFromTemplate } from "./screenTemplates";
+import { buildScreenPayload, normalizeScreenConfig, validateScreenPayload } from "./screenSpec";
+import type { ScreenConfig } from "./types";
+import { buildScreenPackageZip, parseScreenImportFile } from "./utils/screenPackage";
+const SCREEN_LIST_PREF_KEY = "dts.analytics.screens.listPref.v1";
+const UNASSIGNED_DOMAIN_KEY = "__UNASSIGNED__";
+
+type DomainNode = {
+	id?: string;
+	name?: string;
+	code?: string;
+	children?: DomainNode[];
+};
+
+type DomainTreeItem = {
+	key: string;
+	title: string;
+	children?: DomainTreeItem[];
+};
+
+function flattenDomainNodes(nodes: DomainNode[], acc: Array<{ label: string; value: string }> = []) {
+	nodes.forEach((node) => {
+		const id = String(node.id || "").trim();
+		const label = String(node.name || node.code || "").trim();
+		if (id && label) {
+			acc.push({ label, value: id });
+		}
+		if (Array.isArray(node.children) && node.children.length > 0) {
+			flattenDomainNodes(node.children, acc);
+		}
+	});
+	return acc;
+}
+
+function collectDomainIds(nodes: DomainNode[], targetId: string): string[] {
+	for (const node of nodes) {
+		const id = String(node.id || "").trim();
+		if (id === targetId) {
+			return flattenDomainNodes([node]).map((item) => item.value);
+		}
+		const children = Array.isArray(node.children) ? node.children : [];
+		const childIds = collectDomainIds(children, targetId);
+		if (childIds.length > 0) {
+			return childIds;
+		}
+	}
+	return [];
+}
+
+function buildDomainTreeNodes(nodes: DomainNode[]): DomainTreeItem[] {
+	return nodes.map((node, index) => {
+		const id = String(node.id || "").trim() || `fallback-domain-${index}`;
+		return {
+			key: id,
+			title: String(node.name || node.code || "未命名主题域"),
+			children: node.children?.length ? buildDomainTreeNodes(node.children) : undefined,
+		};
+	});
+}
+
+type ScreenRowPermissions = {
+	canRead: boolean;
+	canEdit: boolean;
+	canManage: boolean;
+	canDelete: boolean;
+	isOwner: boolean;
+};
+
+function resolveScreenRowPermissions(screen: ScreenListItem): ScreenRowPermissions {
+	const hasExplicitPermissions = [
+		screen.canRead,
+		screen.canEdit,
+		screen.canPublish,
+		screen.canManage,
+		screen.canDelete,
+		screen.isOwner,
+	].some((value) => typeof value === "boolean");
+
+	if (!hasExplicitPermissions) {
+		return {
+			canRead: true,
+			canEdit: true,
+			canManage: true,
+			canDelete: true,
+			isOwner: true,
+		};
+	}
+
+	return {
+		canRead: screen.canRead === true,
+		canEdit: screen.canEdit === true,
+		canManage: screen.canManage === true,
+		canDelete: screen.canDelete === true,
+		isOwner: screen.isOwner === true,
+	};
+}
+
+export default function ScreensPage() {
+	const navigate = useNavigate();
+	const [screens, setScreens] = useState<ScreenListItem[]>([]);
+	const [loading, setLoading] = useState(true);
+	const [error, setError] = useState<string | null>(null);
+	const [showTemplateGallery, setShowTemplateGallery] = useState(false);
+	const [savingTemplateId, setSavingTemplateId] = useState<string | number | null>(null);
+	// Sprint-24 F3：创建大屏前先收集名称 + 密级，提交后打开模板库。
+	const [intakeOpen, setIntakeOpen] = useState(false);
+	const [pendingClassification, setPendingClassification] = useState<
+		CreateScreenIntakePayload["classification"] | null
+	>(null);
+	const [pendingDomainId, setPendingDomainId] = useState<string | undefined>(undefined);
+	const [pendingScreenName, setPendingScreenName] = useState<string>("");
+	// Sprint-24 F4：大屏密级合规盘点入口对治理角色开放（与后端 SCREEN_AUDITOR_ROLES 对齐）。
+	const [unclassifiedOpen, setUnclassifiedOpen] = useState(false);
+	const userRoles = useUserRoles();
+	const canSeeUnclassifiedAudit = (() => {
+		if (!Array.isArray(userRoles) || userRoles.length === 0) return false;
+		// 必须与后端 MetabaseAuth.SCREEN_AUDITOR_ROLES 保持一致：
+		// OP_ADMIN / 所级或部门数据管理员 / 所级或部门领导 / superuser。
+		const SCREEN_AUDITOR_ROLES = new Set([
+			"OP_ADMIN",
+			"INST_DATA_OWNER",
+			"DEPT_DATA_OWNER",
+			"INST_LEADER",
+			"DEPT_LEADER",
+		]);
+		const normalize = (raw: unknown) =>
+			String(raw || "")
+				.trim()
+				.toUpperCase()
+				.replace(/^ROLE_/, "");
+		return userRoles.some((r) => {
+			const norm = normalize(r);
+			return norm === "SUPERUSER" || SCREEN_AUDITOR_ROLES.has(norm);
+		});
+	})();
+
+	const [showAiGenerator, setShowAiGenerator] = useState(false);
+	const [aiPrompt, setAiPrompt] = useState("");
+	const [aiLoading, setAiLoading] = useState(false);
+	const [aiRefining, setAiRefining] = useState(false);
+	const [aiCreating, setAiCreating] = useState(false);
+	const [aiRefinePrompt, setAiRefinePrompt] = useState("");
+	const [aiRefineMode, setAiRefineMode] = useState<"apply" | "suggest">("apply");
+	const [aiResult, setAiResult] = useState<ScreenAiGenerationResponse | null>(null);
+	const [aiContextHistory, setAiContextHistory] = useState<string[]>([]);
+	const [aclScreenId, setAclScreenId] = useState<string | number | null>(null);
+	const [domainEditorScreen, setDomainEditorScreen] = useState<ScreenListItem | null>(null);
+	const [domainEditorValue, setDomainEditorValue] = useState<string | undefined>(undefined);
+	const [domainSaving, setDomainSaving] = useState(false);
+	const [exportingId, setExportingId] = useState<string | number | null>(null);
+	const [importPreview, setImportPreview] = useState<{
+		fileName: string;
+		parsedSpec: ScreenConfig;
+		templateMeta?: { name: string; description?: string; category?: string; tags?: string[] };
+		validation: { errors: string[]; warnings: string[] };
+		resourcesInlined: boolean;
+		inlinedResourceCount: number;
+		restoredResourceCount: number;
+		classification?: CreateScreenIntakePayload["classification"];
+		domainId?: string;
+		importName?: string;
+		file?: File;
+	} | null>(null);
+	const [isImporting, setIsImporting] = useState(false);
+	const [importIntakeOpen, setImportIntakeOpen] = useState(false);
+	const [domainTree, setDomainTree] = useState<DomainNode[]>([]);
+	const [domainTreeLoading, setDomainTreeLoading] = useState(false);
+	const [selectedDomain, setSelectedDomain] = useState<string | undefined>(() => {
+		if (typeof window === "undefined") return undefined;
+		try {
+			const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+			if (!raw) return undefined;
+			const parsed = JSON.parse(raw) as { selectedDomain?: string };
+			return typeof parsed.selectedDomain === "string" && parsed.selectedDomain ? parsed.selectedDomain : undefined;
+		} catch {
+			return undefined;
+		}
+	});
+	const [searchKeyword, setSearchKeyword] = useState(() => {
+		if (typeof window === "undefined") return "";
+		try {
+			const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+			if (!raw) return "";
+			const parsed = JSON.parse(raw) as { searchKeyword?: string };
+			return String(parsed.searchKeyword || "");
+		} catch {
+			return "";
+		}
+	});
+	const [publishFilter, setPublishFilter] = useState<"all" | "published" | "draft">(() => {
+		if (typeof window === "undefined") return "all";
+		try {
+			const raw = window.localStorage.getItem(SCREEN_LIST_PREF_KEY);
+			if (!raw) return "all";
+			const parsed = JSON.parse(raw) as { publishFilter?: string };
+			return parsed.publishFilter === "published" || parsed.publishFilter === "draft" ? parsed.publishFilter : "all";
+		} catch {
+			return "all";
+		}
+	});
+	const searchInputRef = useRef<HTMLInputElement | null>(null);
+
+	useEffect(() => {
+		if (typeof window === "undefined") return;
+		window.localStorage.setItem(SCREEN_LIST_PREF_KEY, JSON.stringify({ searchKeyword, publishFilter, selectedDomain }));
+	}, [publishFilter, searchKeyword, selectedDomain]);
+	useEffect(() => {
+		const isTypingTarget = (target: EventTarget | null): boolean => {
+			const node = target as HTMLElement | null;
+			if (!node) return false;
+			const tag = node.tagName;
+			if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
+			return node.isContentEditable;
+		};
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.ctrlKey || event.metaKey || event.altKey) {
+				return;
+			}
+			if (event.key === "/") {
+				if (!isTypingTarget(event.target)) {
+					event.preventDefault();
+					searchInputRef.current?.focus();
+					searchInputRef.current?.select();
+				}
+				return;
+			}
+			if (event.key === "Escape" && searchKeyword) {
+				if (!isTypingTarget(event.target)) {
+					event.preventDefault();
+					setSearchKeyword("");
+				}
+			}
+		};
+		window.addEventListener("keydown", handleKeyDown);
+		return () => window.removeEventListener("keydown", handleKeyDown);
+	}, [searchKeyword]);
+
+	const loadScreens = useCallback(() => {
+		setLoading(true);
+		analyticsApi
+			.listScreens()
+			.then((data) => {
+				setScreens(data);
+				setLoading(false);
+			})
+			.catch((err) => {
+				console.error("Failed to load screens:", err);
+				setError("加载大屏列表失败");
+				setLoading(false);
+			});
+	}, []);
+
+	useEffect(() => {
+		loadScreens();
+	}, [loadScreens]);
+
+	useEffect(() => {
+		let cancelled = false;
+		setDomainTreeLoading(true);
+		getDomainTree()
+			.then((resp: unknown) => {
+				if (cancelled) return;
+				const data = Array.isArray(resp)
+					? resp
+					: Array.isArray((resp as { data?: unknown })?.data)
+						? (resp as { data: DomainNode[] }).data
+						: [];
+				setDomainTree(data as DomainNode[]);
+			})
+			.catch((err) => {
+				console.error("Failed to load screen domain tree:", err);
+				if (!cancelled) {
+					toast.error("加载主题域失败");
+				}
+			})
+			.finally(() => {
+				if (!cancelled) {
+					setDomainTreeLoading(false);
+				}
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, []);
+
+	const publishedCount = useMemo(
+		() => screens.filter((item) => Number(item.publishedVersionNo || 0) > 0).length,
+		[screens],
+	);
+	const draftCount = Math.max(0, screens.length - publishedCount);
+	const domainOptions = useMemo(() => flattenDomainNodes(domainTree), [domainTree]);
+	const domainEditorOptions = useMemo(
+		() => [{ label: "未归类", value: UNASSIGNED_DOMAIN_KEY }, ...domainOptions],
+		[domainOptions],
+	);
+	const domainMap = useMemo(() => new Map(domainOptions.map((item) => [item.value, item.label])), [domainOptions]);
+	const selectedDomainIds = useMemo(() => {
+		if (!selectedDomain || selectedDomain === UNASSIGNED_DOMAIN_KEY) {
+			return [];
+		}
+		return collectDomainIds(domainTree, selectedDomain);
+	}, [domainTree, selectedDomain]);
+	const screenDomainTreeData = useMemo(
+		() => [
+			{
+				key: "ALL",
+				title: "全部大屏",
+				children: [{ key: UNASSIGNED_DOMAIN_KEY, title: "未归类" }, ...buildDomainTreeNodes(domainTree)],
+			},
+		],
+		[domainTree],
+	);
+	const aclScreenPermissions = useMemo(() => {
+		if (aclScreenId == null) {
+			return null;
+		}
+		const screen = screens.find((item) => String(item.id) === String(aclScreenId));
+		return screen ? resolveScreenRowPermissions(screen) : null;
+	}, [aclScreenId, screens]);
+	const visibleScreens = useMemo(() => {
+		const keyword = searchKeyword.trim().toLowerCase();
+		return screens.filter((item) => {
+			const itemDomainId = typeof item.domainId === "string" ? item.domainId.trim() : "";
+			if (selectedDomain === UNASSIGNED_DOMAIN_KEY) {
+				if (itemDomainId && (domainMap.size === 0 || domainMap.has(itemDomainId))) {
+					return false;
+				}
+			} else if (selectedDomain) {
+				const allowedIds = selectedDomainIds.length > 0 ? selectedDomainIds : [selectedDomain];
+				if (!itemDomainId || !allowedIds.includes(itemDomainId)) {
+					return false;
+				}
+			}
+			const published = Number(item.publishedVersionNo || 0) > 0;
+			if (publishFilter === "published" && !published) return false;
+			if (publishFilter === "draft" && published) return false;
+			if (!keyword) return true;
+			const name = String(item.name || "").toLowerCase();
+			const desc = String(item.description || "").toLowerCase();
+			return name.includes(keyword) || desc.includes(keyword);
+		});
+	}, [domainMap, publishFilter, screens, searchKeyword, selectedDomain, selectedDomainIds]);
+
+	// 列表分页：默认 10 条/页，过滤条件变化时回到第 1 页，越界自动回正。
+	const [currentPage, setCurrentPage] = useState(1);
+	const [pageSize, setPageSize] = useState(10);
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [searchKeyword, publishFilter]);
+	useEffect(() => {
+		setCurrentPage(1);
+	}, [selectedDomain]);
+	const totalCount = visibleScreens.length;
+	const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+	const safePage = Math.min(currentPage, totalPages);
+	useEffect(() => {
+		if (currentPage !== safePage) {
+			setCurrentPage(safePage);
+		}
+	}, [currentPage, safePage]);
+	const handleCreate = () => {
+		// Sprint-24 F3：先弹 intake 收集名称 + 密级，提交后再开模板库。
+		setIntakeOpen(true);
+	};
+
+	/**
+	 * Sprint-24 F3：intake 提交后的真正创建逻辑。从 modal 拿 name + classification，
+	 * 把 classification 通过 navigate state 透传到 /bi/screens/new，保存时 buildScreenPayload 一并带上。
+	 */
+	const handleIntakeSubmit = (payload: CreateScreenIntakePayload) => {
+		setIntakeOpen(false);
+		setPendingClassification(payload.classification);
+		setPendingDomainId(payload.domainId);
+		setPendingScreenName(payload.name);
+		setShowTemplateGallery(true);
+	};
+
+	const handleOpenAiGenerator = () => {
+		setAiPrompt("生成一个面向运营的周报大屏，包含趋势、结构占比、区域排名和明细表");
+		setAiRefinePrompt("改成三列布局，增加区域筛选，切换为浅色商务风格，刷新30秒并放大字体");
+		setAiRefineMode("apply");
+		setAiResult(null);
+		setAiContextHistory([]);
+		setShowAiGenerator(true);
+	};
+	// "自动生成" 入口按钮目前被注释（见下方 JSX），但函数保留以便一键恢复。
+	// 这一行的作用只是让 TS `noUnusedLocals` 认为该变量被读取，避免构建失败。
+	void handleOpenAiGenerator;
+
+	const handleTemplateSelect = async (selection: TemplateSelection) => {
+		setShowTemplateGallery(false);
+		// Sprint-24 F3：把 intake 收集的密级 + 名称带进后续 flow，
+		// 模板复制（asset）路径继续后再到编辑器属性面板补设；
+		// local 模板路径直接写入 initialConfig，让 designer 保存时透传给后端。
+		const intakeClassification = pendingClassification;
+		const intakeDomainId = pendingDomainId;
+		const intakeName = pendingScreenName;
+		setPendingClassification(null);
+		setPendingDomainId(undefined);
+		setPendingScreenName("");
+
+		try {
+			if (selection.kind === "asset") {
+				const remoteTemplate = selection.template;
+				const response = await analyticsApi.createScreenFromTemplate(remoteTemplate.id as string | number, {
+					name: intakeName || (remoteTemplate.name || "未命名模板") + " 副本",
+					classification: intakeClassification ?? undefined,
+					domainId: intakeDomainId,
+				});
+				navigate(`/bi/screens/${response.id}/edit`);
+				return;
+			}
+
+			const config = createConfigFromTemplate(selection.template);
+			navigate("/bi/screens/new", {
+				state: {
+					initialConfig: {
+						id: "",
+						...config,
+						...(intakeName ? { name: intakeName } : {}),
+						...(intakeClassification ? { classification: intakeClassification } : {}),
+						...(intakeDomainId ? { domainId: intakeDomainId } : {}),
+					},
+				},
+			});
+		} catch (err) {
+			console.error("Failed to create screen from template:", err);
+			navigate("/bi/screens/new");
+		}
+	};
+
+	const handleGenerateAi = async () => {
+		if (aiLoading) return;
+		const prompt = aiPrompt.trim();
+		if (!prompt) {
+			message.warning("请输入业务需求描述");
+			return;
+		}
+
+		setAiLoading(true);
+		try {
+			const result = await analyticsApi.generateScreenSpec({
+				prompt,
+				width: 1920,
+				height: 1080,
+			});
+			setAiResult(result);
+			setAiContextHistory((prev) => [...prev, `初始需求: ${prompt}`].slice(-12));
+		} catch (err) {
+			console.error("Failed to generate ai screen spec:", err);
+			toast.error("AI 生成失败");
+		} finally {
+			setAiLoading(false);
+		}
+	};
+
+	const handleCreateFromAi = async () => {
+		if (aiCreating) return;
+		const spec = aiResult?.screenSpec;
+		if (!spec) {
+			message.warning("请先生成方案");
+			return;
+		}
+		const pendingVariables = aiResult?.nl2sqlDiagnostics?.pendingVariables ?? [];
+		if (pendingVariables.length > 0) {
+			const preview = pendingVariables.slice(0, 6).join("、");
+			const confirmed = window.confirm(
+				`当前仍有 ${pendingVariables.length} 个待补参数（${preview}${pendingVariables.length > 6 ? "..." : ""}），继续创建草稿吗？`,
+			);
+			if (!confirmed) {
+				return;
+			}
+		}
+
+		setAiCreating(true);
+		try {
+			const normalized = normalizeScreenConfig(spec, { id: "" });
+			const created = await analyticsApi.createScreen(
+				buildScreenPayload({
+					...normalized.config,
+					name: spec.name || normalized.config.name || "AI生成大屏草稿",
+					description: spec.description || normalized.config.description || "AI自动生成",
+				}),
+			);
+			setShowAiGenerator(false);
+			navigate(`/bi/screens/${created.id}/edit`);
+		} catch (err) {
+			console.error("Failed to create screen from ai spec:", err);
+			toast.error("创建 AI 草稿失败");
+		} finally {
+			setAiCreating(false);
+		}
+	};
+
+	const handleRefineAi = async () => {
+		if (aiRefining) return;
+		const prompt = aiRefinePrompt.trim();
+		const screenSpec = aiResult?.screenSpec;
+		if (!prompt) {
+			message.warning("请输入优化指令");
+			return;
+		}
+		if (!screenSpec) {
+			message.warning("请先生成初始方案");
+			return;
+		}
+		setAiRefining(true);
+		try {
+			const result = await analyticsApi.reviseScreenSpec({
+				prompt,
+				screenSpec: screenSpec as Record<string, unknown>,
+				context: aiContextHistory.slice(-8),
+				mode: aiRefineMode,
+			});
+			setAiResult(result);
+			setAiContextHistory((prev) => {
+				const modeLabel = aiRefineMode === "suggest" ? "建议模式" : "应用模式";
+				const next = [...prev, `优化指令(${modeLabel}): ${prompt}`];
+				if (Array.isArray(result.actions) && result.actions.length > 0) {
+					next.push(`执行结果: ${result.actions.join("；")}`);
+				}
+				return next.slice(-12);
+			});
+		} catch (err) {
+			console.error("Failed to refine ai screen spec:", err);
+			toast.error("AI 优化失败");
+		} finally {
+			setAiRefining(false);
+		}
+	};
+
+	const handleCopyAiRecommendations = async () => {
+		if (!aiResult) {
+			message.warning("请先生成 AI 方案");
+			return;
+		}
+		const payload = {
+			engine: aiResult.engine || "heuristic-v1",
+			prompt: aiResult.prompt || aiPrompt.trim(),
+			intent: aiResult.intent || {},
+			semanticModelHints: aiResult.semanticModelHints || {},
+			queryRecommendations: aiResult.queryRecommendations || [],
+			sqlBlueprints: aiResult.sqlBlueprints || [],
+			vizRecommendations: aiResult.vizRecommendations || [],
+			semanticRecall: aiResult.semanticRecall || {},
+			metricLensReferences: aiResult.metricLensReferences || [],
+			nl2sqlDiagnostics: aiResult.nl2sqlDiagnostics || {},
+			quality: aiResult.quality || {},
+			actions: aiResult.actions || [],
+		};
+		const copied = await writeTextToClipboard(JSON.stringify(payload, null, 2));
+		if (!copied) {
+			message.warning("复制失败，请稍后重试");
+			return;
+		}
+		message.success("AI建议已复制到剪贴板");
+	};
+
+	const handleEdit = (id: string | number) => {
+		window.open(resolveRouteForOpen(`/bi/screens/${id}/edit`), "_blank", "noopener,noreferrer");
+	};
+
+	const handlePreview = (id: string | number) => {
+		window.open(resolveRouteForOpen(`/bi/screens/${id}/preview`), "_blank", "noopener,noreferrer");
+	};
+
+	const handleCopyScreenLink = async (id: string | number) => {
+		const copied = await writeTextToClipboard(resolveRouteForOpen(`/bi/screens/${id}/preview`));
+		if (!copied) {
+			message.warning("复制失败，请稍后重试");
+			return;
+		}
+		message.success("大屏地址已复制");
+	};
+
+	const handleSaveAsTemplate = async (id: string | number, screenName?: string) => {
+		if (savingTemplateId !== null) return;
+
+		const suggestedName = `${(screenName || "未命名大屏").trim() || "未命名大屏"} 模板`;
+		const name = (window.prompt("请输入模板名称", suggestedName) || "").trim();
+		if (!name) {
+			return;
+		}
+
+		const categoryInput = (
+			window.prompt("模板分类（business/tech/dashboard/monitor/custom）", "custom") || "custom"
+		).trim();
+		const category = categoryInput || "custom";
+
+		setSavingTemplateId(id);
+		try {
+			await analyticsApi.createScreenTemplateFromScreen(id, {
+				name,
+				category,
+				tags: ["saved-from-screen"],
+			});
+			toast.success("已保存到模板资产中心");
+		} catch (err) {
+			console.error("Failed to create template from screen:", err);
+			toast.error("保存模板失败");
+		} finally {
+			setSavingTemplateId(null);
+		}
+	};
+
+	const handleDelete = async (id: string | number) => {
+		if (!confirm("确定要删除这个大屏吗？")) return;
+
+		try {
+			await analyticsApi.deleteScreen(id);
+			loadScreens();
+		} catch (err) {
+			console.error("Failed to delete screen:", err);
+			toast.error("删除失败");
+		}
+	};
+
+	const sanitizeFileName = (name: string) => {
+		const trimmed = (name || "").trim() || "screen";
+		return trimmed.replace(/[\\/:*?"<>|]+/g, "_");
+	};
+
+	const handleExportScreenPackage = useCallback(
+		async (screen: ScreenListItem) => {
+			if (exportingId !== null) return;
+			setExportingId(screen.id);
+			try {
+				const detail = await analyticsApi.getScreen(screen.id, { mode: "draft", fallbackDraft: true });
+				const normalized = normalizeScreenConfig(detail, { id: detail.id });
+				if (normalized.warnings.length > 0) {
+					console.warn("[screens-export] normalized warnings:", normalized.warnings);
+				}
+				const rawSpec = buildScreenPayload(normalized.config) as Record<string, unknown>;
+				const { blob, resourceCount, warnings } = await buildScreenPackageZip({
+					screenName: String(detail.name || screen.name || "screen"),
+					screenSpec: rawSpec,
+				});
+				if (warnings.length > 0) {
+					console.warn("[screens-export] resource packaging warnings:", warnings);
+				}
+				const url = URL.createObjectURL(blob);
+				const link = document.createElement("a");
+				link.href = url;
+				link.download = `${sanitizeFileName(String(detail.name || screen.name || "screen"))}-screen.zip`;
+				document.body.appendChild(link);
+				link.click();
+				document.body.removeChild(link);
+				URL.revokeObjectURL(url);
+				if (warnings.length > 0) {
+					toast.warning(`已导出大屏包，${warnings.length} 个资源未打包`);
+				} else {
+					toast.success(resourceCount > 0 ? `已导出大屏包（含 ${resourceCount} 个资源）` : "已导出大屏包");
+				}
+			} catch (err) {
+				console.error("Failed to export screen package:", err);
+				toast.error(err instanceof Error ? err.message : "导出大屏失败");
+			} finally {
+				setExportingId(null);
+			}
+		},
+		[exportingId],
+	);
+
+	const handleOpenImport = useCallback(() => {
+		if (isImporting) return;
+		setImportIntakeOpen(true);
+	}, [isImporting]);
+
+	const openDomainEditor = useCallback((screen: ScreenListItem) => {
+		const currentDomainId = typeof screen.domainId === "string" ? screen.domainId.trim() : "";
+		setDomainEditorScreen(screen);
+		setDomainEditorValue(currentDomainId || undefined);
+	}, []);
+
+	const closeDomainEditor = useCallback(() => {
+		if (domainSaving) return;
+		setDomainEditorScreen(null);
+		setDomainEditorValue(undefined);
+	}, [domainSaving]);
+
+	const handleSaveDomain = useCallback(async () => {
+		if (!domainEditorScreen || domainSaving) return;
+		const nextDomainId = domainEditorValue?.trim() || null;
+		setDomainSaving(true);
+		try {
+			const updated = await analyticsApi.updateScreenDomain(domainEditorScreen.id, nextDomainId);
+			setScreens((prev) =>
+				prev.map((item) =>
+					String(item.id) === String(domainEditorScreen.id)
+						? {
+								...item,
+								domainId: updated.domainId ?? null,
+								updatedAt: updated.updatedAt || item.updatedAt,
+							}
+						: item,
+				),
+			);
+			setDomainEditorScreen(null);
+			setDomainEditorValue(undefined);
+			toast.success("已更新所属域");
+		} catch (err) {
+			console.error("Failed to update screen domain:", err);
+			toast.error(err instanceof Error ? err.message : "更新所属域失败");
+		} finally {
+			setDomainSaving(false);
+		}
+	}, [domainEditorScreen, domainEditorValue, domainSaving]);
+
+	const handleImportIntakeSubmit = useCallback(async (payload: CreateScreenIntakePayload) => {
+		const file = payload.file;
+		if (!file) return;
+		try {
+			const imported = await parseScreenImportFile(file);
+			const source = imported.source;
+			const templateMeta = imported.templateMeta;
+			const normalized = normalizeScreenConfig(
+				{
+					...source,
+					classification: payload.classification,
+					domainId: payload.domainId,
+				},
+				{ id: "" },
+			);
+			if (normalized.warnings.length > 0) {
+				console.warn("[screens-import] normalized warnings:", normalized.warnings);
+			}
+			const validation = validateScreenPayload(buildScreenPayload(normalized.config));
+			const validationWithPackageWarnings = {
+				...validation,
+				warnings: [...validation.warnings, ...imported.warnings],
+			};
+			setImportPreview({
+				fileName: file.name,
+				parsedSpec: normalized.config,
+				templateMeta: templateMeta || undefined,
+				validation: validationWithPackageWarnings,
+				resourcesInlined: imported.resourcesInlined,
+				inlinedResourceCount: imported.inlinedResourceCount,
+				restoredResourceCount: imported.restoredResourceCount,
+				classification: payload.classification,
+				domainId: payload.domainId,
+				importName: payload.name,
+				file: payload.file,
+			});
+			setImportIntakeOpen(false);
+			if (imported.restoredResourceCount > 0) {
+				toast.success(`已恢复 ${imported.restoredResourceCount} 个大屏资源`);
+			}
+		} catch (err) {
+			console.error("Failed to parse import file:", err);
+			toast.error("大屏导入失败，请检查大屏包或 JSON 文件格式");
+		}
+	}, []);
+
+	const performImportCreate = useCallback(
+		async (override?: {
+			classification?: CreateScreenIntakePayload["classification"];
+			domainId?: string;
+			name?: string;
+		}) => {
+			if (!importPreview) return;
+			const { parsedSpec } = importPreview;
+			setIsImporting(true);
+			try {
+				const trimmedName = override?.name?.trim() || importPreview.importName?.trim();
+				const classification = override?.classification || importPreview.classification;
+				const domainId = override?.domainId ?? importPreview.domainId;
+				const spec = buildScreenPayload({
+					...parsedSpec,
+					...(classification ? { classification } : {}),
+					...(domainId ? { domainId } : {}),
+					name: trimmedName || importPreview.templateMeta?.name || parsedSpec.name || "导入大屏",
+					description: importPreview.templateMeta?.description || parsedSpec.description || "",
+				});
+				const created = await analyticsApi.createScreen(spec);
+				setImportPreview(null);
+				toast.success("已导入大屏草稿");
+				navigate(`/bi/screens/${created.id}/edit`);
+			} catch (err) {
+				console.error("Failed to import screen:", err);
+				toast.error(err instanceof Error ? err.message : "导入失败");
+			} finally {
+				setIsImporting(false);
+			}
+		},
+		[importPreview, navigate],
+	);
+
+	const handleImportConfirm = useCallback(
+		async (action: "replace" | "create-screen" | "register-template") => {
+			if (!importPreview) return;
+			if (action !== "create-screen") {
+				toast.error("大屏列表仅支持创建新大屏，请在模板资产中心注册模板");
+				return;
+			}
+			// Sprint-24 F3：后端强制 classification，先看 JSON 自带密级是否合法，
+			// 否则弹 IntakeModal 让用户补选，避免直接 400。
+			const existing = (importPreview.parsedSpec as { classification?: string | null }).classification;
+			const upper = (importPreview.classification ||
+				(typeof existing === "string" ? existing.trim().toUpperCase() : "")) as
+				| CreateScreenIntakePayload["classification"]
+				| "";
+			const validSet = new Set(["PUBLIC", "INTERNAL", "SECRET", "CONFIDENTIAL"]);
+			if (upper && validSet.has(upper)) {
+				await performImportCreate({ classification: upper, domainId: importPreview.domainId });
+				return;
+			}
+			setImportIntakeOpen(true);
+		},
+		[importPreview, performImportCreate],
+	);
+
+	const formatDate = (dateStr?: string) => {
+		if (!dateStr) return "-";
+		const date = new Date(dateStr);
+		return date.toLocaleDateString("zh-CN", {
+			year: "numeric",
+			month: "2-digit",
+			day: "2-digit",
+			hour: "2-digit",
+			minute: "2-digit",
+		});
+	};
+
+	const buildMoreMenu = (screen: ScreenListItem, rowPermissions: ScreenRowPermissions): MenuProps => {
+		const items: NonNullable<MenuProps["items"]> = [];
+		if (rowPermissions.canEdit) {
+			items.push({ key: "preview", label: "预览" });
+		}
+		if (rowPermissions.canManage) {
+			items.push({ key: "permission", label: "权限设置" });
+		}
+		items.push(
+			{ key: "copy", label: "复制链接" },
+			{ key: "publish", label: "发布", disabled: true, title: "请进入编辑器完成发布门禁" },
+		);
+		if (rowPermissions.canEdit) {
+			items.push(
+				{ type: "divider" },
+				{ key: "domain", label: "修改所属域" },
+				{ key: "export", label: exportingId === screen.id ? "导出中..." : "导出大屏", disabled: exportingId === screen.id },
+				{ key: "template", label: savingTemplateId === screen.id ? "保存中..." : "保存为模板", disabled: savingTemplateId === screen.id },
+			);
+		}
+		if (rowPermissions.canDelete) {
+			items.push({ type: "divider" }, { key: "delete", label: "删除", danger: true });
+		}
+		return {
+			items,
+			onClick: ({ key, domEvent }) => {
+				domEvent.stopPropagation();
+				switch (key) {
+					case "preview":
+						handlePreview(screen.id);
+						break;
+					case "permission":
+						if (!screen.publishedVersionNo) {
+							message.warning("只有已经发布的大屏才能进行权限设置");
+							return;
+						}
+						setAclScreenId(screen.id);
+						break;
+					case "copy":
+						void handleCopyScreenLink(screen.id);
+						break;
+					case "domain":
+						openDomainEditor(screen);
+						break;
+					case "export":
+						void handleExportScreenPackage(screen);
+						break;
+					case "template":
+						void handleSaveAsTemplate(screen.id, screen.name);
+						break;
+					case "delete":
+						void handleDelete(screen.id);
+						break;
+				}
+			},
+		};
+	};
+
+	const screenColumns: ColumnsType<ScreenListItem> = [
+		{
+			title: "名称",
+			dataIndex: "name",
+			key: "name",
+			ellipsis: { showTitle: false },
+			sorter: (left, right) => String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"),
+			render: (_value, screen) => <ScreenPreviewName screen={screen} />,
+		},
+		{
+			title: "创建者",
+			dataIndex: "creatorName",
+			key: "creatorName",
+			width: "12%",
+			sorter: (left, right) => String(left.creatorName || "").localeCompare(String(right.creatorName || ""), "zh-CN"),
+			render: (_value, screen) => {
+				const creator = screen.creatorName || (screen.creatorId == null ? "—" : `用户 ${screen.creatorId}`);
+				return <span title={creator}>{creator}</span>;
+			},
+		},
+		{
+			title: "描述",
+			dataIndex: "description",
+			key: "description",
+			ellipsis: { showTitle: false },
+			responsive: ["xl"],
+			sorter: (left, right) => String(left.description || "").localeCompare(String(right.description || ""), "zh-CN"),
+			render: (_value, screen) => (
+				<span className="text-text-secondary" title={screen.description || "无描述"}>
+					{screen.description || "无描述"}
+				</span>
+			),
+		},
+		{
+			title: "有效密级",
+			dataIndex: "classification",
+			key: "classification",
+			width: "10%",
+			responsive: ["lg"],
+			sorter: (left, right) => String(left.classification || "").localeCompare(String(right.classification || "")),
+			render: (_value, screen) => (
+				<div
+					title={[
+						"有效密级取所有展示数据的最高密级",
+						screen.manualClassificationFloor ? `人工下限：${screen.manualClassificationFloor}` : "未设置人工下限",
+						screen.classificationSnapshotVersion != null
+							? `快照版本：${screen.classificationSnapshotVersion}`
+							: "密级快照待生成",
+					].join("；")}
+				>
+					<ClassificationTag value={screen.classification ?? null} style={{ fontSize: "inherit" }} />
+				</div>
+			),
+		},
+		{
+			title: "状态",
+			dataIndex: "publishedVersionNo",
+			key: "published",
+			width: "10%",
+			responsive: ["lg"],
+			sorter: (left, right) => Number(left.publishedVersionNo || 0) - Number(right.publishedVersionNo || 0),
+			render: (_value, screen) => (
+				<span className="font-semibold text-text-primary">
+					{screen.publishedVersionNo ? `已发布 v${screen.publishedVersionNo}` : "未发布"}
+				</span>
+			),
+		},
+		{
+			title: "更新时间",
+			dataIndex: "updatedAt",
+			key: "updatedAt",
+			width: "15%",
+			responsive: ["xl"],
+			defaultSortOrder: "descend",
+			sorter: (left, right) => new Date(left.updatedAt || 0).getTime() - new Date(right.updatedAt || 0).getTime(),
+			render: (value?: string) => <span className="text-text-secondary">{formatDate(value)}</span>,
+		},
+		actionColumn<ScreenListItem>(
+			(screen) => {
+				const rowPermissions = resolveScreenRowPermissions(screen);
+				return [
+					{
+						key: "primary",
+						label: rowPermissions.canEdit ? "编辑" : "预览",
+						onClick: () => (rowPermissions.canEdit ? handleEdit(screen.id) : handlePreview(screen.id)),
+						testId: rowPermissions.canEdit
+							? `analytics-screen-edit-button-${screen.id}`
+							: `analytics-screen-preview-${screen.id}`,
+					},
+					{
+						key: "more",
+						label: (
+							<Dropdown menu={buildMoreMenu(screen, rowPermissions)} trigger={["click"]} placement="bottomRight">
+								<span data-testid={`analytics-screen-more-${screen.id}`}>更多</span>
+							</Dropdown>
+						),
+					},
+				];
+			},
+			{ maxActions: 2 },
+		),
+	];
+
+	return (
+		<ScreenListPreview>
+			<div className="space-y-4" data-testid="analytics-screens-page">
+				<div className="flex items-center justify-between gap-3 pt-1 flex-wrap">
+					<h1 className="m-0 text-xl font-semibold text-text-primary">大屏管理</h1>
+					<div className="flex gap-2.5">
+						{canSeeUnclassifiedAudit && (
+							<button
+								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-warning rounded-md bg-surface-card text-warning cursor-pointer transition-all duration-200 whitespace-nowrap hover:bg-warning/10"
+								onClick={() => setUnclassifiedOpen(true)}
+								title="盘点 classification 为空的大屏（数据管理员 / 部门领导 / 所级领导 / OP_ADMIN / superuser）"
+							>
+								大屏盘点
+							</button>
+						)}
+						<button
+							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md  bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
+							data-testid="analytics-screen-import"
+							onClick={handleOpenImport}
+							disabled={isImporting}
+							title="从大屏包（zip）或旧版 JSON 文件导入大屏（将创建为新草稿）"
+						>
+							{isImporting ? "导入中..." : "导入大屏"}
+						</button>
+						{/* <button className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed" onClick={handleOpenAiGenerator}>
+							自动生成
+						</button> */}
+						<button
+							className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-50 disabled:cursor-not-allowed"
+							data-testid="analytics-screen-create"
+							onClick={handleCreate}
+						>
+							新建大屏
+						</button>
+					</div>
+				</div>
+
+				<div className="flex min-h-[620px] gap-4 overflow-hidden">
+					<aside className="hidden w-[240px] flex-none rounded-lg border border-border-default bg-surface-card p-3 2xl:block">
+						<div className="mb-3 text-sm font-semibold text-text-primary">数据域</div>
+						<Spin spinning={domainTreeLoading}>
+							<Tree
+								blockNode
+								defaultExpandAll
+								selectedKeys={[selectedDomain || "ALL"]}
+								treeData={screenDomainTreeData}
+								onSelect={(keys) => {
+									const key = String(keys[0] || "ALL");
+									setSelectedDomain(key === "ALL" || key.startsWith("fallback-domain-") ? undefined : key);
+								}}
+							/>
+						</Spin>
+					</aside>
+
+					<div className="min-w-0 flex-1 space-y-4 overflow-hidden">
+						<div className="flex items-center justify-between gap-2.5 rounded-lg border border-border-default bg-surface-card px-4 py-3 flex-wrap">
+							<div className="flex items-center gap-2 flex-wrap">
+								<label className="2xl:hidden">
+									<span className="sr-only">数据域</span>
+									<select
+										className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+										data-testid="analytics-screen-domain-select"
+										value={selectedDomain || "ALL"}
+										onChange={(event) => {
+											const next = event.target.value;
+											setSelectedDomain(next === "ALL" ? undefined : next);
+										}}
+									>
+										<option value="ALL">全部数据域</option>
+										<option value={UNASSIGNED_DOMAIN_KEY}>未归类</option>
+										{domainOptions.map((option) => (
+											<option key={option.value} value={option.value}>
+												{option.label}
+											</option>
+										))}
+									</select>
+								</label>
+								<input
+									ref={searchInputRef}
+									className="min-w-[220px] max-w-[420px] flex-1 border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+									value={searchKeyword}
+									onChange={(e) => setSearchKeyword(e.target.value)}
+									placeholder="搜索大屏名称或描述（/）"
+								/>
+								<select
+									className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px]"
+									value={publishFilter}
+									onChange={(e) => {
+										const next = e.target.value;
+										if (next === "published" || next === "draft") {
+											setPublishFilter(next);
+											return;
+										}
+										setPublishFilter("all");
+									}}
+								>
+									<option value="all">全部状态</option>
+									<option value="published">仅已发布</option>
+									<option value="draft">仅未发布</option>
+								</select>
+								<button
+									type="button"
+									className="border border-border-default rounded-lg px-2.5 py-2 bg-surface-card text-text-primary text-[13px] cursor-pointer hover:border-brand hover:bg-brand/10"
+									onClick={() => {
+										setSearchKeyword("");
+										setPublishFilter("all");
+									}}
+									title="恢复默认筛选"
+								>
+									重置
+								</button>
+							</div>
+							<div className="text-xs text-text-secondary">
+								总计 {screens.length} · 已发布 {publishedCount} · 未发布 {draftCount} · 当前 {visibleScreens.length}
+							</div>
+						</div>
+						{loading ? (
+							<div className="flex flex-col items-center justify-center py-[60px] gap-4">
+								<div className="w-8 h-8 border-[3px] border-border-default border-t-brand rounded-full animate-spin" />
+								<span>加载中...</span>
+							</div>
+						) : error ? (
+							<div className="flex flex-col items-center justify-center py-[60px] gap-4">
+								<span>{error}</span>
+								<button onClick={loadScreens}>重试</button>
+							</div>
+						) : screens.length === 0 ? (
+							<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
+								<div className="text-5xl text-text-muted mb-4">屏</div>
+								<div className="text-sm text-text-secondary">暂无大屏</div>
+								<div className="text-xs text-text-muted mt-2">点击"新建大屏"创建您的第一个数据大屏</div>
+								<button
+									className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4"
+									onClick={handleCreate}
+								>
+									新建大屏
+								</button>
+							</div>
+						) : visibleScreens.length === 0 ? (
+							<div className="flex flex-col items-center justify-center px-5 py-10 text-center">
+								<div className="text-sm text-text-secondary">没有匹配结果</div>
+								<div className="text-xs text-text-muted mt-2">尝试清空搜索词或调整状态筛选</div>
+								<button
+									className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 mt-4"
+									onClick={() => {
+										setSearchKeyword("");
+										setPublishFilter("all");
+									}}
+								>
+									重置筛选
+								</button>
+							</div>
+						) : (
+							<CompactTable<ScreenListItem>
+								autoSort={false}
+								className="analytics-screen-table"
+								columns={screenColumns}
+								dataSource={visibleScreens}
+								rowKey={(screen) => String(screen.id)}
+								scroll={{ x: "100%" }}
+								tableLayout="fixed"
+								rowClassName={() => "bg-surface-card hover:bg-brand/5 transition-colors duration-150"}
+								pagination={{
+									current: safePage,
+									pageSize,
+									total: totalCount,
+									pageSizeOptions: ["10", "20", "50", "100"],
+									showSizeChanger: true,
+									showTotal: (total, [from, to]) => `${from}-${to} / 共 ${total} 条`,
+									onChange: (nextPage, nextSize) => {
+										if (nextSize !== pageSize) {
+											setPageSize(nextSize);
+											setCurrentPage(1);
+										} else {
+											setCurrentPage(nextPage);
+										}
+									},
+								}}
+							/>
+						)}
+					</div>
+				</div>
+			</div>
+
+			<style>{`
+				@keyframes spin {
+					to { transform: rotate(360deg); }
+				}
+			`}</style>
+
+			{showTemplateGallery && (
+				<TemplateGallery onSelect={handleTemplateSelect} onClose={() => setShowTemplateGallery(false)} />
+			)}
+
+			{/* Sprint-24 F3：新建大屏 intake，强制收集名称 + 密级。 */}
+			<CreateScreenIntakeModal
+				open={intakeOpen}
+				mode={"create"}
+				defaultName=""
+				defaultDomainId={selectedDomain && selectedDomain !== UNASSIGNED_DOMAIN_KEY ? selectedDomain : undefined}
+				domainOptions={domainOptions}
+				okText="下一步"
+				onCancel={() => setIntakeOpen(false)}
+				onSubmit={handleIntakeSubmit}
+			/>
+
+				{/* Sprint-24 F3/F5：导入大屏与新建复用 intake，一次性收集文件、名称、密级与数据域。 */}
+				<CreateScreenIntakeModal
+					open={importIntakeOpen}
+					mode={"import"}
+					title="导入大屏"
+					description="请选择大屏包（.zip）或旧版 JSON 文件，并为本次导入补齐大屏名称、密级和数据域。"
+				defaultName={importPreview?.templateMeta?.name || importPreview?.parsedSpec.name || "导入大屏"}
+				defaultDomainId={selectedDomain && selectedDomain !== UNASSIGNED_DOMAIN_KEY ? selectedDomain : undefined}
+				domainOptions={domainOptions}
+				okText="确认导入"
+				onCancel={() => setImportIntakeOpen(false)}
+				onSubmit={handleImportIntakeSubmit}
+			/>
+
+			<Modal
+				open={domainEditorScreen !== null}
+				title="修改所属业务域"
+				width={420}
+				onCancel={closeDomainEditor}
+				onOk={handleSaveDomain}
+				okText="保存"
+				cancelText="取消"
+				okButtonProps={{ loading: domainSaving }}
+				destroyOnClose
+			>
+				<div className="grid gap-3 pt-1">
+					<div className="text-sm font-medium text-text-primary">{domainEditorScreen?.name || "未命名大屏"}</div>
+					<div>
+						<div className="mb-1.5 text-xs font-medium text-text-secondary">数据域</div>
+						<Select
+							value={domainEditorValue || UNASSIGNED_DOMAIN_KEY}
+							onChange={(value) =>
+								setDomainEditorValue(value === UNASSIGNED_DOMAIN_KEY ? undefined : String(value))
+							}
+							options={domainEditorOptions}
+							style={{ width: "100%" }}
+						/>
+					</div>
+					<div className="text-xs leading-5 text-text-tertiary">
+						数据域来自主题域管理；不选择时归入未归类。
+					</div>
+				</div>
+			</Modal>
+
+			{/* Sprint-24 F4：大屏密级合规盘点入口 */}
+			<UnclassifiedScreensModal
+				open={unclassifiedOpen}
+				onClose={() => setUnclassifiedOpen(false)}
+				onJumpToScreen={(id) => {
+					setUnclassifiedOpen(false);
+					navigate(`/bi/screens/${encodeURIComponent(String(id))}/edit`);
+				}}
+			/>
+
+			{showAiGenerator && (
+				<div
+					className="fixed inset-0 bg-[rgba(10,18,32,0.6)] flex items-center justify-center z-[1400]"
+					onClick={() => setShowAiGenerator(false)}
+				>
+					<div
+						className="w-[min(920px,92vw)] max-h-[86vh] overflow-auto bg-[#0f172a] border border-white/20 rounded-xl shadow-[0_24px_80px_rgba(2,6,23,0.45)] text-[#e2e8f0]"
+						onClick={(e) => e.stopPropagation()}
+					>
+						<div className="flex justify-between items-center px-5 py-4 border-b border-white/15">
+							<h3 className="m-0">AI 生成大屏草稿</h3>
+							<button
+								className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40"
+								style={{ maxWidth: 80 }}
+								onClick={() => setShowAiGenerator(false)}
+							>
+								关闭
+							</button>
+						</div>
+						<div className="px-5 py-[18px] grid gap-3">
+							<div className="text-[13px] text-[#94a3b8]">
+								描述业务场景、核心指标、时间粒度，系统将生成可编辑大屏草稿（可再绑定真实数据源）。
+							</div>
+							<textarea
+								className="w-full min-h-[120px] border border-white/20 rounded-lg px-3 py-2.5 text-sm leading-relaxed resize-y bg-[#0b1222] text-[#e2e8f0]"
+								value={aiPrompt}
+								onChange={(e) => setAiPrompt(e.target.value)}
+								placeholder="示例：生成一个制造车间运营大屏，包含产量趋势、良率、设备告警、班组排名和明细表"
+							/>
+							<textarea
+								className="w-full min-h-[78px] border border-white/20 rounded-lg px-3 py-2.5 text-sm leading-relaxed resize-y bg-[#0b1222] text-[#e2e8f0]"
+								value={aiRefinePrompt}
+								onChange={(e) => setAiRefinePrompt(e.target.value)}
+								placeholder="优化指令示例：改成三列布局，首图改成柱状图，切换为浅色主题，增加筛选器，加tab切换场景，移除tab切换，刷新30秒，放大字体"
+							/>
+							<div className="flex items-center gap-2">
+								<label className="text-xs text-[#94a3b8] min-w-[88px]">优化模式</label>
+								<select
+									className="bg-[#0b1222] text-[#e2e8f0] border border-white/20 rounded-md px-2.5 py-1.5 text-[13px] max-w-[180px]"
+									value={aiRefineMode}
+									onChange={(e) => setAiRefineMode(e.target.value === "suggest" ? "suggest" : "apply")}
+								>
+									<option value="apply">应用模式（默认）</option>
+									<option value="suggest">建议模式（不自动发布）</option>
+								</select>
+							</div>
+							{aiContextHistory.length > 0 && (
+								<div className="border border-white/15 rounded-lg px-3 py-2.5 bg-[rgba(15,23,42,0.45)]">
+									<div className="flex justify-between items-center">
+										<div className="font-semibold text-xs">多轮上下文（最近 12 条）</div>
+										<button
+											className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40"
+											style={{ maxWidth: 100 }}
+											onClick={() => setAiContextHistory([])}
+										>
+											清空上下文
+										</button>
+									</div>
+									<ol className="mt-2 pl-[18px] grid gap-1 max-h-[140px] overflow-auto text-xs text-[#cbd5e1]">
+										{aiContextHistory.map((item, index) => (
+											<li key={`${item}-${index}`}>{item}</li>
+										))}
+									</ol>
+								</div>
+							)}
+							{aiResult?.screenSpec && (
+								<div className="border border-white/15 rounded-lg p-3 bg-[rgba(15,23,42,0.7)]">
+									<div className="font-semibold">生成预览</div>
+									<div className="grid gap-2 mt-2" style={{ gridTemplateColumns: "repeat(4, minmax(0, 1fr))" }}>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											名称: {aiResult.screenSpec.name || "-"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											主题: {aiResult.screenSpec.theme || "-"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											组件数: {(aiResult.screenSpec.components || []).length}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											质量分: {aiResult.quality?.score ?? "-"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											上下文条数: {aiResult.contextCount ?? 0}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											有效上下文: {aiResult.usedContextCount ?? aiResult.contextCount ?? 0}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											优化模式: {aiResult.applyMode || "apply"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											领域: {aiResult.intent?.domain || "-"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											时间范围: {aiResult.intent?.timeRange || "-"}
+										</div>
+										<div className="border border-white/15 rounded-md p-2 text-xs text-[#cbd5e1]">
+											粒度: {aiResult.intent?.granularity || "-"}
+										</div>
+									</div>
+									{aiResult.intent && (
+										<div className="mt-2.5 text-xs text-[#cbd5e1]">
+											识别指标：{(aiResult.intent.metrics || []).join("、") || "-"}；维度：
+											{(aiResult.intent.dimensions || []).join("、") || "-"}；筛选：
+											{(aiResult.intent.filters || []).join("、") || "-"}
+										</div>
+									)}
+									{Array.isArray(aiResult.quality?.warnings) && aiResult.quality?.warnings.length > 0 && (
+										<div className="mt-2.5 text-xs text-[#fbbf24]">{aiResult.quality?.warnings.join("；")}</div>
+									)}
+									{Array.isArray(aiResult.actions) && aiResult.actions.length > 0 && (
+										<div className="mt-2.5 text-xs text-[#38bdf8]">
+											{aiResult.applyMode === "suggest" ? "建议动作：" : "已执行："}
+											{aiResult.actions.join("；")}
+										</div>
+									)}
+									{Array.isArray(aiResult.queryRecommendations) && aiResult.queryRecommendations.length > 0 && (
+										<div className="mt-2.5 text-xs text-[#93c5fd]">
+											查询建议：
+											{aiResult.queryRecommendations.map((q) => `${q.id || "-"}(${q.purpose || "-"})`).join("；")}
+										</div>
+									)}
+									{aiResult.semanticModelHints && (
+										<div className="mt-2.5 text-xs text-[#60a5fa]">
+											语义映射：事实表 {aiResult.semanticModelHints.factTable || "-"}，时间字段{" "}
+											{aiResult.semanticModelHints.timeField || "-"}
+										</div>
+									)}
+									{Array.isArray(aiResult.sqlBlueprints) && aiResult.sqlBlueprints.length > 0 && (
+										<div className="mt-2.5 text-xs text-[#bfdbfe]">
+											SQL蓝图：
+											{aiResult.sqlBlueprints.map((row) => `${row.queryId || "-"}(${row.purpose || "-"})`).join("；")}
+										</div>
+									)}
+									{aiResult.nl2sqlDiagnostics && (
+										<div className="mt-2.5 text-xs text-[#fca5a5]">
+											NL2SQL诊断：状态 {aiResult.nl2sqlDiagnostics.status || "-"}，就绪度{" "}
+											{aiResult.nl2sqlDiagnostics.executionReadiness || "-"}，可执行{" "}
+											{aiResult.nl2sqlDiagnostics.executableBlueprintCount ?? aiResult.nl2sqlDiagnostics.safeCount ?? 0}
+											，需补参 {aiResult.nl2sqlDiagnostics.needsParamsCount ?? 0}，阻断{" "}
+											{aiResult.nl2sqlDiagnostics.blockedCount ?? 0}
+										</div>
+									)}
+									{Array.isArray(aiResult.nl2sqlDiagnostics?.requiredVariables) &&
+										aiResult.nl2sqlDiagnostics.requiredVariables.length > 0 && (
+											<div className="mt-2 text-xs text-[#fda4af]">
+												识别参数：{aiResult.nl2sqlDiagnostics.requiredVariables.slice(0, 8).join("、")}
+											</div>
+										)}
+									{Array.isArray(aiResult.nl2sqlDiagnostics?.pendingVariables) &&
+										aiResult.nl2sqlDiagnostics.pendingVariables.length > 0 && (
+											<div className="mt-2 text-xs text-[#fecdd3]">
+												待补参数：{aiResult.nl2sqlDiagnostics.pendingVariables.slice(0, 8).join("、")}
+											</div>
+										)}
+									{Array.isArray(aiResult.nl2sqlDiagnostics?.autoInjectedVariables) &&
+										aiResult.nl2sqlDiagnostics.autoInjectedVariables.length > 0 && (
+											<div className="mt-2 text-xs text-[#fdba74]">
+												自动补齐变量：{aiResult.nl2sqlDiagnostics.autoInjectedVariables.slice(0, 8).join("、")}
+											</div>
+										)}
+									{Array.isArray(aiResult.nl2sqlDiagnostics?.blueprintChecks) &&
+										aiResult.nl2sqlDiagnostics!.blueprintChecks!.length > 0 && (
+											<div className="mt-2 text-xs text-[#fecaca]">
+												蓝图检查：
+												{aiResult
+													.nl2sqlDiagnostics!.blueprintChecks!.slice(0, 6)
+													.map((row) => `${String(row.queryId || "-")}:${String(row.status || "-")}`)
+													.join("；")}
+											</div>
+										)}
+									{aiResult.semanticRecall && (
+										<div className="mt-2.5 text-xs text-[#86efac]">
+											语义召回：候选表/字段 {aiResult.semanticRecall.schemaCandidates?.length ?? 0}，同义词命中{" "}
+											{aiResult.semanticRecall.synonymHits?.length ?? 0}，few-shot{" "}
+											{aiResult.semanticRecall.fewShotExamples?.length ?? 0}
+										</div>
+									)}
+									{Array.isArray(aiResult.vizRecommendations) && aiResult.vizRecommendations.length > 0 && (
+										<div className="mt-2.5 text-xs text-[#a7f3d0]">
+											图表建议：
+											{aiResult.vizRecommendations
+												.map((v) => `${v.componentType || "-"}←${v.queryId || "-"}`)
+												.join("；")}
+										</div>
+									)}
+								</div>
+							)}
+						</div>
+						<div className="flex justify-end gap-2.5 px-5 py-3.5 border-t border-white/15">
+							<button
+								className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								style={{ maxWidth: 100 }}
+								onClick={() => setShowAiGenerator(false)}
+							>
+								取消
+							</button>
+							<button
+								className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								style={{ maxWidth: 120 }}
+								onClick={handleGenerateAi}
+								disabled={aiLoading}
+							>
+								{aiLoading ? "生成中..." : "生成方案"}
+							</button>
+							<button
+								className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								style={{ maxWidth: 130 }}
+								onClick={handleRefineAi}
+								disabled={aiRefining || !aiResult?.screenSpec}
+							>
+								{aiRefining ? "优化中..." : "按指令优化"}
+							</button>
+							<button
+								className="flex-none py-2 px-3 border border-white/20 rounded-md bg-[rgba(30,41,59,0.8)] text-[#e2e8f0] text-xs cursor-pointer hover:bg-[rgba(51,65,85,0.9)] hover:border-white/40 disabled:opacity-40 disabled:cursor-not-allowed"
+								style={{ maxWidth: 130 }}
+								onClick={handleCopyAiRecommendations}
+								disabled={!aiResult}
+							>
+								复制建议
+							</button>
+							<button
+								className="inline-flex items-center justify-center h-8 px-4 text-sm font-normal leading-normal border border-brand rounded-md bg-brand text-white cursor-pointer transition-all duration-200 whitespace-nowrap hover:opacity-85 disabled:opacity-40 disabled:cursor-not-allowed"
+								onClick={handleCreateFromAi}
+								disabled={aiCreating || !aiResult?.screenSpec}
+							>
+								{aiCreating ? "创建中..." : "创建草稿"}
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+			<ScreenAclPanel
+				open={aclScreenId != null}
+				screenId={aclScreenId ?? undefined}
+				onClose={() => {
+					setAclScreenId(null);
+					// 关闭权限面板后刷新列表，确保密级 / 共享名单的修改在卡片上立即可见
+					loadScreens();
+				}}
+				isOwner={aclScreenPermissions?.canManage === true}
+			/>
+			{importPreview && (
+				<ImportPreviewModal
+					isOpen={!!importPreview}
+					onClose={() => setImportPreview(null)}
+					fileName={importPreview.fileName}
+					parsedSpec={importPreview.parsedSpec}
+					templateMeta={importPreview.templateMeta}
+					validation={importPreview.validation}
+					resourcesInlined={importPreview.resourcesInlined}
+					inlinedResourceCount={importPreview.inlinedResourceCount}
+					restoredResourceCount={importPreview.restoredResourceCount}
+					mode="list"
+					onConfirm={handleImportConfirm}
+				/>
+			)}
+		</ScreenListPreview>
+	);
+}

@@ -1,0 +1,126 @@
+version: 2
+
+models:
+  - name: it_demo_dwd_dim_date
+    description: "统一公历日期维度。"
+    columns:
+      - name: date_key
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+
+  - name: it_demo_dwd_dim_org
+    description: "Demo 组织当前维度。"
+    columns:
+      - name: org_code
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+
+  - name: it_demo_dwd_dim_project
+    description: "Demo 项目当前维度。"
+    columns:
+      - name: project_code
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: owner_org_code
+        tests:
+          - relationships:
+              arguments:
+                to: ref('it_demo_dwd_dim_org')
+                field: org_code
+              config:
+                severity: error
+
+  - name: it_demo_dwd_fct_task_snapshot
+    description: "一个项目任务在一个快照日期一行的周期快照事实。"
+    columns:
+      - name: task_snapshot_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: snapshot_date
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: project_code
+        tests:
+          - relationships:
+              arguments:
+                to: ref('it_demo_dwd_dim_project')
+                field: project_code
+              config:
+                severity: error
+      - name: task_status_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - TS-NOT-STARTED
+                  - TS-IN-PROGRESS
+                  - TS-DONE
+                  - TS-OVERDUE
+              config:
+                severity: error
+      - name: risk_level_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - RL-LOW
+                  - RL-MID
+                  - RL-HIGH
+              config:
+                severity: error
+
+  - name: it_demo_dws_project_health
+    description: "按项目和快照日期汇总的项目健康模型。"
+    columns:
+      - name: project_health_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error
+      - name: health_status_code
+        tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - PH-GREEN
+                  - PH-AMBER
+                  - PH-RED
+              config:
+                severity: error
+
+  - name: it_demo_ads_project_overview
+    description: "面向 BI、API 和数据产品的项目健康概览。"
+    columns:
+      - name: project_overview_id
+        tests:
+          - not_null:
+              config:
+                severity: error
+          - unique:
+              config:
+                severity: error

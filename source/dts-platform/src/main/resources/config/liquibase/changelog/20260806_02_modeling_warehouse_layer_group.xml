@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260806-02-modeling-warehouse-layer-group" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_warehouse_layer"/>
+            <not>
+                <columnExists tableName="modeling_warehouse_layer" columnName="layer_group"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add the DataWorks-aligned layer group (STAGING/COMMON/APPLICATION) to the global
+            custom warehouse-layer registry. The group is derived from the immutable system layer
+            code, so it is stable for the life of the row; built-in layers expose the same group
+            from the code contract.
+        </comment>
+
+        <addColumn tableName="modeling_warehouse_layer">
+            <column name="layer_group" type="varchar(16)"/>
+        </addColumn>
+
+        <sql>
+            update modeling_warehouse_layer
+               set layer_group = case system_layer_code
+                   when 'ODS_RAW' then 'STAGING'
+                   when 'ODS_STANDARDIZED' then 'STAGING'
+                   when 'STG' then 'STAGING'
+                   when 'DWD' then 'COMMON'
+                   when 'DWS' then 'COMMON'
+                   when 'ADS' then 'APPLICATION'
+               end
+             where layer_group is null;
+
+            alter table modeling_warehouse_layer
+                alter column layer_group set not null;
+
+            alter table modeling_warehouse_layer
+                add constraint ck_modeling_warehouse_layer_group
+                check (layer_group in ('STAGING', 'COMMON', 'APPLICATION'));
+        </sql>
+
+        <rollback>
+            <sql>alter table modeling_warehouse_layer drop column layer_group;</sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

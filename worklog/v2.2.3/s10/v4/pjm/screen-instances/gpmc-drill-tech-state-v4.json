@@ -1,0 +1,1141 @@
+{
+  "schemaVersion": 3,
+  "id": "gpmc-drill-tech-state-v4",
+  "name": "执行层-技术状态与跟进明细",
+  "description": "技术状态变更钻取页面，分区展示变更全量清单、签署整改摘要及未闭环变更跟进表。",
+  "classification": "INTERNAL",
+  "width": 1920,
+  "height": 1080,
+  "backgroundColor": "#115AAD",
+  "theme": "dark-command",
+  "globalVariables": [
+    {
+      "key": "dateFrom",
+      "label": "开始日期",
+      "type": "date",
+      "defaultValue": "2024-01-01"
+    },
+    {
+      "key": "dateTo",
+      "label": "结束日期",
+      "type": "date",
+      "defaultValue": "2026-12-31"
+    },
+    {
+      "key": "projectNo",
+      "label": "项目编号",
+      "type": "string"
+    },
+    {
+      "key": "deptId",
+      "label": "事业部/科室",
+      "type": "string"
+    },
+    {
+      "key": "riskLevel",
+      "label": "风险等级",
+      "type": "string"
+    }
+  ],
+  "components": [
+    {
+      "id": "drill-tech-header-bar",
+      "type": "shape",
+      "name": "drill-tech-header-bar",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 56,
+      "zIndex": 5,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(14, 47, 96, 0.90)",
+        "borderColor": "rgba(14, 47, 96, 0.90)",
+        "borderWidth": 0,
+        "radius": 0
+      }
+    },
+    {
+      "id": "drill-tech-title",
+      "type": "title",
+      "name": "执行层-技术状态与跟进明细",
+      "x": 20,
+      "y": 12,
+      "width": 500,
+      "height": 32,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "执行层-技术状态与跟进明细",
+        "fontSize": 22,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-badge",
+      "type": "title",
+      "name": "只读执行页",
+      "x": 1760,
+      "y": 14,
+      "width": 140,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "只读执行页",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center",
+        "backgroundColor": "rgba(88, 180, 255, 0.20)",
+        "borderRadius": 14
+      }
+    },
+    {
+      "id": "drill-tech-back-shape",
+      "type": "shape",
+      "name": "返回技术状态看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 60,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(88, 180, 255, 0.20)",
+        "borderColor": "rgba(39, 216, 255, 0.22)",
+        "borderWidth": 1,
+        "radius": 14
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-tech-back-label",
+      "type": "title",
+      "name": "返回技术状态看板",
+      "x": 1600,
+      "y": 14,
+      "width": 150,
+      "height": 28,
+      "zIndex": 61,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "← 返回技术状态看板",
+        "fontSize": 13,
+        "fontWeight": "600",
+        "color": "#ffffff",
+        "textAlign": "center"
+      },
+      "actions": []
+    },
+    {
+      "id": "drill-tech-kpi-1",
+      "type": "number-card",
+      "name": "签署完成率",
+      "x": 20,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "技术状态变更单签署完成率",
+        "value": "66.7",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_tech_signature_rate",
+          "displayName": "技术状态变更单签署完成率",
+          "domain": "技术状态",
+          "category": "签署率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "变更单中已完成签署的占比",
+          "formula": "已完成签署数 ÷ (已完成签署数 + 未完成签署 I+II+III) × 100%",
+          "scope": "全量,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80,
+            "critical": 70,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #12 pjm_tech_signature_rate"
+        },
+        "metricCode": "pjm_tech_signature_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-kpi-2",
+      "type": "number-card",
+      "name": "整改完成率",
+      "x": 490,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "整改落实完成率(I, II类)",
+        "value": "75.0",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_tech_reform_rate",
+          "displayName": "整改落实完成率(I, II类)",
+          "domain": "技术状态",
+          "category": "整改率",
+          "unit": "%",
+          "direction": "UP",
+          "definition": "I/II 类变更单中已落实整改的占比(III 类不涉及整改)",
+          "formula": "已落实整改(I,II类) ÷ (已落实整改 + 未落实整改) × 100%",
+          "scope": "仅 I/II 类变更单,截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80,
+            "critical": 70,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #13 pjm_tech_reform_rate"
+        },
+        "metricCode": "pjm_tech_reform_rate"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-kpi-3",
+      "type": "number-card",
+      "name": "未签署比率",
+      "x": 960,
+      "y": 70,
+      "width": 456,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "变更单未签署比率",
+        "value": "22.2",
+        "unit": "%",
+        "precision": 1,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_tech_unsigned_ratio",
+          "displayName": "变更单未签署比率",
+          "domain": "技术状态",
+          "category": "预警",
+          "unit": "%",
+          "direction": "DOWN",
+          "definition": "新增变更单中尚未完成签署的占比",
+          "formula": "未完成签署(I+II+III) ÷ (I+II+III 类新增总数) × 100%",
+          "scope": "受顶部时间筛选器控制(分母);分子截止结束时间",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 20,
+            "critical": 35,
+            "rule": ">"
+          },
+          "excelRef": "二次指标 #15 pjm_tech_unsigned_ratio"
+        },
+        "metricCode": "pjm_tech_unsigned_ratio"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT CASE WHEN (SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))=0 THEN 0 ELSE ROUND(SUM(order_signed_cnt)::numeric/(SUM(order_signed_cnt)+SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric*100,2) END AS \"签署完成率\", CASE WHEN (SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))=0 THEN 0 ELSE ROUND(SUM(reform_done_i_ii)::numeric/(SUM(reform_done_i_ii)+SUM(reform_pending_i_ii))::numeric*100,2) END AS \"整改完成率\", CASE WHEN SUM(total_change_cnt)=0 THEN 0 ELSE ROUND((SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii))::numeric/SUM(total_change_cnt)::numeric*100,2) END AS \"未签署比率\" FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-kpi-4",
+      "type": "number-card",
+      "name": "技术健康度",
+      "x": 1430,
+      "y": 70,
+      "width": 470,
+      "height": 90,
+      "zIndex": 10,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "技术状态健康度评分",
+        "value": "74",
+        "unit": "",
+        "precision": 0,
+        "titleColor": "#ffffff",
+        "valueColor": "#ffffff",
+        "backgroundColor": "transparent",
+        "borderRadius": 12,
+        "fontSize": 36,
+        "metricNote": {
+          "code": "pjm_tech_health_score",
+          "displayName": "技术状态健康度评分",
+          "domain": "技术状态",
+          "category": "健康度",
+          "unit": "分",
+          "direction": "UP",
+          "definition": "综合签署率/整改率/未签署比率得出的健康度评分",
+          "formula": "签署完成率 × 40% + 整改落实率 × 40% + (100 − 未签署比率) × 20%",
+          "scope": "需技术状态三项子指标均有数据",
+          "sourceTable": "技术状态信息汇总表",
+          "frequency": "每日 01:00 刷新",
+          "thresholds": {
+            "warning": 80,
+            "critical": 70,
+            "rule": "<"
+          },
+          "excelRef": "二次指标 #16 pjm_tech_health_score"
+        },
+        "metricCode": "pjm_tech_health_score"
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT SUM(order_signed_cnt) AS order_signed_cnt, SUM(order_unsigned_cat_i)+SUM(order_unsigned_cat_ii)+SUM(order_unsigned_cat_iii) AS order_unsigned_total, SUM(reform_done_i_ii) AS reform_done_i_ii, SUM(reform_pending_i_ii) AS reform_pending_i_ii, SUM(total_change_cnt) AS total_change_cnt FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT ROUND((CASE WHEN (order_signed_cnt+order_unsigned_total)=0 THEN 0 ELSE order_signed_cnt::numeric/(order_signed_cnt+order_unsigned_total)::numeric*100 END)*0.4 + (CASE WHEN (reform_done_i_ii+reform_pending_i_ii)=0 THEN 0 ELSE reform_done_i_ii::numeric/(reform_done_i_ii+reform_pending_i_ii)::numeric*100 END)*0.4 + (100 - CASE WHEN total_change_cnt=0 THEN 0 ELSE order_unsigned_total::numeric/total_change_cnt::numeric*100 END)*0.2, 2) AS \"技术健康度\" FROM agg",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-detail-table",
+      "type": "table",
+      "name": "技术状态变更全量清单",
+      "x": 38,
+      "y": 244,
+      "width": 1144,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "技术状态变更全量清单",
+        "header": [
+          "项目编号",
+          "技术状态名称",
+          "更改项目",
+          "负责人",
+          "责任科室",
+          "更改类别",
+          "文件签署状态",
+          "整改状态",
+          "签署完成",
+          "提交时间",
+          "签署闭环日期"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "更改类别": {
+            "kind": "field",
+            "displayName": "更改类别",
+            "definition": "技术状态更改的影响等级分类。",
+            "enumValues": [
+              {
+                "code": "I",
+                "label": "Ⅰ类更改",
+                "description": "影响最大的更改,需走完整评估评审签署流程"
+              },
+              {
+                "code": "II",
+                "label": "Ⅱ类更改",
+                "description": "影响中等的更改,需评审签署"
+              },
+              {
+                "code": "III",
+                "label": "Ⅲ类更改",
+                "description": "影响最小的更改,简化流程,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: 罗马数字/阿拉伯数字/汉字一/二/三都归一化为 I/II/III"
+          },
+          "文件签署状态": {
+            "kind": "field",
+            "displayName": "文件签署状态",
+            "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+            "enumValues": [
+              {
+                "code": "已提出需求,未评估评审",
+                "label": "已提出需求,未评估评审",
+                "description": "I/II 类: 已发起更改但未完成评估评审"
+              },
+              {
+                "code": "已评估评审,未签署",
+                "label": "已评估评审,未签署",
+                "description": "I/II 类: 已完成评估评审但未签署"
+              },
+              {
+                "code": "已评估评审,已签署",
+                "label": "已评估评审,已签署",
+                "description": "I/II 类: 评审与签署均完成(已闭环)"
+              },
+              {
+                "code": "已提出需求,未签署",
+                "label": "已提出需求,未签署",
+                "description": "III 类: 已发起但未签署"
+              },
+              {
+                "code": "已提出需求,已签署",
+                "label": "已提出需求,已签署",
+                "description": "III 类: 已签署(已闭环)"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          },
+          "签署完成": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          }
+        },
+        "description": "事实明细表：展示统计周期内技术状态变更事实、签署状态、整改状态和闭环日期。",
+        "tableRole": "事实明细表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 130,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", CASE WHEN is_signature_completed THEN '是' ELSE '否' END AS \"签署完成\", change_submit_time AS \"提交时间\", signature_closure_date AS \"签署闭环日期\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-side-panel",
+      "type": "table",
+      "name": "技术状态签署整改摘要",
+      "x": 1238,
+      "y": 244,
+      "width": 644,
+      "height": 342,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "技术状态签署整改摘要",
+        "header": [
+          "指标",
+          "数值",
+          "说明"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "变更总数": {
+            "code": "pjm_tech_total_changes",
+            "displayName": "技术状态变更单总数",
+            "domain": "技术状态",
+            "category": "基础",
+            "unit": "个",
+            "direction": "NEUTRAL",
+            "definition": "周期内新增的全部 I/II/III 类技术状态更改单总数",
+            "formula": "新增 I 类更改 + 新增 II 类更改 + 新增 III 类更改",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #49+#50+#51"
+          },
+          "I类": {
+            "code": "pjm_tech_new_changes_i",
+            "displayName": "新增 I 类更改数",
+            "domain": "技术状态",
+            "category": "更改分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内新增的 I 类技术状态更改单数(影响最大)",
+            "formula": "更改类别='I' 且 更改提出时间在[开始,结束]内的更改计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #49"
+          },
+          "II类": {
+            "code": "pjm_tech_new_changes_ii",
+            "displayName": "新增 II 类更改数",
+            "domain": "技术状态",
+            "category": "更改分类",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "周期内新增的 II 类技术状态更改单数",
+            "formula": "更改类别='II' 且 更改提出时间在[开始,结束]内的更改计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #50"
+          },
+          "III类": {
+            "code": "pjm_tech_new_changes_iii",
+            "displayName": "新增 III 类更改数",
+            "domain": "技术状态",
+            "category": "更改分类",
+            "unit": "个",
+            "direction": "NEUTRAL",
+            "definition": "周期内新增的 III 类技术状态更改单数(影响最小)",
+            "formula": "更改类别='III' 且 更改提出时间在[开始,结束]内的更改计数",
+            "scope": "受顶部时间筛选器控制",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #51"
+          },
+          "已签署": {
+            "code": "pjm_tech_signed_total",
+            "displayName": "已完成签署变更单数",
+            "domain": "技术状态",
+            "category": "签署",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "技术状态变更单中已完成签署的数量",
+            "formula": "完成签署='是' 的变更单计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #64"
+          },
+          "未签署": {
+            "code": "pjm_tech_unsigned_total",
+            "displayName": "技术状态变更单未完成签署(I, II, III类)",
+            "domain": "技术状态",
+            "category": "签署",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "尚未完成签署的全部技术状态变更单数",
+            "formula": "完成签署='否' 的变更单计数 = I 类未签 + II 类未签 + III 类未签",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #63"
+          },
+          "已整改": {
+            "code": "pjm_tech_reform_done_i_ii",
+            "displayName": "已落实整改(I, II类)",
+            "domain": "技术状态",
+            "category": "整改",
+            "unit": "个",
+            "direction": "UP",
+            "definition": "I/II 类技术状态变更单中已落实整改的数量",
+            "formula": "更改类别∈(I, II) 且 整改落实状态='已落实整改' 的变更单计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #66"
+          },
+          "待整改": {
+            "code": "pjm_tech_reform_pending_i_ii",
+            "displayName": "未落实整改(I, II类)",
+            "domain": "技术状态",
+            "category": "整改",
+            "unit": "个",
+            "direction": "DOWN",
+            "definition": "I/II 类技术状态变更单中尚未落实整改的数量",
+            "formula": "更改类别∈(I, II) 且 整改落实状态='未落实整改' 的变更单计数",
+            "scope": "全量,截止结束时间",
+            "sourceTable": "技术状态信息汇总表",
+            "frequency": "每日 01:00 刷新",
+            "thresholds": null,
+            "excelRef": "原始指标 #65"
+          }
+        },
+        "description": "指标摘要表：按月度汇总展示变更类别、签署完成和整改落实情况。",
+        "tableRole": "指标摘要表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 116,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "WITH agg AS (SELECT COALESCE(SUM(total_change_cnt),0)::numeric AS total_change_cnt, COALESCE(SUM(new_cat_i),0)::numeric AS new_cat_i, COALESCE(SUM(new_cat_ii),0)::numeric AS new_cat_ii, COALESCE(SUM(new_cat_iii),0)::numeric AS new_cat_iii, COALESCE(SUM(order_signed_cnt),0)::numeric AS order_signed_cnt, (COALESCE(SUM(order_unsigned_cat_i),0)+COALESCE(SUM(order_unsigned_cat_ii),0)+COALESCE(SUM(order_unsigned_cat_iii),0))::numeric AS order_unsigned_cnt, COALESCE(SUM(reform_done_i_ii),0)::numeric AS reform_done_i_ii, COALESCE(SUM(reform_pending_i_ii),0)::numeric AS reform_pending_i_ii FROM biz_dws_tech_state_monthly_v2 WHERE period_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND period_month <= to_char({{dateTo}}::date, 'YYYY-MM') [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]]) SELECT v.metric AS \"指标\", v.value AS \"数值\", v.note AS \"说明\" FROM agg CROSS JOIN LATERAL (VALUES ('变更总数', agg.total_change_cnt, '统计周期内技术状态变更单总量'), ('I类', agg.new_cat_i, '新增I类技术状态变更数'), ('II类', agg.new_cat_ii, '新增II类技术状态变更数'), ('III类', agg.new_cat_iii, '新增III类技术状态变更数'), ('已签署', agg.order_signed_cnt, '已完成文件签署的变更单数'), ('未签署', agg.order_unsigned_cnt, '截至统计周期仍未完成签署的变更单数'), ('已整改', agg.reform_done_i_ii, 'I/II类已落实整改的变更单数'), ('待整改', agg.reform_pending_i_ii, 'I/II类尚未落实整改的变更单数')) AS v(metric,value,note)",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-support-table",
+      "type": "table",
+      "name": "未闭环技术状态跟进表",
+      "x": 38,
+      "y": 704,
+      "width": 1844,
+      "height": 320,
+      "zIndex": 18,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "title": "未闭环技术状态跟进表",
+        "header": [
+          "项目编号",
+          "技术状态名称",
+          "更改项目",
+          "负责人",
+          "责任科室",
+          "更改类别",
+          "文件签署状态",
+          "整改状态",
+          "受影响文件",
+          "受影响对象",
+          "计划签署闭环",
+          "计划整改闭环"
+        ],
+        "data": [],
+        "fontSize": 14,
+        "headerAlign": "center",
+        "headerColor": "#ffffff",
+        "headerBackground": "#092657",
+        "bodyColor": "#ffffff",
+        "bodyBackground": "rgba(4, 24, 68, 0.78)",
+        "oddRowBackground": "rgba(7, 33, 84, 0.88)",
+        "evenRowBackground": "rgba(12, 55, 118, 0.78)",
+        "borderColor": "rgba(97, 181, 255, 0.30)",
+        "enableSort": true,
+        "enablePagination": true,
+        "pageSize": 8,
+        "freezeHeader": true,
+        "columnNotes": {
+          "更改类别": {
+            "kind": "field",
+            "displayName": "更改类别",
+            "definition": "技术状态更改的影响等级分类。",
+            "enumValues": [
+              {
+                "code": "I",
+                "label": "Ⅰ类更改",
+                "description": "影响最大的更改,需走完整评估评审签署流程"
+              },
+              {
+                "code": "II",
+                "label": "Ⅱ类更改",
+                "description": "影响中等的更改,需评审签署"
+              },
+              {
+                "code": "III",
+                "label": "Ⅲ类更改",
+                "description": "影响最小的更改,简化流程,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: 罗马数字/阿拉伯数字/汉字一/二/三都归一化为 I/II/III"
+          },
+          "文件签署状态": {
+            "kind": "field",
+            "displayName": "文件签署状态",
+            "definition": "技术状态变更文件的签署流程节点。I/II 类与 III 类流程不同。",
+            "enumValues": [
+              {
+                "code": "已提出需求,未评估评审",
+                "label": "已提出需求,未评估评审",
+                "description": "I/II 类: 已发起更改但未完成评估评审"
+              },
+              {
+                "code": "已评估评审,未签署",
+                "label": "已评估评审,未签署",
+                "description": "I/II 类: 已完成评估评审但未签署"
+              },
+              {
+                "code": "已评估评审,已签署",
+                "label": "已评估评审,已签署",
+                "description": "I/II 类: 评审与签署均完成(已闭环)"
+              },
+              {
+                "code": "已提出需求,未签署",
+                "label": "已提出需求,未签署",
+                "description": "III 类: 已发起但未签署"
+              },
+              {
+                "code": "已提出需求,已签署",
+                "label": "已提出需求,已签署",
+                "description": "III 类: 已签署(已闭环)"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": null
+          },
+          "整改状态": {
+            "kind": "field",
+            "displayName": "整改状态",
+            "definition": "I/II 类技术状态变更单的整改落实状态。III 类不涉及整改。",
+            "enumValues": [
+              {
+                "code": "已落实整改",
+                "label": "已落实整改",
+                "description": "I/II 类: 已完成整改落实"
+              },
+              {
+                "code": "未落实整改",
+                "label": "未落实整改",
+                "description": "I/II 类: 整改尚未落实"
+              },
+              {
+                "code": "不涉及",
+                "label": "不涉及",
+                "description": "III 类变更单,不涉及整改要求"
+              }
+            ],
+            "sourceTable": "技术状态信息汇总表",
+            "note": "数据规范化: '已完成'/'完成' 归为'已落实整改';'无' 归为'不涉及'"
+          },
+          "签署完成": {
+            "kind": "field",
+            "displayName": "是/否(布尔)",
+            "definition": "通用布尔字段,如'是否完成签署'。",
+            "enumValues": [
+              {
+                "code": "是",
+                "label": "是",
+                "description": "肯定/已完成/已签署"
+              },
+              {
+                "code": "否",
+                "label": "否",
+                "description": "否定/未完成/未签署"
+              }
+            ],
+            "sourceTable": "通用",
+            "note": "数据规范化: Y/YES/TRUE/已*/是 → 是; N/NO/FALSE/未*/否 → 否"
+          }
+        },
+        "description": "跟进处置表：聚焦未签署或待整改变更单，展示受影响文件、对象和计划闭环时间。",
+        "tableRole": "跟进处置表",
+        "headerFontSize": 14,
+        "rowHoverBackground": "rgba(74, 158, 255, 0.22)",
+        "autoPageSize": true,
+        "minColumnWidth": 132,
+        "freezeFirstColumn": true
+      },
+      "dataSource": {
+        "type": "sql",
+        "sqlConfig": {
+          "databaseId": "{{DATABASE_ID}}",
+          "query": "SELECT project_no AS \"项目编号\", tech_state_name AS \"技术状态名称\", change_item AS \"更改项目\", owner AS \"负责人\", dept AS \"责任科室\", change_category AS \"更改类别\", file_signature_status AS \"文件签署状态\", reform_status AS \"整改状态\", affected_files AS \"受影响文件\", affected_objects AS \"受影响对象\", plan_file_closure_date AS \"计划签署闭环\", plan_reform_date AS \"计划整改闭环\" FROM biz_dwd_tech_state_v2 WHERE submit_month >= to_char({{dateFrom}}::date, 'YYYY-MM') AND submit_month <= to_char({{dateTo}}::date, 'YYYY-MM') AND (COALESCE(is_signature_completed,false) = false OR COALESCE(is_reform_pending,false) = true) [[AND dept = {{deptId}}]] [[AND project_no = {{projectNo}}]] ORDER BY change_submit_time DESC NULLS LAST",
+          "queryTimeoutSeconds": 30,
+          "maxRows": 2000,
+          "parameterBindings": [
+            {
+              "name": "dateFrom",
+              "variableKey": "dateFrom"
+            },
+            {
+              "name": "dateTo",
+              "variableKey": "dateTo"
+            },
+            {
+              "name": "deptId",
+              "variableKey": "deptId"
+            },
+            {
+              "name": "projectNo",
+              "variableKey": "projectNo"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-bg",
+      "type": "shape",
+      "name": "主明细区",
+      "x": 20,
+      "y": 176,
+      "width": 1180,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-title",
+      "type": "title",
+      "name": "技术状态变更全量清单",
+      "x": 38,
+      "y": 190,
+      "width": 540,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态变更全量清单",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-detail-section-desc",
+      "type": "title",
+      "name": "技术状态变更全量清单说明",
+      "x": 38,
+      "y": 218,
+      "width": 1124,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "事实明细表：展示统计周期内技术状态变更事实、签署状态、整改状态和闭环日期。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-side-section-bg",
+      "type": "shape",
+      "name": "摘要洞察区",
+      "x": 1220,
+      "y": 176,
+      "width": 680,
+      "height": 438,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-side-section-title",
+      "type": "title",
+      "name": "技术状态签署整改摘要",
+      "x": 1238,
+      "y": 190,
+      "width": 420,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "技术状态签署整改摘要",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-side-section-desc",
+      "type": "title",
+      "name": "技术状态签署整改摘要说明",
+      "x": 1238,
+      "y": 218,
+      "width": 624,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "指标摘要表：按月度汇总展示变更类别、签署完成和整改落实情况。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-support-section-bg",
+      "type": "shape",
+      "name": "跟进处置区",
+      "x": 20,
+      "y": 632,
+      "width": 1880,
+      "height": 420,
+      "zIndex": 8,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "shapeType": "rect",
+        "fillColor": "rgba(5, 28, 78, 0.64)",
+        "borderColor": "rgba(88, 180, 255, 0.34)",
+        "borderWidth": 1,
+        "radius": 14
+      }
+    },
+    {
+      "id": "drill-tech-support-section-title",
+      "type": "title",
+      "name": "未闭环技术状态跟进表",
+      "x": 38,
+      "y": 646,
+      "width": 620,
+      "height": 26,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "未闭环技术状态跟进表",
+        "fontSize": 18,
+        "fontWeight": "700",
+        "color": "#ffffff",
+        "textAlign": "flex-start"
+      }
+    },
+    {
+      "id": "drill-tech-support-section-desc",
+      "type": "title",
+      "name": "未闭环技术状态跟进表说明",
+      "x": 38,
+      "y": 674,
+      "width": 1760,
+      "height": 24,
+      "zIndex": 22,
+      "locked": false,
+      "visible": true,
+      "config": {
+        "text": "跟进处置表：聚焦未签署或待整改变更单，展示受影响文件、对象和计划闭环时间。",
+        "fontSize": 13,
+        "fontWeight": "500",
+        "color": "#b9e7ff",
+        "textAlign": "flex-start"
+      }
+    }
+  ]
+}

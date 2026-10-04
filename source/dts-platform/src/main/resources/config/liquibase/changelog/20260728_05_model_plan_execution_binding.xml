@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260728_05_model_plan_execution_binding" author="platform">
+        <comment>
+            Sprint-76 F4/T02: one plan/environment/execution-target binding owns the published
+            ModelSpec scope consumed by the existing Airflow release-build DAG. The first contract
+            is deliberately MANUAL_ONLY; scheduling policy is not inferred during publication.
+        </comment>
+
+        <createTable tableName="modeling_plan_execution_binding">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="plan_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="environment" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="execution_target_key" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="int" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="schedule_mode" type="varchar(32)" defaultValue="MANUAL_ONLY">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cron_expression" type="varchar(128)"/>
+            <column name="timezone" type="varchar(64)"/>
+            <column name="desired_scope_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="desired_deployment_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dag_id" type="varchar(250)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deployment_status" type="varchar(32)" defaultValue="DEPLOYING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="deployed_checksum" type="varchar(64)"/>
+            <column name="last_deployment_at" type="timestamp"/>
+            <column name="last_error_code" type="varchar(128)"/>
+            <column name="last_error_message" type="varchar(2048)"/>
+            <column name="created_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_by" type="varchar(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_modified_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_plan_execution_binding"
+            columnNames="tenant_id,plan_id,environment,execution_target_key"
+            constraintName="uk_model_plan_execution_binding_scope"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_plan_execution_binding"
+            baseColumnNames="plan_id"
+            constraintName="fk_model_plan_execution_binding_plan"
+            referencedTableName="modeling_warehouse_plan"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <createTable tableName="modeling_plan_execution_binding_entry">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="binding_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="published_release_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_revision" type="int">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dbt_unique_id" type="varchar(256)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_identifier" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="artifact_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="dependency_snapshot_checksum" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_date" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="modeling_plan_execution_binding_entry"
+            columnNames="binding_id,model_spec_id"
+            constraintName="uk_model_plan_execution_binding_entry_model"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_plan_execution_binding_entry"
+            baseColumnNames="binding_id"
+            constraintName="fk_model_plan_execution_binding_entry_binding"
+            referencedTableName="modeling_plan_execution_binding"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_plan_execution_binding_entry"
+            baseColumnNames="model_spec_id"
+            constraintName="fk_model_plan_execution_binding_entry_model"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_plan_execution_binding_entry"
+            baseColumnNames="published_release_id"
+            constraintName="fk_model_plan_execution_binding_entry_release"
+            referencedTableName="modeling_model_lifecycle_event"
+            referencedColumnNames="id"
+            onDelete="RESTRICT"/>
+
+        <createIndex tableName="modeling_plan_execution_binding_entry" indexName="idx_model_plan_execution_binding_entry_release">
+            <column name="published_release_id"/>
+        </createIndex>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_plan_execution_binding
+                ADD CONSTRAINT ck_model_plan_execution_binding_payload
+                CHECK (
+                    version > 0
+                    AND schedule_mode = 'MANUAL_ONLY'
+                    AND cron_expression IS NULL
+                    AND timezone IS NULL
+                    AND desired_scope_checksum ~ '^[0-9a-f]{64}$'
+                    AND desired_deployment_checksum ~ '^[0-9a-f]{64}$'
+                    AND deployment_status IN ('DEPLOYING', 'DEPLOYED', 'FAILED')
+                    AND (deployed_checksum IS NULL OR deployed_checksum ~ '^[0-9a-f]{64}$')
+                );
+            ALTER TABLE modeling_plan_execution_binding_entry
+                ADD CONSTRAINT ck_model_plan_execution_binding_entry_payload
+                CHECK (
+                    model_revision > 0
+                    AND artifact_checksum ~ '^[0-9a-f]{64}$'
+                    AND dependency_snapshot_checksum ~ '^[0-9a-f]{64}$'
+                    AND dbt_unique_id ~ '^model\.[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$'
+                    AND target_identifier ~ '^[A-Za-z_][A-Za-z0-9_]*$'
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (SELECT 1 FROM modeling_plan_execution_binding_entry)
+                       OR EXISTS (SELECT 1 FROM modeling_plan_execution_binding) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_PLAN_EXECUTION_BINDING_DATA_EXISTS';
+                    END IF;
+                END
+                $$;
+            ]]></sql>
+            <dropTable tableName="modeling_plan_execution_binding_entry"/>
+            <dropTable tableName="modeling_plan_execution_binding"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

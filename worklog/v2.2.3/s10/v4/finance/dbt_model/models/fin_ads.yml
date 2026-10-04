@@ -1,0 +1,242 @@
+version: 2
+
+models:
+  - name: biz_ads_own_fund_kpi
+    description: "自有资金年度 KPI：按年度×基金类别输出余额、使用率、净变动率和同比增长率。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: year_num
+        description: "会计年度"
+        data_type: integer
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: fund_category_code
+        description: "基金类别稳定编码"
+        data_type: text
+      - name: fund_category_label
+        description: "基金类别中文名称"
+        data_type: text
+      - name: fund_category_sort
+        description: "基金类别展示顺序"
+        data_type: integer
+      - name: opening_amount
+        description: "年初余额（万元）"
+        data_type: numeric(15,2)
+      - name: increase_amount
+        description: "预计增加额（万元）"
+        data_type: numeric(15,2)
+      - name: usage_amount
+        description: "预计使用额（万元）"
+        data_type: numeric(15,2)
+      - name: year_end_balance
+        description: "年末余额（万元）"
+        data_type: numeric(15,2)
+      - name: usage_rate
+        description: "基金使用率"
+        data_type: numeric
+      - name: net_change_rate
+        description: "相对年初余额的净变动率"
+        data_type: numeric
+      - name: year_over_year_growth_rate
+        description: "年末余额同比增长率"
+        data_type: numeric
+      - name: usage_rate_level
+        description: "使用率告警等级"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['healthy', 'warning', 'danger']
+              config:
+                severity: error
+      - name: net_change_direction
+        description: "净变动方向"
+        data_type: text
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['positive', 'negative', 'flat']
+              config:
+                severity: error
+      - name: source_count
+        description: "已覆盖的基金来源类别数"
+        data_type: bigint
+      - name: record_count
+        description: "明细记录数"
+        data_type: numeric
+      - name: is_complete_sources
+        description: "是否覆盖完整基金来源"
+        data_type: boolean
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_ads_project_fund_kpi
+    description: "项目经费 KPI：按汇总范围输出经费、执行率、收款和超支指标。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: summary_scope
+        description: "汇总范围类型"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: scope_key
+        description: "汇总范围稳定编码"
+        data_type: text
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: scope_label
+        description: "汇总范围中文名称"
+        data_type: text
+      - name: project_count
+        description: "项目去重数"
+        data_type: bigint
+      - name: record_count
+        description: "项目经费记录数"
+        data_type: bigint
+      - name: major_project_count
+        description: "重大项目数"
+        data_type: bigint
+      - name: completed_project_count
+        description: "已完成项目数"
+        data_type: bigint
+      - name: sum_total_fund
+        description: "总经费合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_direct_ctrl
+        description: "直接成本控制数合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_reserve_indirect
+        description: "预留间接费用和收益合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_direct_spent
+        description: "直接成本支出合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_indirect_spent
+        description: "间接费用支出合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_total_spent
+        description: "项目支出合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_remaining_fund
+        description: "正向剩余经费合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_overspend_amount
+        description: "超支金额合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_received_fund
+        description: "已收款合计（万元）"
+        data_type: numeric(15,2)
+      - name: sum_receivable_fund
+        description: "待收经费合计（万元）"
+        data_type: numeric(15,2)
+      - name: overall_direct_rate
+        description: "整体直接成本执行率"
+        data_type: numeric
+      - name: overall_total_rate
+        description: "整体总经费执行率"
+        data_type: numeric
+      - name: overall_indirect_rate
+        description: "整体间接费用执行率"
+        data_type: numeric
+      - name: overall_received_rate
+        description: "整体已收款比例"
+        data_type: numeric
+      - name: overall_receivable_rate
+        description: "整体待收经费比例"
+        data_type: numeric
+      - name: direct_rate_over_100_count
+        description: "直接成本执行率超过 100% 的项目数"
+        data_type: bigint
+      - name: total_rate_over_100_count
+        description: "总经费执行率超过 100% 的项目数"
+        data_type: bigint
+      - name: avg_cycle_month_span
+        description: "平均研制周期月数"
+        data_type: numeric
+      - name: earliest_cycle_start_date
+        description: "最早研制开始日期"
+        data_type: date
+      - name: latest_cycle_end_date
+        description: "最晚研制结束日期"
+        data_type: date
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_ads_aux_balance_kpi
+    description: "合同辅助核算 KPI：输出余额、科目、合同和部门总览。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: total_balance
+        description: "合同辅助核算净余额（元）"
+        data_type: numeric(15,2)
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: total_abs_balance
+        description: "余额绝对值合计（元）"
+        data_type: numeric(15,2)
+      - name: subject_count
+        description: "科目去重数"
+        data_type: bigint
+      - name: contract_count
+        description: "合同去重数"
+        data_type: bigint
+      - name: dept_count
+        description: "部门去重数"
+        data_type: bigint
+      - name: record_count
+        description: "明细记录数"
+        data_type: bigint
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone
+
+  - name: biz_ads_aux_balance_personal_kpi
+    description: "个人辅助核算 KPI：输出净余额、借贷方余额和人员规模。"
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: net_balance
+        description: "个人辅助核算净余额（元）"
+        data_type: numeric(15,2)
+        tests:
+          - not_null:
+              config:
+                severity: error
+      - name: debit_total
+        description: "借方余额合计（元）"
+        data_type: numeric(15,2)
+      - name: credit_total
+        description: "贷方余额合计（元）"
+        data_type: numeric(15,2)
+      - name: employee_count
+        description: "职工去重数"
+        data_type: bigint
+      - name: subject_count
+        description: "科目去重数"
+        data_type: bigint
+      - name: dept_count
+        description: "部门去重数"
+        data_type: bigint
+      - name: record_count
+        description: "明细记录数"
+        data_type: bigint
+      - name: etl_time
+        description: "模型产出时间"
+        data_type: timestamp with time zone

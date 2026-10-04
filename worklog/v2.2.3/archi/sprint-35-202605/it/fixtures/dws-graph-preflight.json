@@ -1,0 +1,13 @@
+{
+  "base": "dws_order_day",
+  "measures": ["order_amount"],
+  "dimensions": ["stat_date"],
+  "nodes": [
+    {
+      "id": "dws_order_day",
+      "role": "BASE",
+      "warehouseLayer": "DWS",
+      "grain": ["stat_date"]
+    }
+  ]
+}

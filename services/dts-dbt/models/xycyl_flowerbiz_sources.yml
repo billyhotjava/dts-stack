@@ -1,0 +1,47 @@
+version: 2
+
+sources:
+  - name: "xycyl_ods"
+    schema: "public"
+    description: |
+      馨懿诚绿植租摆（xycyl）报花域 ODS 源表声明。
+      ODS 镜像来源: rs_cloud_flower（MySQL 业务库）入湖结果。
+      ODS 只负责落地与追溯（字段全部 varchar），业务语义统一经 STG 收敛。
+
+      schema: public — 遵循 dts-stack 默认数据湖约定，所有层级（ODS/STG/DWD/DWS/ADS）
+      落同一个 schema，靠表前缀（ods_ptr_mysql_*/xycyl_stg_*/xycyl_dwd_*/...）区分层次。
+      参考 worklog/v2.2.3/s10/v4/pjm/pm_sources_v2.yml 的 schema=public 约定。
+    tables:
+      - name: "flower_biz_info"
+        identifier: "ods_ptr_mysql_t_flower_biz_info"
+        description: "报花单主表 — 业务事实表源头。每行 = 一张报花单 = 一次 bizType 实例。"
+      - name: "flower_biz_item"
+        identifier: "ods_ptr_mysql_t_flower_biz_item"
+        description: "报花明细 — 每行 = 一个摆位上一棵绿植（多对一至 flower_biz_info，软外键）。"
+      - name: "flower_biz_item_detailed"
+        identifier: "ods_ptr_mysql_t_flower_biz_item_detailed"
+        description: "报花子项明细 — 关联实摆 p_project_green_item，本 sprint 仅注册 source。"
+      - name: "change_info"
+        identifier: "ods_ptr_mysql_t_change_info"
+        description: "变更单 — 报花单 status≥4 后的金额/起租期/规格变更。"
+      - name: "recovery_info"
+        identifier: "ods_ptr_mysql_t_recovery_info"
+        description: "回收主表 — bizType=3 撤摆 / 4 调拨 触发，控制实际回收节奏。"
+      - name: "recovery_info_item"
+        identifier: "ods_ptr_mysql_t_recovery_info_item"
+        description: "回收明细 — recovery_type 决定货物去向（报损/回购/留用）。"
+      - name: "flower_biz_log"
+        identifier: "ods_ptr_mysql_t_flower_biz_log"
+        description: "报花单操作日志 — 状态机流水，承载审批/驳回/备货/入库/结算等操作追溯。"
+      - name: "flower_extra_cost"
+        identifier: "ods_ptr_mysql_t_flower_extra_cost"
+        description: "报花单额外费用 — 运费/人工/税费/垃圾清理 等附加成本。"
+      - name: "flower_rent_time_log"
+        identifier: "ods_ptr_mysql_t_flower_rent_time_log"
+        description: "起租期变更日志 — start_lease_time 事后改动追溯。"
+      - name: "project"
+        identifier: "ods_ptr_mysql_p_project"
+        description: "项目主数据简化镜像 — 仅供报花 JOIN，完整模型在 sprint-24 摆放域建。"
+      - name: "customer"
+        identifier: "ods_ptr_mysql_p_customer"
+        description: "客户主数据简化镜像 — 仅供报花 JOIN。"

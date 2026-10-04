@@ -1,0 +1,344 @@
+{
+  "revision": "2a815d4271b5d410771f4951fe38274c740bd402",
+  "delivery": {
+    "status": 200,
+    "body": {
+      "status": 200,
+      "message": "OK",
+      "code": null,
+      "data": {
+        "modelSpecId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+        "modelRevision": 7,
+        "modelChecksum": "e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd",
+        "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+        "environment": "dev",
+        "candidate": {
+          "id": "23530616-daad-4272-b731-c24018cea1a3",
+          "version": 8,
+          "status": "PUBLISHED",
+          "entryRevision": 7,
+          "entryChecksum": "e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd",
+          "matchesCurrentModel": true,
+          "updatedAt": "2026-09-08T00:26:15.146665Z"
+        },
+        "observedAt": "2026-09-08T00:38:46.392292865Z",
+        "recommendedStep": "verification",
+        "workspace": {
+          "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+          "state": "READY",
+          "candidate": {
+            "id": "23530616-daad-4272-b731-c24018cea1a3",
+            "tenantId": "default",
+            "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+            "environment": "dev",
+            "status": "PUBLISHED",
+            "version": 8,
+            "idempotencyKey": "build-intent-create:c3ceca5d87d9e8bd9986773bb5c3332a92ba9b8a571dfe402a804dc6684776be",
+            "requestHash": "cd69ca85d1f9c415882b2de8bb31bb66d886be3eedcd467432850536f7f74ada",
+            "audit": {
+              "createdBy": "xiezm",
+              "createdAt": "2026-09-07T23:54:46.372025Z",
+              "submittedBy": null,
+              "submittedAt": null,
+              "approvedBy": null,
+              "approvedAt": null,
+              "publishedBy": "xiezm",
+              "publishedAt": "2026-09-08T00:06:38.524111Z"
+            },
+            "lastModifiedBy": "xiezm",
+            "lastModifiedAt": "2026-09-08T00:26:15.146665Z",
+            "entries": [
+              {
+                "id": "49e7cbc7-1f38-4af8-a63a-3e6ef260a876",
+                "tenantId": "default",
+                "candidateId": "23530616-daad-4272-b731-c24018cea1a3",
+                "planId": "d01c183f-3067-41f4-af50-27e33e7c7c81",
+                "modelSpecId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+                "revision": 7,
+                "checksum": "e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd",
+                "implementationId": "3f2856f0-1ea2-463e-9959-0aea3a5bc5f8",
+                "implementationMode": "DBT_MANAGED",
+                "status": "PUBLISHED",
+                "sortOrder": 0,
+                "selectedReason": "single-model build intent"
+              }
+            ],
+            "origin": "SCHEMA_ONLY_INTENT",
+            "executionTargetKey": "postgres-primary",
+            "adapter": "postgres",
+            "profileKey": "dts",
+            "targetName": "dev"
+          },
+          "evidence": [
+            {
+              "type": "ARTIFACT",
+              "state": "PASSED",
+              "code": null,
+              "message": null
+            },
+            {
+              "type": "BUILD_RUN",
+              "state": "PASSED",
+              "code": null,
+              "message": null
+            },
+            {
+              "type": "QUALITY_RUN",
+              "state": "PASSED",
+              "code": null,
+              "message": null
+            },
+            {
+              "type": "REVIEW",
+              "state": "UNAVAILABLE",
+              "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+              "message": "No current evidence is available"
+            },
+            {
+              "type": "PUBLICATION",
+              "state": "PASSED",
+              "code": null,
+              "message": null
+            },
+            {
+              "type": "REGISTRATION",
+              "state": "PASSED",
+              "code": null,
+              "message": null
+            },
+            {
+              "type": "ROLLBACK",
+              "state": "UNAVAILABLE",
+              "code": "MODEL_RELEASE_EVIDENCE_NOT_AVAILABLE",
+              "message": "No current evidence is available"
+            }
+          ],
+          "entryEvidence": [
+            {
+              "candidateEntryId": "49e7cbc7-1f38-4af8-a63a-3e6ef260a876",
+              "modelSpecId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+              "modelName": "S104 F3 汇总验收 2300",
+              "modelRevision": 7,
+              "implementationRevision": 2,
+              "targetRelation": "biadmin.public.dws_s104_f3_2300",
+              "runStatus": "BUILT",
+              "relationState": "VERIFIED",
+              "pipelineRunGroupId": "3f4d0340-a5b8-3b4a-b83b-5af77e21db5c",
+              "dbtInvocationId": "f2991dcc-5721-4c0b-83fe-3d8c0899221b",
+              "airflowDagId": "dts_release_build_postgres_primary",
+              "airflowRunId": "dts_rc_23530616daad4272b731c24018cea1a3_v2_a1",
+              "attempt": 1,
+              "startedAt": "2026-09-07T23:54:46.787738Z",
+              "finishedAt": "2026-09-07T23:55:07.015890Z",
+              "observedAt": "2026-09-07T23:55:05.556647Z",
+              "repairCode": null
+            }
+          ],
+          "governanceQuality": {
+            "required": true,
+            "state": "PASSED",
+            "code": null,
+            "message": null,
+            "maxAgeSeconds": 86400,
+            "evidence": [
+              {
+                "assetKey": "source:a0000000-0000-0000-0000-000000000001/schema:public/table:dws_s104_f3_2300",
+                "ruleId": "f0ce195f-4544-44b6-9c41-9e13e1b73ddc",
+                "ruleVersionId": "f34b9b42-09c3-4a36-9a74-acdf97c3af35",
+                "bindingId": "8d8032a4-fc43-4975-8dcc-f25fcc27aa50",
+                "runId": "25481e8a-75ee-495e-9b55-52465580b815",
+                "status": "SUCCEEDED",
+                "finishedAt": "2026-09-07T16:05:38.224592Z",
+                "evidenceChecksum": "2e0afb7950aa00fb53b4fb478125ad64b420409d4fed34e466ae4fa340cf84e7",
+                "violations": []
+              }
+            ]
+          },
+          "primaryBlocker": null,
+          "allowedActions": [
+            "CREATE_CANDIDATE",
+            "ROLLBACK"
+          ],
+          "etag": "\"release-candidate:23530616-daad-4272-b731-c24018cea1a3:8\""
+        },
+        "wizard": [
+          {
+            "key": "definition",
+            "canView": true,
+            "canEdit": true,
+            "reasonCode": null,
+            "primaryAction": {
+              "code": "FORK_DRAFT",
+              "enabled": true,
+              "reasonCode": null,
+              "targetId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+              "expectedVersion": 7
+            }
+          },
+          {
+            "key": "implementation",
+            "canView": true,
+            "canEdit": false,
+            "reasonCode": "MODEL_AUTHORING_READONLY",
+            "primaryAction": {
+              "code": "NEXT",
+              "enabled": true,
+              "reasonCode": null,
+              "targetId": null,
+              "expectedVersion": null
+            }
+          },
+          {
+            "key": "verification",
+            "canView": true,
+            "canEdit": true,
+            "reasonCode": null,
+            "primaryAction": {
+              "code": "RETURN_TO_MODELS",
+              "enabled": true,
+              "reasonCode": null,
+              "targetId": null,
+              "expectedVersion": null
+            }
+          },
+          {
+            "key": "delivery",
+            "canView": true,
+            "canEdit": false,
+            "reasonCode": "MODEL_DATA_MODULE_REQUIRED",
+            "primaryAction": null
+          }
+        ],
+        "steps": [
+          {
+            "key": "materialization",
+            "state": "SUCCEEDED",
+            "reasonCode": null,
+            "message": "物化已完成",
+            "evidenceRevision": 8,
+            "matchesCurrentTarget": true,
+            "resourceId": "23530616-daad-4272-b731-c24018cea1a3",
+            "updatedAt": "2026-09-08T00:26:15.146665Z",
+            "outputs": []
+          },
+          {
+            "key": "quality",
+            "state": "SUCCEEDED",
+            "reasonCode": null,
+            "message": "质量检查已通过",
+            "evidenceRevision": 8,
+            "matchesCurrentTarget": true,
+            "resourceId": "23530616-daad-4272-b731-c24018cea1a3",
+            "updatedAt": "2026-09-08T00:26:15.146665Z",
+            "outputs": []
+          },
+          {
+            "key": "publication",
+            "state": "SUCCEEDED",
+            "reasonCode": null,
+            "message": "发布已完成",
+            "evidenceRevision": 8,
+            "matchesCurrentTarget": true,
+            "resourceId": "23530616-daad-4272-b731-c24018cea1a3",
+            "updatedAt": "2026-09-08T00:26:15.146665Z",
+            "outputs": []
+          },
+          {
+            "key": "catalog",
+            "state": "SUCCEEDED",
+            "reasonCode": null,
+            "message": "资产已登记",
+            "evidenceRevision": null,
+            "matchesCurrentTarget": true,
+            "resourceId": "01d94b75-7aa1-30c1-bed9-43799853c01e",
+            "updatedAt": "2026-09-08T00:26:29.696867Z",
+            "outputs": [
+              {
+                "resourceId": "01d94b75-7aa1-30c1-bed9-43799853c01e",
+                "state": "SUCCEEDED",
+                "reasonCode": null,
+                "message": "资产已登记",
+                "matchesCurrentTarget": true,
+                "updatedAt": null
+              }
+            ]
+          },
+          {
+            "key": "analysis",
+            "state": "SUCCEEDED",
+            "reasonCode": null,
+            "message": "分析准备已完成",
+            "evidenceRevision": null,
+            "matchesCurrentTarget": true,
+            "resourceId": "01d94b75-7aa1-30c1-bed9-43799853c01e",
+            "updatedAt": "2026-09-08T00:26:29.696867Z",
+            "outputs": [
+              {
+                "resourceId": "01d94b75-7aa1-30c1-bed9-43799853c01e",
+                "state": "SUCCEEDED",
+                "reasonCode": null,
+                "message": "分析准备已完成",
+                "matchesCurrentTarget": true,
+                "updatedAt": "2026-09-08T00:26:29.696867Z"
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "code": "OPEN_VISUAL",
+            "enabled": true,
+            "reasonCode": null,
+            "targetId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+            "expectedVersion": 7
+          },
+          {
+            "code": "OPEN_CODE",
+            "enabled": true,
+            "reasonCode": null,
+            "targetId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+            "expectedVersion": 7
+          },
+          {
+            "code": "FORK_DRAFT",
+            "enabled": true,
+            "reasonCode": null,
+            "targetId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+            "expectedVersion": 7
+          },
+          {
+            "code": "CREATE_CANDIDATE",
+            "enabled": true,
+            "reasonCode": null,
+            "targetId": "23530616-daad-4272-b731-c24018cea1a3",
+            "expectedVersion": 8
+          },
+          {
+            "code": "ROLLBACK",
+            "enabled": true,
+            "reasonCode": null,
+            "targetId": "23530616-daad-4272-b731-c24018cea1a3",
+            "expectedVersion": 8
+          }
+        ],
+        "modelingResult": {
+          "state": "SUCCEEDED",
+          "reasonCode": null,
+          "modelSpecId": "cab6861d-035e-4c33-897c-24a9827d5cff",
+          "modelRevision": 7,
+          "modelChecksum": "e3f4e996ddc5c646f476a05ce1f68d8b17c31fd4ccb2ace3ae6324a55d72cfcd",
+          "implementationRevision": 2,
+          "implementationChecksum": "b8c718032e117ff86a382e335ab14a7d77a21cff8afd199174a74d151d37b0b7",
+          "buildMode": "SCHEMA_ONLY",
+          "environment": "dev",
+          "candidateId": "23530616-daad-4272-b731-c24018cea1a3",
+          "runGroupId": "3f4d0340-a5b8-3b4a-b83b-5af77e21db5c",
+          "targetRelation": "biadmin.public.dws_s104_f3_2300",
+          "matchesCurrentTarget": true,
+          "observedAt": "2026-09-07T23:55:05.556647Z"
+        },
+        "dataPrimaryAction": null
+      }
+    }
+  }
+}

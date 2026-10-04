@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260501-06-add-lineage-validity-columns" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_dataset_lineage" columnName="valid_from"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_dataset_lineage">
+            <column name="valid_from" type="timestamp"/>
+            <column name="valid_to" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260501-07-backfill-lineage-valid-from" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <columnExists tableName="catalog_dataset_lineage" columnName="valid_from"/>
+        </preConditions>
+        <sql>
+            update catalog_dataset_lineage
+               set valid_from = coalesce(created_date, last_observed_at, now())
+             where valid_from is null
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260501-08-replace-lineage-relation-unique-with-current-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <uniqueConstraintExists tableName="catalog_dataset_lineage" constraintName="uk_catalog_dataset_lineage_relation"/>
+        </preConditions>
+        <dropUniqueConstraint tableName="catalog_dataset_lineage" constraintName="uk_catalog_dataset_lineage_relation"/>
+    </changeSet>
+
+    <changeSet id="20260501-09-create-current-lineage-unique-index" author="codex" dbms="postgresql">
+        <sql>
+            create unique index if not exists uk_catalog_dataset_lineage_current_relation
+                on catalog_dataset_lineage (upstream_dataset_id, downstream_dataset_id, relation_type)
+             where valid_to is null
+        </sql>
+    </changeSet>
+
+    <changeSet id="20260501-10-create-lineage-validity-indexes" author="codex" dbms="postgresql">
+        <sql>
+            create index if not exists idx_catalog_dataset_lineage_validity
+                on catalog_dataset_lineage (valid_from, valid_to);
+            create index if not exists idx_catalog_dataset_lineage_up_validity
+                on catalog_dataset_lineage (upstream_dataset_id, valid_from);
+            create index if not exists idx_catalog_dataset_lineage_down_validity
+                on catalog_dataset_lineage (downstream_dataset_id, valid_from);
+        </sql>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260802-03-catalog-model-serving-projection" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_release_candidate"/>
+            <tableExists tableName="modeling_materialization_dispatch"/>
+            <tableExists tableName="modeling_physical_relation_observation"/>
+            <not>
+                <tableExists tableName="modeling_catalog_model_serving_projection"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add separate latest-published and serving pointers for one stable logical ModelSpec
+            Catalog identity. References contain immutable IDs/checksums only, never sample rows,
+            SQL, connection strings, credentials or runtime tokens.
+        </comment>
+
+        <createTable tableName="modeling_catalog_model_serving_projection">
+            <column name="tenant_id" type="varchar(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="model_spec_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="catalog_asset_type" type="varchar(64)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="catalog_asset_key" type="varchar(512)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="latest_published_ref" type="jsonb">
+                <constraints nullable="false"/>
+            </column>
+            <column name="serving_ref" type="jsonb"/>
+            <column name="version" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sync_status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sync_attempts" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_sync_error" type="varchar(128)"/>
+            <column name="next_sync_at" type="${datetimeType}"/>
+            <column name="created_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="${datetimeType}">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey
+            tableName="modeling_catalog_model_serving_projection"
+            columnNames="tenant_id, model_spec_id"
+            constraintName="pk_catalog_model_serving_projection"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_catalog_model_serving_projection"
+            baseColumnNames="tenant_id, model_spec_id"
+            constraintName="fk_catalog_model_serving_model_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="tenant_id, id"
+            onDelete="RESTRICT"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_catalog_model_serving_projection
+                ADD CONSTRAINT ck_catalog_model_serving_projection
+                CHECK (
+                    btrim(tenant_id) <> ''
+                    AND catalog_asset_type = 'SEMANTIC_MODEL'
+                    AND catalog_asset_key ~ '^semantic-model:[a-z0-9][a-z0-9._:-]{0,510}$'
+                    AND jsonb_typeof(latest_published_ref) = 'object'
+                    AND (
+                        serving_ref IS NULL
+                        OR jsonb_typeof(serving_ref) = 'object'
+                    )
+                    AND version > 0
+                    AND sync_status IN ('SYNC_PENDING', 'SYNCED', 'SYNC_FAILED')
+                    AND sync_attempts >= 0
+                    AND (
+                        sync_status <> 'SYNC_FAILED'
+                        OR (last_sync_error IS NOT NULL AND btrim(last_sync_error) <> '')
+                    )
+                    AND updated_at >= created_at
+                );
+
+            CREATE UNIQUE INDEX uk_catalog_model_serving_asset
+                ON modeling_catalog_model_serving_projection (
+                    tenant_id, catalog_asset_type, catalog_asset_key
+                );
+
+            CREATE INDEX idx_catalog_model_serving_sync_retry
+                ON modeling_catalog_model_serving_projection (
+                    sync_status, next_sync_at, updated_at, model_spec_id
+                )
+                WHERE sync_status IN ('SYNC_PENDING', 'SYNC_FAILED');
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1 FROM modeling_catalog_model_serving_projection
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_CATALOG_MODEL_SERVING_PROJECTION_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropTable tableName="modeling_catalog_model_serving_projection"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

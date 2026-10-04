@@ -1,0 +1,26 @@
+Sprint-67 F2-T02 category and policy versioning evidence
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Automated verification:
+- WarehousePlanContractTest, WarehousePlanResourceTest and adjacent F2 unit tests: included in 60/60 PASS.
+- WarehousePlanApplicationServiceIT: 13/13 PASS.
+- CatalogDomainResolutionAdapterIT: 7/7 PASS.
+- F2 related PostgreSQL integration total: 20/20 PASS.
+
+Live Chrome95 verification:
+- opadmin authenticated against https://bi.yuzhicloud.com.
+- category PUT persisted the active PUBLIC domain and advanced business_scope_version 1 -> 2.
+- a second PUT with stale If-Match category-scope:1 returned HTTP 409,
+  WAREHOUSE_PLAN_EDIT_UNIT_VERSION_CONFLICT and currentVersion=2.
+- policy PUT persisted layer/naming/history/time-zone/conceptual-design and advanced policy_version 1 -> 2.
+- policy readiness returned IMPLEMENTATION_READY.
+
+Database evidence before cleanup:
+- domain_id=4f215444-dfa7-4287-a135-76b93c6a847a, confirmation_status=CONFIRMED.
+- layer=CLASSIC_ODS_DWD_DWS_ADS, naming=CLASSIC_LOWER_SNAKE.
+- history=PRESERVE_BUSINESS_HISTORY, default_time_zone=Asia/Shanghai.
+
+Cleanup:
+- the isolated plan, domain binding and policy were deleted by exact fixture UUID.
+- residual plan/domain/policy counts: 0/0/0.

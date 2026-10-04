@@ -1,0 +1,180 @@
+import { Alert, Button, Col, Row, Space } from "antd";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import workbenchService, { type LeaderOverviewResponse } from "@/api/services/workbenchService";
+import { auditLog } from "@/utils/audit";
+import { CoreAssetsBlock } from "./components/CoreAssetsBlock";
+import { DomainMatrix } from "./components/DomainMatrix";
+import { KpiRow } from "./components/KpiRow";
+import { ScreenStrip } from "./components/ScreenStrip";
+import { TopReportsBlock } from "./components/TopReportsBlock";
+import { initialFilterState, WorkbenchFilterBar, type WorkbenchFilterState } from "./components/WorkbenchFilterBar";
+import { useWorkbenchRole } from "./hooks/useWorkbenchRole";
+
+/**
+ * Sprint-15 F5/T04 — Leader-overview workbench page shell.
+ *
+ * Assembles the sticky filter bar (F3) on top, a KPI row (F4/T01),
+ * optional business-domain heat strip (F4/T03, INST_LEADER only),
+ * and the TOP reports / core assets columns (F5 wave A) below a
+ * compact published-screen strip.
+ *
+ * Fetches `/workbench/leader-overview` on mount and on any filter
+ * change, debounced by 150 ms. Errors surface as a retryable Alert.
+ */
+
+const DEBOUNCE_MS = 150;
+
+export type LeaderOverviewPageProps = {
+	visibleComponentKeys?: ReadonlySet<string>;
+};
+
+export function LeaderOverviewPage({ visibleComponentKeys }: LeaderOverviewPageProps = {}) {
+	const roleInfo = useWorkbenchRole();
+	const [filter, setFilter] = useState<WorkbenchFilterState>(() => initialFilterState(roleInfo));
+	const [data, setData] = useState<LeaderOverviewResponse | null>(null);
+	const [loading, setLoading] = useState<boolean>(true);
+	const [error, setError] = useState<Error | null>(null);
+	const [domainLabels, setDomainLabels] = useState<Readonly<Record<string, string>>>({});
+
+	// Page-enter audit (once per role/dept identity).
+	useEffect(() => {
+		auditLog("WORKBENCH_OVERVIEW_VIEW", {
+			role: roleInfo.role,
+			deptCode: roleInfo.deptCode,
+		});
+	}, [roleInfo.role, roleInfo.deptCode]);
+
+	// Re-seed filter when the effective role or department changes (e.g. login swap).
+	useEffect(() => {
+		setFilter(initialFilterState(roleInfo));
+	}, [roleInfo.role, roleInfo.deptCode]);
+
+	const fetchData = useCallback(async (f: WorkbenchFilterState, signal: AbortSignal): Promise<void> => {
+		if (signal.aborted) return;
+		setLoading(true);
+		setError(null);
+		try {
+			const resp = await workbenchService.leaderOverview({
+				scope: f.scope,
+				deptCode: f.deptCode,
+				bizDomain: f.bizDomain,
+				timeRange: f.timeRange,
+			});
+			if (signal.aborted) return;
+			setData(resp);
+		} catch (ex: unknown) {
+			if (signal.aborted) return;
+			setError(ex instanceof Error ? ex : new Error(String(ex)));
+		} finally {
+			if (!signal.aborted) setLoading(false);
+		}
+	}, []);
+
+	// Serialize filter so rapid changes collapse into a single trailing fetch.
+	const filterKey = useMemo(() => JSON.stringify(filter), [filter]);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		const id = setTimeout(() => {
+			void fetchData(filter, controller.signal);
+		}, DEBOUNCE_MS);
+		return () => {
+			clearTimeout(id);
+			controller.abort();
+		};
+		// `filter` is structurally identified by filterKey; avoid thrashing on identity-only changes.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [filterKey, fetchData]);
+
+	const handleRetry = useCallback((): void => {
+		const controller = new AbortController();
+		void fetchData(filter, controller.signal);
+	}, [fetchData, filter]);
+
+	const handleDomainSelect = useCallback((domain: string | null): void => {
+		setFilter((prev) => ({ ...prev, bizDomain: domain }));
+	}, []);
+
+	const isComponentVisible = useCallback(
+		(key: string): boolean => !visibleComponentKeys || visibleComponentKeys.has(key),
+		[visibleComponentKeys],
+	);
+
+	const showMatrix =
+		isComponentVisible("leader-kpi") &&
+		roleInfo.isInstLeader &&
+		filter.bizDomainAvailable &&
+		(data?.domainMatrix?.length ?? 0) > 0;
+
+	return (
+		<div data-testid="platform-workbench-page">
+			<WorkbenchFilterBar value={filter} onChange={setFilter} onDomainLabelsChange={setDomainLabels} />
+
+			<div style={{ padding: 16 }}>
+				<Space direction="vertical" size={16} style={{ width: "100%" }}>
+					{isComponentVisible("screen-strip") && <ScreenStrip />}
+
+					{error && (
+						<Alert
+							type="error"
+							showIcon
+							message="暂时拿不到数据"
+							description="请稍后重试。如问题持续，请联系管理员。"
+							action={
+								<Button size="small" onClick={handleRetry} data-testid="leader-overview-retry">
+									重试
+								</Button>
+							}
+						/>
+					)}
+
+					{isComponentVisible("leader-kpi") && (
+						<KpiRow
+							role={roleInfo.role}
+							filter={filter}
+							kpis={data?.kpis ?? null}
+							loading={loading}
+							error={Boolean(error)}
+						/>
+					)}
+
+					{roleInfo.isInstLeader && isComponentVisible("leader-kpi") && (
+						<DomainMatrix
+							visible={showMatrix}
+							cells={data?.domainMatrix ?? []}
+							activeDomain={filter.bizDomain}
+							onSelect={handleDomainSelect}
+						/>
+					)}
+
+					{(isComponentVisible("top-reports") || isComponentVisible("core-assets")) && (
+						<Row gutter={16}>
+							{isComponentVisible("top-reports") && (
+								<Col xs={24} md={isComponentVisible("core-assets") ? 16 : 24}>
+									<TopReportsBlock
+										role={roleInfo.role}
+										items={data?.topReports ?? []}
+										loading={loading}
+										domainLabels={domainLabels}
+									/>
+								</Col>
+							)}
+							{isComponentVisible("core-assets") && (
+								<Col xs={24} md={isComponentVisible("top-reports") ? 8 : 24}>
+									<CoreAssetsBlock
+										role={roleInfo.role}
+										items={data?.topAssets ?? []}
+										loading={loading}
+										domainLabels={domainLabels}
+									/>
+								</Col>
+							)}
+						</Row>
+					)}
+				</Space>
+			</div>
+		</div>
+	);
+}
+
+export default LeaderOverviewPage;

@@ -1,0 +1,29 @@
+services:
+  dts-opmanager:
+    image: ${OPMANAGER_IMAGE:-dts-opmanager:2.2.3}
+    container_name: dts-opmanager
+    restart: unless-stopped
+    working_dir: /app/dts-opmanager
+    entrypoint:
+      - /app/java/openjdk/bin/java
+      - -jar
+      - /app/dts-opmanager/dts-opmanager.jar
+    security_opt:
+      - seccomp=unconfined
+    ulimits:
+      nproc: 65535
+    ports:
+      - "${OPMANAGER_HTTP_PORT:-18095}:18090"
+    environment:
+      OPMANAGER_SERVER_PORT: "18090"
+      OPMANAGER_DATA_DIR: ${OPMANAGER_HOME:-/opt/dts-opmanager}/data
+      OPMANAGER_PACKAGE_ROOTS: ${OPMANAGER_HOME:-/opt/dts-opmanager}/packages
+      OPMANAGER_TARGET_STACK_DIR: /opt/dts-stack
+      OPMANAGER_DOCKER_ENABLED: ${OPMANAGER_DOCKER_ENABLED:-true}
+      OPMANAGER_PORTAINER_URL: ${OPMANAGER_PORTAINER_URL:-}
+    volumes:
+      - ${OPMANAGER_HOME:-/opt/dts-opmanager}/data:${OPMANAGER_HOME:-/opt/dts-opmanager}/data
+      - ${OPMANAGER_HOME:-/opt/dts-opmanager}/packages:${OPMANAGER_HOME:-/opt/dts-opmanager}/packages
+      - /opt:/opt
+      - /data:/data
+      - /var/run/docker.sock:/var/run/docker.sock

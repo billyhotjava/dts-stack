@@ -1,0 +1,197 @@
+# -*- coding: utf-8 -*-
+"""以 weekly-2026-08-14.docx 为模板，生成同版式的本周周报 docx。"""
+import re, shutil, zipfile, os
+from xml.sax.saxutils import escape
+
+REF = "/opt/prod/s10/v2.2.3/worklog/v2.2.3/weekly-report/weekly-2026-08-14.docx"
+OUT = "/opt/prod/s10/v2.2.3/worklog/v2.2.3/weekly-report/weekly-2026-08-28.docx"
+TITLE = "DTS v2.2.3 周报（2026年8月24日—8月28日）"
+
+def t(s):
+    return f'<w:r><w:rPr /><w:t xml:space="preserve">{escape(s)}</w:t></w:r>'
+
+def h1(s):
+    return ('<w:p><w:pPr><w:pStyle w:val="Heading1" /><w:bidi w:val="0" />'
+            '<w:spacing w:before="360" w:after="160" /><w:rPr /></w:pPr>' + t(s) + '</w:p>')
+
+def subtitle(s):
+    return ('<w:p><w:pPr><w:pStyle w:val="BodyTextsubtitle" /><w:bidi w:val="0" />'
+            '<w:rPr /></w:pPr>' + t(s) + '</w:p>')
+
+def h2(s):
+    return ('<w:p><w:pPr><w:pStyle w:val="Heading2" /><w:keepLines w:val="false" />'
+            '<w:bidi w:val="0" /><w:ind w:hanging="0" w:start="0" w:end="0" />'
+            '<w:jc w:val="start" /><w:rPr /></w:pPr>' + t(s) + '</w:p>')
+
+def h3(s):
+    return ('<w:p><w:pPr><w:pStyle w:val="Heading3" /><w:keepLines w:val="false" />'
+            '<w:bidi w:val="0" /><w:jc w:val="start" /><w:rPr /></w:pPr>' + t(s) + '</w:p>')
+
+def bullet(s, last=False):
+    sp = '' if last else '<w:spacing w:before="100" w:after="0" />'
+    return ('<w:p><w:pPr><w:pStyle w:val="BodyText" /><w:keepLines w:val="false" />'
+            '<w:numPr><w:ilvl w:val="0" /><w:numId w:val="1" /></w:numPr>'
+            '<w:tabs><w:tab w:val="clear" w:pos="1134" />'
+            '<w:tab w:val="left" w:pos="809" w:leader="none" /></w:tabs>'
+            '<w:bidi w:val="0" />' + sp +
+            '<w:ind w:hanging="283" w:start="809" /><w:jc w:val="start" /><w:rPr /></w:pPr>'
+            + t(s + ' ') + '</w:p>')
+
+def lead(s):
+    """“数据资产方面：”这类引导句，无项目符号。"""
+    return ('<w:p><w:pPr><w:pStyle w:val="BodyText" /><w:keepLines w:val="false" />'
+            '<w:bidi w:val="0" /><w:spacing w:before="160" w:after="0" />'
+            '<w:jc w:val="start" /><w:rPr /></w:pPr>' + t(s) + '</w:p>')
+
+def bullets(items):
+    return ''.join(bullet(x, last=(i == len(items) - 1)) for i, x in enumerate(items))
+
+def footer(s):
+    return ('<w:p><w:pPr><w:pStyle w:val="BodyTextfooter-note" /><w:bidi w:val="0" />'
+            '<w:spacing w:before="320" w:after="100" /><w:jc w:val="start" /><w:rPr /></w:pPr>'
+            + t(s) + '</w:p>')
+
+def cell(w, txt, style="TableContents", jc="start", shd=True):
+    shd_xml = '<w:shd w:fill="F4F7FB" w:val="clear" />' if shd else ''
+    return (f'<w:tc><w:tcPr><w:tcW w:w="{w}" w:type="dxa" /><w:tcBorders />{shd_xml}'
+            f'<w:vAlign w:val="center" /></w:tcPr>'
+            f'<w:p><w:pPr><w:pStyle w:val="{style}" /><w:bidi w:val="0" />'
+            f'<w:spacing w:before="100" w:after="100" /><w:jc w:val="{jc}" /><w:rPr /></w:pPr>'
+            + t(txt) + '</w:p></w:tc>')
+
+def info_table(rows):
+    grid = '<w:tblGrid><w:gridCol w:w="2751" /><w:gridCol w:w="8587" /></w:tblGrid>'
+    body = ''
+    for k, v in rows:
+        body += ('<w:tr><w:trPr />' + cell(2751, k) + cell(8587, v) + '</w:tr>')
+    return ('<w:tbl><w:tblPr><w:tblW w:w="5000" w:type="pct" /><w:jc w:val="start" />'
+            '<w:tblInd w:w="0" w:type="dxa" /><w:shd w:fill="F4F7FB" w:val="clear" />'
+            '<w:tblLayout w:type="fixed" /><w:tblCellMar>'
+            '<w:top w:w="28" w:type="dxa" /><w:start w:w="28" w:type="dxa" />'
+            '<w:bottom w:w="28" w:type="dxa" /><w:end w:w="28" w:type="dxa" />'
+            '</w:tblCellMar></w:tblPr>' + grid + body + '</w:tbl>')
+
+ISSUE_W = [640, 836, 1034, 4601, 2867]
+
+def issue_table(header, rows):
+    grid = '<w:tblGrid>' + ''.join(f'<w:gridCol w:w="{w}" />' for w in ISSUE_W) + '</w:tblGrid>'
+    hd = '<w:tr><w:trPr><w:tblHeader w:val="true" /><w:cantSplit w:val="true" /></w:trPr>'
+    for w, txt in zip(ISSUE_W, header):
+        hd += cell(w, txt, style="TableHeading", jc="center", shd=False)
+    hd += '</w:tr>'
+    body = ''
+    for r in rows:
+        body += '<w:tr><w:trPr><w:cantSplit w:val="true" /></w:trPr>'
+        for i, (w, txt) in enumerate(zip(ISSUE_W, r)):
+            body += cell(w, txt, jc="center" if i == 0 else "start", shd=False)
+        body += '</w:tr>'
+    return ('<w:tbl><w:tblPr><w:tblW w:w="4400" w:type="pct" /><w:jc w:val="center" />'
+            '<w:tblInd w:w="0" w:type="dxa" /><w:tblLayout w:type="fixed" /><w:tblCellMar>'
+            '<w:top w:w="28" w:type="dxa" /><w:start w:w="28" w:type="dxa" />'
+            '<w:bottom w:w="28" w:type="dxa" /><w:end w:w="28" w:type="dxa" />'
+            '</w:tblCellMar></w:tblPr>' + grid + hd + body + '</w:tbl>')
+
+# ---------------- 内容 ----------------
+P = []
+P.append(h1("DTS v2.2.3 周报"))
+P.append(subtitle("数据集成、数据质量、数据建模、商业智能及数据资产工作汇总"))
+P.append(info_table([
+    ("报告周期", "2026年8月24日—2026年8月28日"),
+    ("下周周期", "2026年8月31日—2026年9月4日"),
+    ("产品版本", "v2.2.3"),
+]))
+
+P.append(h2("一、本周工作内容"))
+
+P.append(h3("1. 数据集成流程"))
+P.append(bullets([
+    "将任务编排页收敛为“数据集成流程”：任务配置是唯一事实源，拓扑改为服务端自动生成的只读投影，不再建设自由画布和第二套工作流引擎。",
+    "页面拆分为任务列表、任务设计、运行实例三部分；不带任务参数打开时默认进入服务端分页任务列表，不再自动打开第一条任务。",
+    "运行实例默认按当前版本过滤，可切换查看全部历史版本；运行相关请求全部收敛到任务自身接口，不再直接操作全局调度作业列表。",
+    "新增任务设计的读取、保存与校验接口及执行命令幂等控制，用同一份配置校验和贯通保存、校验、准入发布和运行。",
+    "完成本机真实浏览器只读旅程回归，深链跳转、返回列表、窄屏横向滚动均通过，无控制台错误与失败请求。",
+]))
+
+P.append(h3("2. 数据质量"))
+P.append(bullets([
+    "接入后质量验证纳入统一工作流：执行完整提交后按目标数据集与执行实例幂等触发，接入过程只做准入校验。",
+    "新增质量工作流重试调度与尝试记录账本，重试等待和重试耗尽状态对用户可见。",
+    "接入执行与质量工作流建立关联字段，接入成功事实与质量结论保持分离，质量失败不回写接入结果。",
+    "补齐质量工作流的审计动作目录登记。",
+]))
+
+P.append(h3("3. 数据建模"))
+P.append(bullets([
+    "修复 dbt 模型包导入丢失维度属性映射的问题，同时保持旧版本模型包的字段向后兼容。",
+    "完成专利域逆向建模离线导入包验证：离线解析通过、零外部依赖、四项维度属性映射与主键映射与当前定义完全一致。",
+    "重做建模关系图，改为可读的关系投影，解决节点重叠、无法定位的可用性问题。",
+    "数据标准页新增标准映射建议，可基于既有指标与标准定义给出候选映射。",
+    "修复规划编辑与逆向建模检查步骤的布局问题。",
+]))
+
+P.append(h3("4. 商业智能与数据大屏"))
+P.append(bullets([
+    "大屏目录显示创建人，便于按责任人定位内容。",
+    "修复数据大屏下钻不可逆的问题：下钻后可返回上层，并补充下钻配置的服务端校验。",
+]))
+
+P.append(h3("5. 数据资产与标签"))
+P.append(bullets([
+    "重构标签管理页，标签维护与资产关联操作合并到同一视图。",
+]))
+
+P.append(h2("二、文档更新内容"))
+P.append(bullets([
+    "新增数据集成流程实施方案，含产品范围裁决、架构决策记录、端到端契约链、页面能力矩阵、调度作业对账与发布回滚预案。",
+    "新增数据质量工作流方案的领域画像与非功能预算文档。",
+    "新增专利域逆向建模验证记录，并提供两个可直接导入的示例包。",
+    "更新集中验收记录与迭代队列台账。",
+]))
+
+P.append(h2("三、下周工作计划"))
+P.append(bullets([
+    "数据集成：完成客户现场浏览器兼容、三角色隔离会话与安全业务金丝雀复验；为历史接入任务补齐目标资产身份。",
+    "数据质量：完成质量工作流的集中端到端验收与运维交接。",
+    "安全与合规：按上周立项推进口令策略与登录失败锁定配置、保密符合性映射台账、敏感数据识别、监控告警部署。",
+    "客户侧待确认事项跟进：保密标准条款目录、口令策略具体数值、测评证据包格式要求。",
+]))
+
+P.append(h2("四、测试问题清单"))
+P.append(issue_table(
+    ["编号", "优先级", "模块", "问题或验收缺口", "处理计划"],
+    [
+        ["T-01", "P0", "数据集成", "现有浏览器证据基于本机 Chrome 150，客户要求的 Chrome 95 环境不可用，不能作为现场兼容性通过证据。", "待现场提供目标浏览器环境后复验。"],
+        ["T-02", "P0", "数据集成", "七条历史接入任务的目标资产身份为空，双批质量证据切换需安全金丝雀。", "下周补齐资产绑定并小批量切换验证。"],
+        ["T-03", "P0", "安全合规", "统一认证尚未配置口令复杂度策略，登录失败锁定未启用。", "按合规专项排期实施，具体数值待客户确认。"],
+        ["T-04", "P0", "数据安全", "无敏感数据自动识别能力，脱敏规则依赖人工逐个标注。", "合规专项建设中。"],
+        ["T-05", "P1", "数据质量", "质量工作流的集中端到端验收与运维交接尚未执行。", "下周完成。"],
+        ["T-06", "P1", "非功能", "全部服务为单节点部署，且缺少覆盖协议性能指标的统一压测报告。", "需环境资源支持，单独排期。"],
+    ]))
+
+P.append(footer("说明：以上工作内容依据本周代码提交、方案文档与验收记录整理。标注为待验收的项目需在正式验收前于真实环境再次确认。"))
+
+BODY = ''.join(P)
+
+# ---------------- 模板手术 ----------------
+os.makedirs(os.path.dirname(OUT), exist_ok=True)
+shutil.copy(REF, OUT + ".tmp")
+src = zipfile.ZipFile(REF, 'r')
+doc = src.read('word/document.xml').decode('utf-8')
+head = doc[:doc.find('<w:body>') + len('<w:body>')]
+tail = doc[doc.find('<w:sectPr>'):]
+new_doc = head + BODY + tail
+
+core = src.read('docProps/core.xml').decode('utf-8')
+core = re.sub(r'<dc:title>.*?</dc:title>', f'<dc:title>{escape(TITLE)}</dc:title>', core, flags=re.S)
+
+with zipfile.ZipFile(OUT, 'w', zipfile.ZIP_DEFLATED) as z:
+    for item in src.infolist():
+        if item.filename == 'word/document.xml':
+            z.writestr(item, new_doc.encode('utf-8'))
+        elif item.filename == 'docProps/core.xml':
+            z.writestr(item, core.encode('utf-8'))
+        else:
+            z.writestr(item, src.read(item.filename))
+src.close()
+os.remove(OUT + ".tmp")
+print("生成:", OUT, os.path.getsize(OUT), "bytes")

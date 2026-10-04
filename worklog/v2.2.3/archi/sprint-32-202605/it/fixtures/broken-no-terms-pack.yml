@@ -1,0 +1,27 @@
+pack_id: broken-no-terms
+pack_name: Broken No Terms Pack
+version: 0.1.0
+industry: demo
+edition_required: professional
+tenant_namespace: demo
+security:
+  apply_rls: true
+source_model: dwd_demo_detail
+dimensions:
+  - field: stat_month
+metrics:
+  - metric_code: contract_amount
+    metric_name: Contract Amount
+    formula:
+      type: aggregation
+      aggregation: sum
+      field: contract_amount
+files:
+  domains: domains.yml
+  business_objects: business-objects.yml
+  dimensions: dimensions.yml
+  metrics: metrics.yml
+  models: models.yml
+  datasets: datasets.yml
+dependencies:
+  platform_assets: []

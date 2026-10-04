@@ -1,0 +1,23 @@
+Sprint-67 F1-T03 legacy process adapter evidence
+Date: 2026-07-19
+Status: VERIFIED - ONE-WAY LEGACY READ ADAPTER
+
+Current truth after closure refresh (2026-07-20)
+- `ModelSpecCompatibilityReader` maps a legacy FACT `processId` to canonical `businessActivityRef` in `LEGACY_READONLY` mode.
+- Canonical create/update field allowlists reject `processId` and `objectId`; new writes use `businessActivityRef` only for FACT.
+- Legacy object/process identifiers remain compatibility read metadata and are not copied into canonical write commands.
+
+Frozen compatibility intent
+- Legacy reads may map a nonblank processId to optional businessActivityRef for FACT diagnostics.
+- New writes must use businessActivityRef and must not write a new legacy processId.
+- Explicit new fields win over legacy URL/payload aliases; conflicts return diagnostics and are never silently overwritten.
+- Non-FACT legacy process metadata is compatibility-only diagnostic data and is not copied to a new revision.
+
+Current backend verification
+- `./mvnw -Dtest=BusinessObjectRetirementPolicyTest,ModelingDomainValidatorTest,ModelSpecCompatibilityReaderTest,ModelSpecCreateRequestDecoderTest test`
+- Result: 47 passed, 0 failures, 0 errors, 0 skipped.
+- `ModelSpecCompatibilityReaderTest.prefersV2SnapshotAndMapsV1SpecAsLegacyReadonly` proves the exact `processId` → `businessActivityRef` read mapping.
+
+Boundary
+- Legacy vNext and semantic APIs remain audited compatibility surfaces; this evidence does not claim their physical deletion.
+- Real browser/auth/database journey evidence remains F6-T03 scope.

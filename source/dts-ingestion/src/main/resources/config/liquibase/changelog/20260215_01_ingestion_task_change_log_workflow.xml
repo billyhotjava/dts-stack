@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260215-01-ingestion-task-change-log-add-assignee" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_task_change_log" columnName="assignee"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_task_change_log">
+            <column name="assignee" type="varchar(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-02-ingestion-task-change-log-add-approval-comment" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_task_change_log" columnName="approval_comment"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_task_change_log">
+            <column name="approval_comment" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-03-ingestion-task-change-log-add-handled-at" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_task_change_log" columnName="handled_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_task_change_log">
+            <column name="handled_at" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-04-ingestion-task-change-log-add-handled-by" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="ingestion_task_change_log" columnName="handled_by"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="ingestion_task_change_log">
+            <column name="handled_by" type="varchar(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-05-ingestion-task-change-log-add-assignee-index" author="codex">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="ingestion_task_change_log" indexName="idx_ingestion_task_change_assignee"/>
+            </not>
+        </preConditions>
+        <createIndex indexName="idx_ingestion_task_change_assignee" tableName="ingestion_task_change_log">
+            <column name="assignee"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

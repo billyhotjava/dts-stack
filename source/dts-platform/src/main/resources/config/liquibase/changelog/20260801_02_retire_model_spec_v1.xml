@@ -1,0 +1,219 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260801-02-retire-model-spec-v1" author="codex" dbms="postgresql" runInTransaction="true">
+        <preConditions
+            onFail="HALT"
+            onError="HALT"
+            onFailMessage="MODEL_SPEC_V1_SCHEMA_RETIREMENT_BLOCKED: migrate or archive v1 rows and clear legacy columns before deployment"
+            onErrorMessage="MODEL_SPEC_V1_SCHEMA_RETIREMENT_SCHEMA_UNEXPECTED">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_spec_revision"/>
+            <tableExists tableName="modeling_standard_binding"/>
+            <tableExists tableName="modeling_business_object"/>
+
+            <columnExists tableName="modeling_model_spec" columnName="contract_version"/>
+            <columnExists tableName="modeling_model_spec" columnName="object_id"/>
+            <columnExists tableName="modeling_model_spec" columnName="process_id"/>
+            <columnExists tableName="modeling_model_spec" columnName="dimensions"/>
+            <columnExists tableName="modeling_model_spec" columnName="metrics"/>
+            <columnExists tableName="modeling_model_spec" columnName="dbt_project_key"/>
+            <columnExists tableName="modeling_model_spec" columnName="dbt_unique_id"/>
+            <columnExists tableName="modeling_model_spec" columnName="legacy_ref"/>
+            <columnExists tableName="modeling_model_spec" columnName="legacy_refs"/>
+            <columnExists tableName="modeling_model_spec" columnName="grain_statement"/>
+            <columnExists tableName="modeling_model_spec" columnName="materialization"/>
+            <columnExists tableName="modeling_model_spec_revision" columnName="contract_version"/>
+            <columnExists tableName="modeling_model_spec_revision" columnName="spec_json"/>
+
+            <sqlCheck expectedResult="1"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conrelid = 'modeling_model_spec'::regclass
+                   AND conname = 'fk_modeling_model_spec_object'
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="2"><![CDATA[
+                SELECT count(*)
+                  FROM pg_indexes
+                 WHERE schemaname = current_schema()
+                   AND tablename = 'modeling_model_spec'
+                   AND indexname IN ('idx_modeling_model_spec_object', 'idx_modeling_model_spec_process')
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="6"><![CDATA[
+                SELECT count(*)
+                  FROM pg_constraint
+                 WHERE conname IN (
+                           'ck_model_spec_contract_version',
+                           'ck_model_spec_v2_identity',
+                           'ck_model_spec_v2_type_context',
+                           'ck_model_spec_v2_json_shapes',
+                           'ck_model_spec_revision_contract_version',
+                           'ck_model_spec_revision_payload'
+                       )
+                   AND conrelid IN ('modeling_model_spec'::regclass, 'modeling_model_spec_revision'::regclass)
+            ]]></sqlCheck>
+
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT
+                    (SELECT count(*) FROM modeling_standard_binding) +
+                    (SELECT count(*) FROM modeling_business_object)
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec
+                 WHERE contract_version IS DISTINCT FROM 2
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec
+                 WHERE object_id IS NOT NULL
+                    OR process_id IS NOT NULL
+                    OR dimensions IS NOT NULL
+                    OR metrics IS NOT NULL
+                    OR dbt_project_key IS NOT NULL
+                    OR dbt_unique_id IS NOT NULL
+                    OR legacy_ref IS NOT NULL
+                    OR legacy_refs IS NOT NULL
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec_revision
+                 WHERE contract_version IS DISTINCT FROM 2
+                    OR spec_json IS NOT NULL
+            ]]></sqlCheck>
+        </preConditions>
+        <comment>
+            Contract the ModelSpec ledger to the canonical v2 schema after all legacy rows,
+            legacy columns and compatibility tables have been proven empty.
+        </comment>
+
+        <sql><![CDATA[
+            LOCK TABLE modeling_business_object, modeling_model_spec,
+                modeling_model_spec_revision, modeling_standard_binding
+            IN ACCESS EXCLUSIVE MODE
+        ]]></sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            BEGIN
+                IF (
+                    (SELECT count(*) FROM modeling_standard_binding) +
+                    (SELECT count(*) FROM modeling_business_object) +
+                    (SELECT count(*) FROM modeling_model_spec WHERE contract_version IS DISTINCT FROM 2) +
+                    (SELECT count(*) FROM modeling_model_spec
+                      WHERE object_id IS NOT NULL OR process_id IS NOT NULL OR dimensions IS NOT NULL
+                         OR metrics IS NOT NULL OR dbt_project_key IS NOT NULL OR dbt_unique_id IS NOT NULL
+                         OR legacy_ref IS NOT NULL OR legacy_refs IS NOT NULL) +
+                    (SELECT count(*) FROM modeling_model_spec_revision
+                      WHERE contract_version IS DISTINCT FROM 2 OR spec_json IS NOT NULL)
+                ) <> 0 THEN
+                    RAISE EXCEPTION 'MODEL_SPEC_V1_SCHEMA_RETIREMENT_LOCKED_RECHECK_FAILED';
+                END IF;
+            END $$;
+        ]]></sql>
+
+        <dropTable tableName="modeling_standard_binding"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec DROP CONSTRAINT ck_model_spec_contract_version;
+            ALTER TABLE modeling_model_spec DROP CONSTRAINT ck_model_spec_v2_identity;
+            ALTER TABLE modeling_model_spec DROP CONSTRAINT ck_model_spec_v2_type_context;
+            ALTER TABLE modeling_model_spec DROP CONSTRAINT ck_model_spec_v2_json_shapes;
+            ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT ck_model_spec_revision_contract_version;
+            ALTER TABLE modeling_model_spec_revision DROP CONSTRAINT ck_model_spec_revision_payload;
+            ALTER TABLE modeling_model_spec DROP CONSTRAINT fk_modeling_model_spec_object;
+            DROP INDEX idx_modeling_model_spec_object;
+            DROP INDEX idx_modeling_model_spec_process;
+        ]]></sql>
+
+        <dropColumn tableName="modeling_model_spec" columnName="object_id"/>
+        <dropColumn tableName="modeling_model_spec" columnName="process_id"/>
+        <dropColumn tableName="modeling_model_spec" columnName="dimensions"/>
+        <dropColumn tableName="modeling_model_spec" columnName="metrics"/>
+        <dropColumn tableName="modeling_model_spec" columnName="dbt_project_key"/>
+        <dropColumn tableName="modeling_model_spec" columnName="dbt_unique_id"/>
+        <dropColumn tableName="modeling_model_spec" columnName="legacy_ref"/>
+        <dropColumn tableName="modeling_model_spec" columnName="legacy_refs"/>
+        <dropColumn tableName="modeling_model_spec_revision" columnName="spec_json"/>
+
+        <dropTable tableName="modeling_business_object"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec ALTER COLUMN contract_version SET DEFAULT 2;
+            ALTER TABLE modeling_model_spec_revision ALTER COLUMN contract_version SET DEFAULT 2;
+
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_contract_version
+                CHECK (contract_version = 2);
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_identity
+                CHECK (
+                    contract_version = 2
+                    AND plan_id IS NOT NULL
+                    AND domain_id IS NOT NULL
+                    AND status IN ('DRAFT', 'DESIGNING', 'VALIDATING', 'READY_TO_PUBLISH', 'PUBLISHED', 'ARCHIVED')
+                    AND current_checksum ~ '^[0-9a-f]{64}$'
+                    AND idempotency_key IS NOT NULL
+                    AND btrim(idempotency_key) <> ''
+                    AND idempotency_request_hash ~ '^[0-9a-f]{64}$'
+                    AND idempotency_response_snapshot IS NOT NULL
+                    AND jsonb_typeof(idempotency_response_snapshot) = 'object'
+                );
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_type_context
+                CHECK (
+                    contract_version = 2
+                    AND (model_type = 'FACT' OR business_activity_ref IS NULL)
+                    AND (
+                        model_type <> 'APPLICATION'
+                        OR status = 'DRAFT'
+                        OR (
+                            consumption_scenario IS NOT NULL
+                            AND btrim(consumption_scenario) <> ''
+                        )
+                    )
+                    AND (model_type = 'APPLICATION' OR consumption_scenario IS NULL)
+                    AND (
+                        fact_shape IS NULL
+                        OR fact_shape IN ('TRANSACTION', 'PERIODIC_SNAPSHOT', 'ACCUMULATING_SNAPSHOT')
+                    )
+                );
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_v2_json_shapes
+                CHECK (
+                    contract_version = 2
+                    AND (grain_json IS NULL OR jsonb_typeof(grain_json) = 'object')
+                    AND (time_semantics IS NULL OR jsonb_typeof(time_semantics) = 'object')
+                    AND (fields IS NULL OR jsonb_typeof(fields) = 'array')
+                    AND (source_refs IS NULL OR jsonb_typeof(source_refs) = 'array')
+                    AND (depends_on IS NULL OR jsonb_typeof(depends_on) = 'array')
+                    AND (dimension_refs IS NULL OR jsonb_typeof(dimension_refs) = 'array')
+                    AND (metric_refs IS NULL OR jsonb_typeof(metric_refs) = 'array')
+                    AND (standard_bindings IS NULL OR jsonb_typeof(standard_bindings) = 'array')
+                    AND (generation_strategy IS NULL OR jsonb_typeof(generation_strategy) = 'object')
+                );
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_contract_version
+                CHECK (contract_version = 2);
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_payload
+                CHECK (
+                    contract_version = 2
+                    AND snapshot_json IS NOT NULL
+                    AND jsonb_typeof(snapshot_json) = 'object'
+                    AND content_checksum ~ '^[0-9a-f]{64}$'
+                );
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_V1_SCHEMA_RETIREMENT_FORWARD_ONLY: recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

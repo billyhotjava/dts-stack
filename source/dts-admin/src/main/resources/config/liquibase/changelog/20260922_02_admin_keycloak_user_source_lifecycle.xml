@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260922-02-admin-keycloak-user-source-lifecycle" author="f11" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="admin_keycloak_user"/>
+        </preConditions>
+        <comment>
+            Sprint-104 F11-T07：admin_keycloak_user 从 Keycloak 快照演进为 DTS 人员目录及账号绑定。
+            新增来源/版本/业务准入/同步状态列，全部可空或带默认值；kc_id 保持现状（待开户人员由应用层
+            允许绑定缺失，不在此放开非空约束）。只做前向加列，不改既有数据；回滚仅删列。
+        </comment>
+        <sql splitStatements="false"><![CDATA[
+            ALTER TABLE admin_keycloak_user ADD COLUMN IF NOT EXISTS source_system VARCHAR(64);
+            ALTER TABLE admin_keycloak_user ADD COLUMN IF NOT EXISTS source_version VARCHAR(64);
+            ALTER TABLE admin_keycloak_user ADD COLUMN IF NOT EXISTS access_state VARCHAR(16) NOT NULL DEFAULT 'ACTIVE';
+            ALTER TABLE admin_keycloak_user ADD COLUMN IF NOT EXISTS sync_state VARCHAR(32) NOT NULL DEFAULT 'SYNCED';
+            ALTER TABLE admin_keycloak_user ADD COLUMN IF NOT EXISTS sync_error TEXT;
+        ]]></sql>
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                ALTER TABLE admin_keycloak_user DROP COLUMN IF EXISTS sync_error;
+                ALTER TABLE admin_keycloak_user DROP COLUMN IF EXISTS sync_state;
+                ALTER TABLE admin_keycloak_user DROP COLUMN IF EXISTS access_state;
+                ALTER TABLE admin_keycloak_user DROP COLUMN IF EXISTS source_version;
+                ALTER TABLE admin_keycloak_user DROP COLUMN IF EXISTS source_system;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

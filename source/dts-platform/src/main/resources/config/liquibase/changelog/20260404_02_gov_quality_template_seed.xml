@@ -1,0 +1,198 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <!-- 1. NOT_NULL 非空检查 -->
+    <changeSet id="20260404-02-seed-not-null" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'NOT_NULL',
+    '非空检查',
+    'COMPLETENESS',
+    '检查指定列是否存在空值或空字符串',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true}]'::jsonb,
+    'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''字段不能为空'' AS fail_reason FROM {{table}} WHERE {{column}} IS NULL OR TRIM(CAST({{column}} AS text)) = ''''',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 2. ENUM_CHECK 值域枚举 -->
+    <changeSet id="20260404-02-seed-enum-check" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'ENUM_CHECK',
+    '值域枚举',
+    'ACCURACY',
+    '检查字段值是否在允许的枚举范围内',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"allowed_values","label":"允许值(逗号分隔)","type":"text","required":true}]'::jsonb,
+    'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''值不在允许范围内'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND {{column}} NOT IN ({{allowed_values:csv}})',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 3. DATE_FORMAT 日期格式检查 -->
+    <changeSet id="20260404-02-seed-date-format" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'DATE_FORMAT',
+    '日期格式检查',
+    'CONSISTENCY',
+    '检查日期字段是否符合指定的格式模式',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"pattern","label":"日期正则(默认YYYY-MM-DD)","type":"text","required":false,"default":"^\\d{4}-\\d{2}-\\d{2}$"}]'::jsonb,
+    'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''日期格式不符合要求'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND CAST({{column}} AS text) !~ ''{{pattern}}''',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 4. NUMERIC_RANGE 数值范围 -->
+    <changeSet id="20260404-02-seed-numeric-range" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'NUMERIC_RANGE',
+    '数值范围',
+    'ACCURACY',
+    '检查数值字段是否在指定的最小值和最大值范围内',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"min","label":"最小值","type":"number","required":true},{"name":"max","label":"最大值","type":"number","required":true}]'::jsonb,
+    'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''数值超出范围 [{{min}}, {{max}}]'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND (CAST({{column}} AS text) !~ ''^-?[0-9]+(\.[0-9]+)?$'' OR CAST({{column}} AS numeric) NOT BETWEEN {{min}} AND {{max}})',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 5. UNIQUE_CHECK 唯一性检查 -->
+    <changeSet id="20260404-02-seed-unique-check" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'UNIQUE_CHECK',
+    '唯一性检查',
+    'UNIQUENESS',
+    '检查指定列是否存在重复值（简化版，单列适用；多列版后续优化）',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"columns","label":"检查列(逗号分隔)","type":"text","required":true}]'::jsonb,
+    'SELECT t.id, ''{{columns}}'' AS fail_column, {{columns}} AS actual_value, ''存在重复值'' AS fail_reason FROM {{table}} t INNER JOIN (SELECT {{columns}} FROM {{table}} GROUP BY {{columns}} HAVING COUNT(*) > 1) dup ON t.{{columns}} = dup.{{columns}}',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 6. CROSS_COLUMN 跨列逻辑 -->
+    <changeSet id="20260404-02-seed-cross-column" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'CROSS_COLUMN',
+    '跨列逻辑',
+    'CONSISTENCY',
+    '检查跨列条件表达式是否成立',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"expression","label":"条件表达式","type":"text","required":true},{"name":"description","label":"规则描述","type":"text","required":false}]'::jsonb,
+    'SELECT id, '''' AS fail_column, '''' AS actual_value, ''{{description}}'' AS fail_reason FROM {{table}} WHERE NOT ({{expression}})',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 7. CROSS_TABLE_REF 跨表引用 -->
+    <changeSet id="20260404-02-seed-cross-table-ref" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'CROSS_TABLE_REF',
+    '跨表引用',
+    'CONSISTENCY',
+    '检查字段值是否在引用表的对应列中存在',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"ref_table","label":"引用表","type":"table_select","required":true},{"name":"ref_column","label":"引用列","type":"text","required":true}]'::jsonb,
+    'SELECT t.id, ''{{column}}'' AS fail_column, t.{{column}} AS actual_value, ''引用值在 {{ref_table}}.{{ref_column}} 中不存在'' AS fail_reason FROM {{table}} t LEFT JOIN {{ref_table}} r ON CAST(t.{{column}} AS text) = CAST(r.{{ref_column}} AS text) WHERE t.{{column}} IS NOT NULL AND TRIM(CAST(t.{{column}} AS text)) != '''' AND r.{{ref_column}} IS NULL',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 8. AGGREGATE_THRESHOLD 聚合阈值 -->
+    <changeSet id="20260404-02-seed-aggregate-threshold" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'AGGREGATE_THRESHOLD',
+    '聚合阈值',
+    'COMPLETENESS',
+    '检查聚合指标（如空值率）是否超过阈值',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"metric","label":"指标类型","type":"select","required":true,"options":[{"label":"空值率","value":"null_rate"},{"label":"重复率","value":"dup_rate"}]},{"name":"threshold","label":"阈值(百分比)","type":"number","required":true}]'::jsonb,
+    'SELECT 0 AS id, ''{{column}}'' AS fail_column, ROUND(COUNT(CASE WHEN {{column}} IS NULL OR TRIM(CAST({{column}} AS text)) = '''' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0), 2) AS actual_value, ''空值率超过阈值 {{threshold}}%'' AS fail_reason FROM {{table}} HAVING COUNT(CASE WHEN {{column}} IS NULL OR TRIM(CAST({{column}} AS text)) = '''' THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0) > {{threshold}}',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 9. REGEX_MATCH 正则匹配 -->
+    <changeSet id="20260404-02-seed-regex-match" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'REGEX_MATCH',
+    '正则匹配',
+    'ACCURACY',
+    '检查字段值是否匹配指定的正则表达式',
+    '[{"name":"table","label":"目标表","type":"table_select","required":true},{"name":"column","label":"检查列","type":"column_select","required":true},{"name":"pattern","label":"正则表达式","type":"text","required":true}]'::jsonb,
+    'SELECT id, ''{{column}}'' AS fail_column, {{column}} AS actual_value, ''不匹配正则: {{pattern}}'' AS fail_reason FROM {{table}} WHERE {{column}} IS NOT NULL AND TRIM(CAST({{column}} AS text)) != '''' AND CAST({{column}} AS text) !~ ''{{pattern}}''',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+    <!-- 10. CUSTOM_SQL 自定义SQL -->
+    <changeSet id="20260404-02-seed-custom-sql" author="system">
+        <sql><![CDATA[
+INSERT INTO gov_quality_template (code, name, category, description, param_schema, sql_template, builtin, enabled, created_by, last_modified_by)
+VALUES (
+    'CUSTOM_SQL',
+    '自定义SQL',
+    'COMPLETENESS',
+    '用户自定义SQL查询，需返回 id, fail_column, actual_value, fail_reason 四列',
+    '[{"name":"sql","label":"自定义SQL(需返回id, fail_column, actual_value, fail_reason)","type":"sql_editor","required":true}]'::jsonb,
+    '{{sql}}',
+    true,
+    true,
+    'system',
+    'system'
+);
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>

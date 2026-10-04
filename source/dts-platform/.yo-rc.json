@@ -1,0 +1,23 @@
+{
+  "generator-jhipster": {
+    "applicationType": "microservice",
+    "authenticationType": "oauth2",
+    "baseName": "dtsPlatform",
+    "buildTool": "maven",
+    "creationTimestamp": 1759161422132,
+    "devDatabaseType": "postgresql",
+    "entities": [],
+    "jhipsterVersion": "8.11.0",
+    "jwtSecretKey": "YzliYTM3ZTdhMDYwNGU1ZGY4NDM4YzdiYzZmZmMzOTQ5NjU3ZDEyOThhNmE1MTU3YTU3ZDQ0YzdmYjg5YWU3N2NkNTU1OGYwOGIwYjA2NWU3NGFiZjg1ZmIwNzZiMWQ1NzhjYTUxYjE4ZDc0MDA5NGFjYTFhYjQxMGQzMDMzNzU=",
+    "languages": ["en"],
+    "monorepository": true,
+    "nativeLanguage": "en",
+    "packageName": "com.yuzhi.dts.platform",
+    "prodDatabaseType": "postgresql",
+    "reactive": false,
+    "serviceDiscoveryType": "eureka",
+    "skipClient": true,
+    "skipCommitHook": true,
+    "skipUserManagement": true
+  }
+}

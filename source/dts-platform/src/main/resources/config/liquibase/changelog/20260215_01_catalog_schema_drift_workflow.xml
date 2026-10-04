@@ -1,0 +1,96 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260215-01-catalog-schema-drift-policy-mode" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="policy_mode"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="policy_mode" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-02-catalog-schema-drift-ticket-status" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="ticket_status"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="ticket_status" type="varchar(32)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-03-catalog-schema-drift-ticket-assignee" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="ticket_assignee"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="ticket_assignee" type="varchar(100)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-04-catalog-schema-drift-workflow-note" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="workflow_note"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="workflow_note" type="text"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-05-catalog-schema-drift-handled-at" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="handled_at"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="handled_at" type="datetime"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-06-catalog-schema-drift-handled-by" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="catalog_schema_drift_event" columnName="handled_by"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="catalog_schema_drift_event">
+            <column name="handled_by" type="varchar(50)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260215-07-catalog-schema-drift-ticket-index" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="catalog_schema_drift_event" indexName="idx_schema_drift_ticket_status"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="catalog_schema_drift_event" indexName="idx_schema_drift_ticket_status">
+            <column name="ticket_status"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="20260215-08-catalog-schema-drift-policy-index" author="platform">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <indexExists tableName="catalog_schema_drift_event" indexName="idx_schema_drift_policy_mode"/>
+            </not>
+        </preConditions>
+        <createIndex tableName="catalog_schema_drift_event" indexName="idx_schema_drift_policy_mode">
+            <column name="policy_mode"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

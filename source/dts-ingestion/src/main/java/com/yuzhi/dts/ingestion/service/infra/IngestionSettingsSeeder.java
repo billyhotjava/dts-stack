@@ -1,0 +1,137 @@
+package com.yuzhi.dts.ingestion.service.infra;
+
+import com.yuzhi.dts.ingestion.config.AddaxProperties;
+import com.yuzhi.dts.ingestion.config.AirflowProperties;
+import com.yuzhi.dts.ingestion.config.IngestionOutboundPlatformProperties;
+import com.yuzhi.dts.ingestion.config.OpenMetadataProperties;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.ApplicationArguments;
+import org.springframework.boot.ApplicationRunner;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+
+@Component
+public class IngestionSettingsSeeder implements ApplicationRunner {
+
+    private static final Logger LOG = LoggerFactory.getLogger(IngestionSettingsSeeder.class);
+
+    private final InfraServiceSettingsRepository repository;
+    private final AddaxProperties addaxProperties;
+    private final AirflowProperties airflowProperties;
+    private final OpenMetadataProperties openMetadataProperties;
+    private final IngestionOutboundPlatformProperties outboundPlatformProperties;
+
+    public IngestionSettingsSeeder(
+        InfraServiceSettingsRepository repository,
+        AddaxProperties addaxProperties,
+        AirflowProperties airflowProperties,
+        OpenMetadataProperties openMetadataProperties,
+        IngestionOutboundPlatformProperties outboundPlatformProperties
+    ) {
+        this.repository = repository;
+        this.addaxProperties = addaxProperties;
+        this.airflowProperties = airflowProperties;
+        this.openMetadataProperties = openMetadataProperties;
+        this.outboundPlatformProperties = outboundPlatformProperties;
+    }
+
+    @Override
+    public void run(ApplicationArguments args) {
+        seedIfMissing(IngestionSettingsService.SERVICE_ADDAX, buildAddaxSettings());
+        seedIfMissing(IngestionSettingsService.SERVICE_AIRFLOW, buildAirflowSettings());
+        seedIfMissing(IngestionSettingsService.SERVICE_OPENMETADATA, buildOpenMetadataSettings());
+        seedIfMissing(IngestionSettingsService.SERVICE_PLATFORM, buildPlatformSettings());
+    }
+
+    private void seedIfMissing(String service, Map<String, Object> settings) {
+        if (repository.findByService(service).isPresent()) {
+            return;
+        }
+        if (settings == null || settings.isEmpty()) {
+            return;
+        }
+        repository.upsert(service, settings, "system");
+        LOG.info("[ingestion] Seeded settings for service={} keys={}", service, settings.keySet());
+    }
+
+    private Map<String, Object> buildAddaxSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("enabled", addaxProperties.isEnabled());
+        putIfText(settings, "jobDir", addaxProperties.getJobDir());
+        putIfText(settings, "image", addaxProperties.getImage());
+        return settings;
+    }
+
+    private Map<String, Object> buildAirflowSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("enabled", airflowProperties.isEnabled());
+        putIfText(settings, "baseUrl", airflowProperties.getBaseUrl());
+        putIfText(settings, "apiPath", airflowProperties.getApiPath());
+        putIfText(settings, "username", airflowProperties.getUsername());
+        putIfText(settings, "password", airflowProperties.getPassword());
+        putIfText(settings, "dagId", airflowProperties.getDagId());
+        putIfText(settings, "dagsDir", airflowProperties.getDagsDir());
+        putIfNumber(settings, "dagReadyWaitSeconds", airflowProperties.getDagReadyWaitSeconds());
+        putIfNumber(settings, "dagReadyPollSeconds", airflowProperties.getDagReadyPollSeconds());
+        putIfNumber(settings, "dagTriggerRetrySeconds", airflowProperties.getDagTriggerRetrySeconds());
+        putIfNumber(settings, "dagNotFoundRetryWaitSeconds", airflowProperties.getDagNotFoundRetryWaitSeconds());
+        settings.put("executionPollEnabled", airflowProperties.isExecutionPollEnabled());
+        putIfNumber(settings, "executionPollIntervalMs", airflowProperties.getExecutionPollIntervalMs() == null ? null : airflowProperties.getExecutionPollIntervalMs().intValue());
+        putIfNumber(settings, "executionPollBatchSize", airflowProperties.getExecutionPollBatchSize());
+        return settings;
+    }
+
+    private Map<String, Object> buildOpenMetadataSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("enabled", openMetadataProperties.isEnabled());
+        putIfText(settings, "baseUrl", openMetadataProperties.getBaseUrl());
+        putIfText(settings, "apiPath", openMetadataProperties.getApiPath());
+        putIfText(settings, "authToken", openMetadataProperties.getAuthToken());
+        putIfText(settings, "sourceServiceName", openMetadataProperties.getSourceServiceName());
+        putIfText(settings, "sourceServiceType", openMetadataProperties.getSourceServiceType());
+        putIfText(settings, "destinationServiceName", openMetadataProperties.getDestinationServiceName());
+        putIfText(settings, "destinationServiceType", openMetadataProperties.getDestinationServiceType());
+        putIfText(settings, "destinationDatabase", openMetadataProperties.getDestinationDatabase());
+        putIfText(settings, "destinationSchema", openMetadataProperties.getDestinationSchema());
+        putIfText(settings, "sourceDatabase", openMetadataProperties.getSourceDatabase());
+        putIfText(settings, "sourceSchema", openMetadataProperties.getSourceSchema());
+        settings.put("ingestionEnabled", openMetadataProperties.isIngestionEnabled());
+        putIfText(settings, "ingestionPrefix", openMetadataProperties.getIngestionPipelinePrefix());
+        putIfText(settings, "ingestionSchedule", openMetadataProperties.getIngestionDefaultSchedule());
+        putIfText(settings, "tableFields", openMetadataProperties.getTableFields());
+        return settings;
+    }
+
+    private Map<String, Object> buildPlatformSettings() {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        settings.put("catalogSyncOnDataSource", Boolean.TRUE);
+        String baseUrl = StringUtils.hasText(outboundPlatformProperties.getBaseUrl())
+            ? outboundPlatformProperties.getBaseUrl()
+            : "http://dts-platform:8081";
+        String apiPath = StringUtils.hasText(outboundPlatformProperties.getApiPath())
+            ? outboundPlatformProperties.getApiPath()
+            : "/api";
+        settings.put("baseUrl", baseUrl);
+        settings.put("apiPath", apiPath);
+        // Sprint-28 F4 修复:之前不 seed serviceToken 与 serviceName,导致部署只能靠 @Value env 注入,settings 库里永远空。
+        // 现在 seeder 把启动时 yml/env 解析到的值同步到 settings 表,后台 UI 可见可改,运行时仍走 settings 优先 fallback 链。
+        putIfText(settings, "serviceToken", outboundPlatformProperties.getServiceToken());
+        putIfText(settings, "serviceName", outboundPlatformProperties.getServiceName());
+        return settings;
+    }
+
+    private void putIfText(Map<String, Object> settings, String key, String value) {
+        if (StringUtils.hasText(value)) {
+            settings.put(key, value.trim());
+        }
+    }
+
+    private void putIfNumber(Map<String, Object> settings, String key, Integer value) {
+        if (value != null) {
+            settings.put(key, value);
+        }
+    }
+}

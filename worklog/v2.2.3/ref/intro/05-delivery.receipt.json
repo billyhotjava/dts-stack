@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "ok": true,
+  "command": "deliver",
+  "type": "workflow",
+  "input": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/05-delivery.workflow.json",
+  "output": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/ref/05-delivery.html",
+  "specification": {
+    "sha256": "fecff2af72c8daf3ceefd61375b2eb7aff77dfb84abe1e126b529880fb9a9aca",
+    "bytes": 3434
+  },
+  "artifact": {
+    "sha256": "56ec0f8fe66770048380548f873868a4fd9559f2d24a6a8a2028769aedb0a22c",
+    "bytes": 704652
+  },
+  "validation": {
+    "checksPassed": 9,
+    "checkCount": 9,
+    "compositionProfile": "showcase",
+    "compositionStatus": "pass",
+    "errors": 0,
+    "warnings": 0
+  }
+}

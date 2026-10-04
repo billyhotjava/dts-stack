@@ -1,0 +1,114 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1200" viewBox="0 0 1200 1200" role="img" aria-labelledby="title desc">
+  <title id="title">Platform Login Illustration (Light)</title>
+  <desc id="desc">Blue crystalline core surrounded by translucent cubes with service icons on a soft light gradient background.</desc>
+  <defs>
+    <linearGradient id="bgGradient" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F4F7FF" />
+      <stop offset="1" stop-color="#E9F0FF" />
+    </linearGradient>
+    <linearGradient id="cubeCore" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#35D0FF" />
+      <stop offset="1" stop-color="#0583F2" />
+    </linearGradient>
+    <linearGradient id="cubeSide" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1B74E4" stop-opacity="0.92" />
+      <stop offset="1" stop-color="#102A75" stop-opacity="0.92" />
+    </linearGradient>
+    <linearGradient id="cubeTop" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5AD8FF" stop-opacity="0.95" />
+      <stop offset="1" stop-color="#0F9CF7" stop-opacity="0.95" />
+    </linearGradient>
+    <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="15" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+    <symbol id="cube" viewBox="-80 -80 160 160">
+      <polygon points="0,-74 64,-37 64,37 0,74 -64,37 -64,-37" fill="#3D62B3" opacity="0.08" />
+    </symbol>
+  </defs>
+
+  <rect width="1200" height="1200" fill="url(#bgGradient)" />
+
+  <!-- Diagonal light streaks -->
+  <g stroke="#2A63D6" stroke-opacity="0.28" stroke-width="2">
+    <path d="M120 240L1080 900" />
+    <path d="M260 140L1100 780" />
+    <path d="M160 960L880 420" />
+    <path d="M340 1040L960 580" />
+  </g>
+
+  <!-- Floating cubes -->
+  <g fill="none" filter="url(#softGlow)">
+    <use href="#cube" transform="translate(340 340) scale(1.6)" />
+    <use href="#cube" transform="translate(520 260) scale(1.3)" />
+    <use href="#cube" transform="translate(760 320) scale(1.4)" />
+    <use href="#cube" transform="translate(920 460) scale(1.2)" />
+    <use href="#cube" transform="translate(300 520) scale(1.25)" />
+    <use href="#cube" transform="translate(880 640) scale(1.35)" />
+    <use href="#cube" transform="translate(420 760) scale(1.4)" />
+    <use href="#cube" transform="translate(600 860) scale(1.1)" />
+    <use href="#cube" transform="translate(780 780) scale(1.25)" />
+    <use href="#cube" transform="translate(520 980) scale(0.9)" />
+  </g>
+
+  <!-- Central core cube -->
+  <g transform="translate(600 540)" filter="url(#softGlow)">
+    <polygon points="0,-220 190,-110 190,110 0,220 -190,110 -190,-110" fill="url(#cubeTop)" opacity="0.95" />
+    <polygon points="0,220 -190,110 -190,-110 0,0" fill="url(#cubeCore)" />
+    <polygon points="0,220 190,110 190,-110 0,0" fill="url(#cubeSide)" />
+  </g>
+
+  <!-- Service icons -->
+  <g fill="#1E3E78" fill-opacity="0.9">
+    <g transform="translate(360 340) scale(1.15)">
+      <rect x="-52" y="-52" width="104" height="104" rx="16" fill="#ffffff" opacity="0" />
+      <path d="M-20 -6H20V6H-20zM-32 -28H32V-16H-32zM-32 16H32V28H-32z" />
+    </g>
+    <g transform="translate(820 320) scale(1.1)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M0 -28a18 18 0 0 1 18 18c0 10-8 18-18 18s-18-8-18-18a18 18 0 0 1 18-18zm0 52c8 0 16 4 16 10v10H-16v-10c0-6 8-10 16-10z" />
+    </g>
+    <g transform="translate(420 780) scale(1.2)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M-24 -16H12V-4H-24zM-24 4H0V16H-24zM18 -16H24V-4H18zM18 4H24V16H18z" />
+    </g>
+    <g transform="translate(780 780) scale(1.2)">
+      <rect x="-48" y="-48" width="96" height="96" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M-24 -16H24V-4H-24zM-20 4H20V16H-20z" />
+      <path d="M-10 -28L-2 -40H-24V-52H16V-40H-4L6 -28H-10z" />
+    </g>
+    <g transform="translate(600 880) scale(1.25)">
+      <rect x="-56" y="-56" width="112" height="112" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M-32 12c0-20 28-32 32-32s32 12 32 32v16H-32zM-20 12h40c0-8-20-16-20-16s-20 8-20 16z" />
+    </g>
+    <g transform="translate(720 220) scale(0.9)">
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0" />
+      <path d="M0 -22l12 20h-24zM-8 4h16v18h-16z" />
+    </g>
+    <g transform="translate(500 220) scale(0.9)">
+      <rect x="-40" y="-40" width="80" height="80" rx="16" fill="#ffffff" opacity="0" />
+      <path d="M-20 -6H20V6H-20zM-30 -24H30V-12H-30zM-30 12H30V24H-30z" />
+    </g>
+    <g transform="translate(340 520) scale(1)">
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M-8 -20h16l-4 14h-8zM-16 0h32l-6 18h-20zM-4 20h8l-2 8H-2z" />
+    </g>
+    <g transform="translate(880 640) scale(1)">
+      <rect x="-44" y="-44" width="88" height="88" rx="18" fill="#ffffff" opacity="0" />
+      <path d="M-20 -12h40M-24 12h48" stroke="#1E3E78" stroke-width="8" stroke-linecap="round" />
+      <path d="M-28 -20l12 -12v24zM28 20l-12 12v-24z" />
+    </g>
+  </g>
+
+  <!-- Small floating cubes -->
+  <g fill="#5EA9F8" opacity="0.4">
+    <rect x="196" y="280" width="24" height="24" rx="6" />
+    <rect x="980" y="360" width="18" height="18" rx="4" />
+    <rect x="260" y="820" width="18" height="18" rx="5" />
+    <rect x="960" y="760" width="20" height="20" rx="6" />
+    <rect x="420" y="180" width="18" height="18" rx="4" />
+  </g>
+</svg>

@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260727-03-model-spec-mart-variant" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_data_mart"/>
+        </preConditions>
+        <comment>Pin optional data-mart scope and implementation variant while keeping policy details in immutable ModelSpec snapshots.</comment>
+
+        <addColumn tableName="modeling_model_spec">
+            <column name="data_mart_id" type="${uuidType}"/>
+            <column name="variant_code" type="varchar(32)"/>
+        </addColumn>
+        <addColumn tableName="modeling_model_spec_revision">
+            <column name="data_mart_id" type="${uuidType}"/>
+            <column name="variant_code" type="varchar(32)"/>
+        </addColumn>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec"
+            baseColumnNames="tenant_id, data_mart_id"
+            constraintName="fk_model_spec_data_mart"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+        <addForeignKeyConstraint
+            baseTableName="modeling_model_spec_revision"
+            baseColumnNames="tenant_id, data_mart_id"
+            constraintName="fk_model_spec_revision_data_mart"
+            referencedTableName="modeling_data_mart"
+            referencedColumnNames="tenant_id, id"/>
+
+        <sql splitStatements="true" endDelimiter=";"><![CDATA[
+            ALTER TABLE modeling_model_spec
+                ADD CONSTRAINT ck_model_spec_variant_code
+                CHECK (variant_code IS NULL OR variant_code ~ '^[A-Z][A-Z0-9_]{0,31}$');
+            ALTER TABLE modeling_model_spec_revision
+                ADD CONSTRAINT ck_model_spec_revision_variant_code
+                CHECK (variant_code IS NULL OR variant_code ~ '^[A-Z][A-Z0-9_]{0,31}$');
+            CREATE INDEX idx_model_spec_data_mart
+                ON modeling_model_spec (tenant_id, data_mart_id, model_type, status)
+                WHERE data_mart_id IS NOT NULL;
+            CREATE INDEX idx_model_spec_revision_data_mart
+                ON modeling_model_spec_revision (tenant_id, data_mart_id, revision DESC)
+                WHERE data_mart_id IS NOT NULL;
+            CREATE UNIQUE INDEX uk_model_spec_active_dimension_variant
+                ON modeling_model_spec (
+                    tenant_id,
+                    plan_id,
+                    dimension_definition_id,
+                    coalesce(data_mart_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                    coalesce(variant_code, 'DEFAULT')
+                )
+                WHERE contract_version = 2
+                  AND model_type = 'DIMENSION'
+                  AND dimension_definition_id IS NOT NULL
+                  AND status <> 'ARCHIVED';
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_MART_VARIANT_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -1,0 +1,37 @@
+{
+  "evidenceType": "automated-integration-contract",
+  "verifiedDate": "2026-07-19",
+  "result": "PASS",
+  "liveHttpCapture": false,
+  "implementationCommit": "72300c2ce",
+  "testClass": "WarehousePlanSourceInventoryApplicationServiceIT",
+  "tests": 3,
+  "failures": 0,
+  "errors": 0,
+  "verifiedResponseContract": {
+    "endpoint": "/api/modeling/warehouse-plans/{planId}/baseline/sources",
+    "methods": ["GET", "PUT"],
+    "bodyOwnsVersion": true,
+    "strongWritePrecondition": "response version plus If-Match",
+    "inventoryServerOwnedFields": ["version", "etag", "readiness", "checkedAt"],
+    "bindingServerOwnedFields": [
+      "bindingId",
+      "sourceId",
+      "displayName",
+      "resolvedVersion",
+      "confirmedVersion",
+      "freshness",
+      "resolutionStatus",
+      "lastValidatedAt"
+    ],
+    "newBindingWritableFields": ["sourceType", "locator", "confirmationStatus", "exclusionReason"],
+    "existingBindingWritableFields": ["bindingId", "confirmationStatus", "exclusionReason"],
+    "redactedStatuses": ["FORBIDDEN", "MISSING", "PROVIDER_ERROR"]
+  },
+  "verifiedScenarios": [
+    "serverOwnsBindingIdentityAndVersionWhileGetRevalidatesDeletion",
+    "forbiddenSourcesExposeOnlyTheOpaqueBindingAndStillAllowAnExplicitExclusion",
+    "businessFirstConceptualDesignCanProceedWithoutSourcesOrLegacyMappings"
+  ],
+  "boundary": "This is an automated Spring integration-contract manifest, not a captured authenticated live HTTP response."
+}

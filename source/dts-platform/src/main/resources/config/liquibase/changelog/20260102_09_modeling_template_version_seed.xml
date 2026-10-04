@@ -1,0 +1,122 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260102_09_modeling_template_version_seed" author="platform">
+        <addColumn tableName="modeling_template">
+            <column name="version" type="varchar(32)"/>
+            <column name="version_notes" type="varchar(512)"/>
+        </addColumn>
+
+        <createTable tableName="modeling_template_version">
+            <column name="id" type="${uuidType}">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="template_id" type="${uuidType}">
+                <constraints nullable="false"/>
+            </column>
+            <column name="version" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="change_summary" type="varchar(1024)"/>
+            <column name="snapshot_json" type="text"/>
+            <column name="released_at" type="timestamptz"/>
+            <column name="created_by" type="varchar(50)"/>
+            <column name="created_date" type="timestamptz"/>
+            <column name="last_modified_by" type="varchar(50)"/>
+            <column name="last_modified_date" type="timestamptz"/>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="modeling_template_version"
+            baseColumnNames="template_id"
+            referencedTableName="modeling_template"
+            referencedColumnNames="id"
+            constraintName="fk_modeling_template_version_template"/>
+
+        <addUniqueConstraint
+            tableName="modeling_template_version"
+            columnNames="template_id,version"
+            constraintName="uk_modeling_template_version"/>
+
+        <createIndex tableName="modeling_template_version" indexName="idx_modeling_template_version_template">
+            <column name="template_id"/>
+        </createIndex>
+        <createIndex tableName="modeling_template_version" indexName="idx_modeling_template_version_status">
+            <column name="status"/>
+        </createIndex>
+
+        <!-- Seed minimal modeling templates (ODS/DWD/DWS/ADS) for immediate use -->
+        <sql>
+            INSERT INTO modeling_template (
+                id, name, layer, status, version, version_notes,
+                naming_rule, fields_template, review_checklist,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda01',
+                'ODS层模型规范', 'ODS', 'ACTIVE', 'v1', '初始版本',
+                'ods_{system}_{biz}_{entity}（示例：ods_erp_sales_order）',
+                '字段建议：\n- 主键：id\n- 业务编码：*_code\n- 名称：*_name\n- 时间：*_time 或 *_date\n- 标志位：is_*\n- 金额/数量：*_amt/*_qty\n\n注意：ODS 保持源系统字段语义，尽量不改口径，仅做必要的标准化与去噪。',
+                '评审要点：\n- 是否保留源字段原始含义与口径\n- 是否明确主键/唯一键\n- 是否记录抽取批次/抽取时间\n- 是否保留必要的审计字段（created/updated/source_ts）',
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM modeling_template WHERE id = '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda01'
+            );
+
+            INSERT INTO modeling_template (
+                id, name, layer, status, version, version_notes,
+                naming_rule, fields_template, review_checklist,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda02',
+                'DWD层模型规范', 'DWD', 'ACTIVE', 'v1', '初始版本',
+                'dwd_{domain}_{subject}_{entity}（示例：dwd_fin_invoice）',
+                '字段建议：\n- 统一命名：snake_case\n- 维度外键：*_id\n- 枚举：*_type / *_status\n- 口径字段：明确业务含义与取值范围\n\n注意：DWD 面向明细事实，口径必须可追溯到 ODS。',
+                '评审要点：\n- 是否明确业务口径与来源字段\n- 是否消除同义字段/口径歧义\n- 是否满足最小密级/脱敏要求\n- 是否有变更记录与影响提示',
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM modeling_template WHERE id = '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda02'
+            );
+
+            INSERT INTO modeling_template (
+                id, name, layer, status, version, version_notes,
+                naming_rule, fields_template, review_checklist,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda03',
+                'DWS层模型规范', 'DWS', 'ACTIVE', 'v1', '初始版本',
+                'dws_{domain}_{topic}_{metric}（示例：dws_proj_delivery_kpi）',
+                '字段建议：\n- 汇总粒度字段：例如 stat_date/stat_month\n- 指标字段：*_cnt/*_amt/*_rate\n- 维度字段：*_name/*_code\n\n注意：DWS 面向主题汇总，必须明确粒度与维度。',
+                '评审要点：\n- 汇总粒度是否明确且稳定\n- 指标计算口径是否引用指标库/标准\n- 是否支持按部门/密级行过滤\n- 是否有性能与分区策略建议',
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM modeling_template WHERE id = '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda03'
+            );
+
+            INSERT INTO modeling_template (
+                id, name, layer, status, version, version_notes,
+                naming_rule, fields_template, review_checklist,
+                created_by, created_date, last_modified_by, last_modified_date
+            )
+            SELECT
+                '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda04',
+                'ADS层模型规范', 'ADS', 'ACTIVE', 'v1', '初始版本',
+                'ads_{domain}_{app}_{scene}（示例：ads_fin_board_summary）',
+                '字段建议：\n- 面向应用/报表的展示字段\n- 输出字段需要中文含义说明（可在元数据字段备注维护）\n\n注意：ADS 面向消费，字段与指标口径一致性优先。',
+                '评审要点：\n- 是否明确目标报表/看板/大屏\n- 字段是否与标准/指标口径一致\n- 是否存在敏感字段且已配置脱敏\n- 是否记录发布版本与变更说明',
+                'system', now(), 'system', now()
+            WHERE NOT EXISTS (
+                SELECT 1 FROM modeling_template WHERE id = '0b32e6f7-63f0-4c67-a1d7-9c4a9a4bda04'
+            );
+        </sql>
+    </changeSet>
+</databaseChangeLog>
+

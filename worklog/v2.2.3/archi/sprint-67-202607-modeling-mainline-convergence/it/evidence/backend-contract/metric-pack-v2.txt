@@ -1,0 +1,7 @@
+F5 metric-pack v2 contract
+
+- MetricPackValidationService no longer requires a business_objects manifest.
+- VisualAssetSummary uses modelRef instead of businessObjectCode.
+- Canonical references are modelRef, datasetRef and metricRef.
+- Focused dts-metrics suite: 19/19 PASS.
+- dts-metrics Maven package with tests skipped after the focused gate: BUILD SUCCESS.

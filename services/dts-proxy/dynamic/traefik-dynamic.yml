@@ -1,0 +1,68 @@
+# Minimal dynamic config to satisfy --providers.file.filename
+# Keep lightweight; service-specific routers/middlewares are defined via labels.
+#
+# Sprint-78/F4 (2026-07-31): Hetu fallback routers, the `hetu` service and all
+# hetu-* middlewares were removed. Hetu upstream has been decommissioned
+# (unreachable at hetu.upstream:7778); BI is served by the built-in `/bi`.
+# Historical comparison: traefik-dynamic.yml.bak.bi_yuzhicloud_20260412161329
+
+http:
+  middlewares:
+    security-headers:
+      headers:
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        frameDeny: false
+    # Forward-auth to platform: reuse platform browser session for downstream modules (e.g. analytics).
+    # This validates incoming requests via portal_session/browser cookies and injects identity
+    # headers (X-DTS-*) into downstream requests on success.
+    platform-forward-auth:
+      forwardAuth:
+        address: "http://dts-platform:8081/api/forward-auth"
+        trustForwardHeader: true
+        authRequestHeaders:
+          - Cookie
+          - Authorization
+        authResponseHeaders:
+          - X-DTS-User
+          - X-DTS-Display-Name
+          - X-DTS-User-Id
+          - X-DTS-Roles
+          - X-DTS-Permissions
+          - X-DTS-Dept-Code
+          - X-DTS-Personnel-Level
+    # CORS middleware for APIs (auto-match any origin; rely on same-origin routing for safety)
+    cors-allow:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "PATCH"
+          - "DELETE"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "*"
+        addVaryHeader: true
+        accessControlAllowCredentials: true
+        # Auto-match any origin (works with allowCredentials=true since Traefik reflects the matched origin)
+        accessControlAllowOriginListRegex:
+          - "https?://.*"
+        accessControlMaxAge: 86400
+
+tls:
+  certificates:
+    - certFile: /certs/server.crt
+      keyFile: /certs/server.key
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /certs/server.crt
+        keyFile: /certs/server.key

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+  <changeSet id="20260405_10_1" author="system">
+    <createTable tableName="catalog_data_product">
+      <column name="id" type="uuid"><constraints primaryKey="true" nullable="false"/></column>
+      <column name="name" type="varchar(128)"><constraints nullable="false"/></column>
+      <column name="code" type="varchar(64)"><constraints unique="true"/></column>
+      <column name="owner_dept" type="varchar(64)"/>
+      <column name="description" type="varchar(2048)"/>
+      <column name="dataset_ids" type="text"/>
+      <column name="indicator_codes" type="text"/>
+      <column name="status" type="varchar(32)" defaultValue="DRAFT"/>
+      <column name="created_by" type="varchar(50)"/>
+      <column name="created_date" type="timestamp"/>
+      <column name="last_modified_by" type="varchar(50)"/>
+      <column name="last_modified_date" type="timestamp"/>
+    </createTable>
+  </changeSet>
+
+  <changeSet id="20260405_10_2" author="system">
+    <addColumn tableName="catalog_dataset">
+      <column name="row_security_policy" type="varchar(256)"/>
+      <column name="sla_refresh_cron" type="varchar(128)"/>
+    </addColumn>
+  </changeSet>
+
+  <changeSet id="20260405_10_3" author="system">
+    <addColumn tableName="catalog_dataset_lineage">
+      <column name="source_column" type="varchar(128)"/>
+      <column name="target_column" type="varchar(128)"/>
+    </addColumn>
+  </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <!--
+      人员编码是账号的识别键（区分大小写），同一编码不应出现两行快照。
+      前置检查发现存量已有重复时跳过建索引而不是阻塞启动，由现场先行清理。
+    -->
+    <changeSet id="20260920-01-admin-keycloak-user-person-code-unique" author="dts">
+        <preConditions onFail="MARK_RAN" onFailMessage="admin_keycloak_user.person_code 存在重复值，跳过唯一索引创建，请先清理后手工建索引">
+            <sqlCheck expectedResult="0">
+                select count(*) from (
+                    select person_code from admin_keycloak_user
+                     where person_code is not null
+                     group by person_code having count(*) > 1
+                ) dup
+            </sqlCheck>
+        </preConditions>
+        <sql>CREATE UNIQUE INDEX IF NOT EXISTS uk_admin_kc_user_person_code ON admin_keycloak_user (person_code) WHERE person_code IS NOT NULL</sql>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="20260211-1-add-sync-config" author="system">
+        <addColumn tableName="ingestion_task">
+            <column name="sync_config" type="jsonb"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="20260211-2-create-incremental-state" author="system">
+        <createTable tableName="ingestion_incremental_state">
+            <column name="id" type="bigserial">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="task_id" type="bigint">
+                <constraints nullable="false"
+                    foreignKeyName="fk_ingestion_incremental_state_task"
+                    references="ingestion_task(id)"/>
+            </column>
+            <column name="source_table" type="varchar(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="last_success_watermark" type="varchar(512)"/>
+            <column name="last_run_id" type="varchar(255)"/>
+            <column name="updated_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="timestamp" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+            tableName="ingestion_incremental_state"
+            columnNames="task_id, source_table"
+            constraintName="uk_ingestion_incremental_task_table"/>
+
+        <createIndex indexName="idx_ingestion_incremental_task" tableName="ingestion_incremental_state">
+            <column name="task_id"/>
+        </createIndex>
+
+        <createIndex indexName="idx_ingestion_incremental_updated" tableName="ingestion_incremental_state">
+            <column name="updated_at"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

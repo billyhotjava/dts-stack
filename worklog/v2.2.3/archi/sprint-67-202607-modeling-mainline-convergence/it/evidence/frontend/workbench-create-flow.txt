@@ -1,0 +1,120 @@
+Sprint-67 F2-T01 workbench create-flow verification
+Verified: 2026-07-19 Asia/Shanghai
+Result: PASS
+
+Commands:
+  cd source/dts-platform-webapp
+  node src/pages/modeling/warehousePlanCreateFlow.test.ts
+  node src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts
+  node src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts
+  pnpm build
+
+Results:
+- Node helper and source-contract tests: 20 passed, 0 failed.
+- Vite production build: PASS; Chrome 95 legacy target generated successfully (10,587 modules, about 2m10s).
+
+Covered behavior:
+- randomUUID with a getRandomValues RFC 4122 v4 fallback and no time/pseudo-random fallback;
+- reducer behavior verifies one idempotency key per modal lifecycle, retention across errors, explicit replacement after a 409 and clearing on cancel/success;
+- BUSINESS_FIRST and ASSET_FIRST create the same plan type with conditional fields;
+- no client-generated code or Date.now-based identity;
+- authenticated owner context is read-only and the UI uses the same six-role maintainer gate as the backend;
+- success consumes server plan/nextAction; requested plan load failure never silently selects another plan;
+- a requested plan restores before/beside the optional list, and list failure cannot overwrite it;
+- a deferred A/B request-order test and page request guards prevent stale A responses from overwriting B;
+- a missing tab defaults from the persisted onboarding mode; baseline/projection failure remains UNKNOWN instead of making the plan look missing or complete.
+
+Independent review closure (2026-07-19 02:20 +08:00):
+
+Commands:
+  node --experimental-strip-types src/pages/modeling/warehousePlanCreateFlow.test.ts
+  node --experimental-strip-types src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts
+  node --experimental-strip-types src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts
+  pnpm exec tsc --noEmit
+  pnpm build
+
+Results:
+- helper and source-contract tests: 30 passed, 0 failed;
+- TypeScript full type-check: PASS;
+- Chrome 95 legacy build: PASS, 10,587 modules, built in 2m23s.
+
+Review fixes proven:
+- lifecycle labels use the backend states DESIGNING, VALIDATING and READY_TO_PUBLISH;
+- create responses are sequence-guarded and the modal cannot close while submitting;
+- an exact plan remains usable when the list fails, with list-only retry and merge;
+- switching or reloading a plan invalidates an older list retry and immediately clears its loading state;
+- evidence retry does not clear or reload the plan header;
+- StageProjection waits until the exact URL plan GET succeeds;
+- asset-first sources reject duplicate type+id, sourceId over 256 and sourceVersion over 128;
+- conflict recovery copy uses customer language rather than request-identity terminology.
+
+Adjacent language and diff gates (2026-07-19 02:34 +08:00):
+
+Commands:
+  node --experimental-strip-types src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts
+  node --test --experimental-strip-types src/pages/modeling/canonicalModelingLanguage.source-contract.test.ts src/routes/sections/dashboard/portalGoldenLineMenu.source-contract.test.ts src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts src/pages/modeling/warehousePlanJourneyConvergence.source-contract.test.ts
+  git diff --check
+
+Results:
+- canonical customer-language contract: 7 passed, 0 failed;
+- adjacent five-file source-contract gate: 5 files passed, 0 failed;
+- whitespace/error-marker gate: PASS.
+
+Recovery-state follow-up (2026-07-19 02:56 +08:00):
+
+- RED proved that an evidence retry retained stale baseline/projection values when either request failed;
+- RED proved that exact-plan plus list failure fell through to the misleading "新建规划" empty state;
+- the minimal fix now clears only the rejected baseline/projection value and never clears or reloads the plan header;
+- the exact-plan failure alert always offers "重新加载指定计划", explains missing/unauthorized/temporary-network causes, and suppresses the create-plan empty state;
+- focused helper/page contracts: 31 passed, 0 failed; `pnpm exec tsc --noEmit`: PASS; `git diff --check`: PASS.
+
+Real Chrome 95 browser closure (2026-07-19 03:34 +08:00):
+
+Browser and runtime:
+- actual executable: `/tmp/dts-chrome95-ttQJ8k/chrome-linux/chrome`;
+- reported version: `Chromium 95.0.4638.0`;
+- current-source production preview: `http://127.0.0.1:4173`;
+- desktop viewport: 1366x768; narrow viewport: 390x844.
+
+Commands:
+  node --experimental-strip-types src/pages/modeling/warehousePlanCreateFlow.test.ts
+  node --experimental-strip-types src/pages/modeling/ModelingWorkbenchPage.source-contract.test.ts
+  node --experimental-strip-types src/pages/modeling/WarehousePlanDetailPage.source-contract.test.ts
+  pnpm build
+  pnpm exec biome check playwright.sprint67.chrome95.config.ts e2e/sprint67-warehouse-plan.spec.ts
+  pnpm exec tsc --noEmit
+  pnpm preview --host 127.0.0.1 --port 4173
+  CHROME95_EXECUTABLE_PATH=/tmp/dts-chrome95-ttQJ8k/chrome-linux/chrome \
+    E2E_BASE_URL=http://127.0.0.1:4173 \
+    pnpm exec playwright test --config=playwright.sprint67.chrome95.config.ts
+
+Final results:
+- focused helper/page contracts: 31 passed, 0 failed;
+- current-source Chrome 95 legacy production build: PASS;
+- Biome and full TypeScript check: PASS;
+- real Chromium 95 browser suite: 3 passed, 0 failed (12.7s);
+- no blank page, pageerror, transport failure or unexpected HTTP >=400 response;
+- no unexpected console.error; the only accepted HTTP failures are the deliberately injected plan-list 503 and baseline-evidence 503 used to prove recovery.
+
+Browser-covered behavior:
+- BUSINESS_FIRST and ASSET_FIRST render their conditional form fields and submit the same create endpoint;
+- the business-first submit remains in loading state during a delayed POST; a second DOM click does not create a second request (one POST observed);
+- create navigation consumes the server `nextAction`, landing on business-scope or sources according to the returned URL;
+- an exact plan remains selected while the optional list returns 503, then merges the list after an independent retry;
+- detail keeps the plan header while baseline evidence returns 503, then clears the recovery alert after evidence-only retry;
+- detail return and full page refresh retain `planId=plan-exact`;
+- 390x844 has no document/body horizontal overflow and keeps the primary action readable;
+- browser/network probes assert no unexpected errors.
+
+Evidence boundary:
+- the browser suite runs the current production bundle in the actual Chrome 95 executable, with WarehousePlan APIs deterministically intercepted by Playwright.
+- It proves UI behavior, routing, responsive layout, failure recovery and Chrome 95 compatibility; it does not claim live backend persistence, live authentication or Spring Security permission E2E.
+- Live backend idempotency/concurrency is proven separately by the 27-test backend command; permission E2E remains outside this F2-T01 browser evidence.
+
+Screenshots:
+- `it/evidence/chrome95/desktop-business-first-form.png`
+- `it/evidence/chrome95/desktop-business-first.png`
+- `it/evidence/chrome95/desktop-asset-first-form.png`
+- `it/evidence/chrome95/desktop-asset-first.png`
+- `it/evidence/chrome95/desktop-recovery.png`
+- `it/evidence/chrome95/narrow-recovery.png`

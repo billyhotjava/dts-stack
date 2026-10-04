@@ -1,0 +1,2071 @@
+version: 2
+sources:
+- name: public
+  description: 花卉租赁已接入的本地 ODS；由导入页面映射实际资产。
+  schema: public
+  tables:
+  - name: ods_prsa_collection_item
+    identifier: ods_prsa_collection_item
+    description: 花卉租赁源表 a_collection_item
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: collection_record_id
+      data_type: bigint
+      description: 源字段 collection_record_id
+    - name: biz_id
+      data_type: bigint
+      description: 源字段 biz_id
+    - name: biz_type
+      data_type: integer
+      description: 源字段 biz_type
+    - name: total_amount
+      data_type: numeric
+      description: 源字段 total_amount
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsa_collection_record
+    identifier: ods_prsa_collection_record
+    description: 花卉租赁源表 a_collection_record
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: income_type
+      data_type: integer
+      description: 源字段 income_type
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: with_invoice
+      data_type: integer
+      description: 源字段 with_invoice
+    - name: payment_type
+      data_type: integer
+      description: 源字段 payment_type
+    - name: pay_mode
+      data_type: text
+      description: 源字段 pay_mode
+    - name: colloection_name
+      data_type: text
+      description: 源字段 colloection_name
+    - name: colloection_bank_account
+      data_type: text
+      description: 源字段 colloection_bank_account
+    - name: pay_time
+      data_type: timestamp
+      description: 源字段 pay_time
+    - name: pay_amoney
+      data_type: numeric
+      description: 源字段 pay_amoney
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsa_month_accounting
+    identifier: ods_prsa_month_accounting
+    description: 花卉租赁源表 a_month_accounting
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: company_name
+      data_type: text
+      description: 源字段 company_name
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: settlement_year
+      data_type: integer
+      description: 源字段 settlement_year
+    - name: settlement_month
+      data_type: integer
+      description: 源字段 settlement_month
+    - name: year_and_month
+      data_type: text
+      description: 源字段 year_and_month
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: start_time
+      data_type: timestamp
+      description: 源字段 start_time
+    - name: end_time
+      data_type: timestamp
+      description: 源字段 end_time
+    - name: total_day
+      data_type: integer
+      description: 源字段 total_day
+    - name: project_manage_user_id
+      data_type: bigint
+      description: 源字段 project_manage_user_id
+    - name: project_manage_user_name
+      data_type: text
+      description: 源字段 project_manage_user_name
+    - name: supervise_user_id
+      data_type: bigint
+      description: 源字段 supervise_user_id
+    - name: supervise_user_name
+      data_type: text
+      description: 源字段 supervise_user_name
+    - name: biz_user_id
+      data_type: bigint
+      description: 源字段 biz_user_id
+    - name: biz_user_name
+      data_type: text
+      description: 源字段 biz_user_name
+    - name: discount_rate
+      data_type: double precision
+      description: 源字段 discount_rate
+    - name: bit_number
+      data_type: integer
+      description: 源字段 bit_number
+    - name: rent_type
+      data_type: integer
+      description: 源字段 rent_type
+    - name: regular_rent
+      data_type: numeric
+      description: 源字段 regular_rent
+    - name: receivable_total_amount
+      data_type: numeric
+      description: 源字段 receivable_total_amount
+    - name: net_receipt_total_amount
+      data_type: numeric
+      description: 源字段 net_receipt_total_amount
+    - name: folding_after_total_amount
+      data_type: numeric
+      description: 源字段 folding_after_total_amount
+    - name: period_total_amount
+      data_type: numeric
+      description: 源字段 period_total_amount
+    - name: period_receivable_total_amount
+      data_type: numeric
+      description: 源字段 period_receivable_total_amount
+    - name: period_net_receivable_total_amount
+      data_type: numeric
+      description: 源字段 period_net_receivable_total_amount
+    - name: add_total_amount
+      data_type: numeric
+      description: 源字段 add_total_amount
+    - name: add_receivable_total_amount
+      data_type: numeric
+      description: 源字段 add_receivable_total_amount
+    - name: add_net_receipt_total_amount
+      data_type: numeric
+      description: 源字段 add_net_receipt_total_amount
+    - name: cut_total_amount
+      data_type: numeric
+      description: 源字段 cut_total_amount
+    - name: cut_receivable_total_amount
+      data_type: numeric
+      description: 源字段 cut_receivable_total_amount
+    - name: cut_net_receipt_total_amount
+      data_type: numeric
+      description: 源字段 cut_net_receipt_total_amount
+    - name: adjust_total_amount
+      data_type: numeric
+      description: 源字段 adjust_total_amount
+    - name: adjust_receivable_total_amount
+      data_type: numeric
+      description: 源字段 adjust_receivable_total_amount
+    - name: adjust_net_receipt_total_amount
+      data_type: numeric
+      description: 源字段 adjust_net_receipt_total_amount
+    - name: sale_total_amount
+      data_type: numeric
+      description: 源字段 sale_total_amount
+    - name: sale_receipt_total_amount
+      data_type: numeric
+      description: 源字段 sale_receipt_total_amount
+    - name: sale_net_receipt_total_amount
+      data_type: numeric
+      description: 源字段 sale_net_receipt_total_amount
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: update_user_id
+      data_type: bigint
+      description: 源字段 update_user_id
+    - name: update_user_name
+      data_type: text
+      description: 源字段 update_user_name
+    - name: total_amount
+      data_type: numeric
+      description: 源字段 total_amount
+    - name: offset_biz_ids
+      data_type: text
+      description: 源字段 offset_biz_ids
+    - name: department_id
+      data_type: bigint
+      description: 源字段 department_id
+    - name: department_name
+      data_type: text
+      description: 源字段 department_name
+    - name: rent_from_contract
+      data_type: integer
+      description: 源字段 rent_from_contract
+    - name: contract_id
+      data_type: bigint
+      description: 源字段 contract_id
+    - name: rent_by_day
+      data_type: integer
+      description: 源字段 rent_by_day
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsa_month_rent_snapshot
+    identifier: ods_prsa_month_rent_snapshot
+    description: 花卉租赁源表 a_month_rent_snapshot
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: department_id
+      data_type: bigint
+      description: 源字段 department_id
+    - name: department_name
+      data_type: text
+      description: 源字段 department_name
+    - name: year_and_month
+      data_type: text
+      description: 源字段 year_and_month
+    - name: settlement_year
+      data_type: integer
+      description: 源字段 settlement_year
+    - name: settlement_month
+      data_type: integer
+      description: 源字段 settlement_month
+    - name: start_time
+      data_type: timestamp
+      description: 源字段 start_time
+    - name: end_time
+      data_type: timestamp
+      description: 源字段 end_time
+    - name: rent_type
+      data_type: integer
+      description: 源字段 rent_type
+    - name: discount_rate
+      data_type: double precision
+      description: 源字段 discount_rate
+    - name: receivable_amount
+      data_type: numeric
+      description: 源字段 receivable_amount
+    - name: receivable_after_discount
+      data_type: numeric
+      description: 源字段 receivable_after_discount
+    - name: regular_rent
+      data_type: numeric
+      description: 源字段 regular_rent
+    - name: snapshot_time
+      data_type: timestamp
+      description: 源字段 snapshot_time
+    - name: project_manage_user_id
+      data_type: bigint
+      description: 源字段 project_manage_user_id
+    - name: project_manage_user_name
+      data_type: text
+      description: 源字段 project_manage_user_name
+    - name: biz_user_id
+      data_type: bigint
+      description: 源字段 biz_user_id
+    - name: biz_user_name
+      data_type: text
+      description: 源字段 biz_user_name
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsb_goods
+    identifier: ods_prsb_goods
+    description: 花卉租赁源表 b_goods
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: name
+      data_type: text
+      description: 源字段 name
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: type
+      data_type: integer
+      description: 源字段 type
+    - name: unit
+      data_type: text
+      description: 源字段 unit
+    - name: specifications
+      data_type: text
+      description: 源字段 specifications
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: category
+      data_type: text
+      description: 源字段 category
+    - name: goods_classify_id
+      data_type: bigint
+      description: 源字段 goods_classify_id
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsb_goods_price
+    identifier: ods_prsb_goods_price
+    description: 花卉租赁源表 b_goods_price
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: goods_id
+      data_type: bigint
+      description: 源字段 goods_id
+    - name: goods_code
+      data_type: text
+      description: 源字段 goods_code
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: goods_name
+      data_type: text
+      description: 源字段 goods_name
+    - name: specifications
+      data_type: text
+      description: 源字段 specifications
+    - name: goods_att
+      data_type: text
+      description: 源字段 goods_att
+    - name: goods_type
+      data_type: integer
+      description: 源字段 goods_type
+    - name: guidance_price
+      data_type: numeric
+      description: 源字段 guidance_price
+    - name: cost_price
+      data_type: numeric
+      description: 源字段 cost_price
+    - name: unit
+      data_type: text
+      description: 源字段 unit
+    - name: good_category
+      data_type: text
+      description: 源字段 good_category
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsp_contract
+    identifier: ods_prsp_contract
+    description: 花卉租赁源表 p_contract
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: customer_id
+      data_type: bigint
+      description: 源字段 customer_id
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: title
+      data_type: text
+      description: 源字段 title
+    - name: signing_time
+      data_type: timestamp
+      description: 源字段 signing_time
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: start_date
+      data_type: timestamp
+      description: 源字段 start_date
+    - name: end_date
+      data_type: timestamp
+      description: 源字段 end_date
+    - name: type
+      data_type: text
+      description: 源字段 type
+    - name: settlement_method
+      data_type: text
+      description: 源字段 settlement_method
+    - name: discount
+      data_type: numeric
+      description: 源字段 discount
+    - name: business_personnel_id
+      data_type: bigint
+      description: 源字段 business_personnel_id
+    - name: business_personnel_name
+      data_type: text
+      description: 源字段 business_personnel_name
+    - name: settlement_period
+      data_type: text
+      description: 源字段 settlement_period
+    - name: settlement_period_custom
+      data_type: text
+      description: 源字段 settlement_period_custom
+    - name: invoice_type
+      data_type: integer
+      description: 源字段 invoice_type
+    - name: amount_excluding_tax
+      data_type: numeric
+      description: 源字段 amount_excluding_tax
+    - name: amount_including_tax
+      data_type: numeric
+      description: 源字段 amount_including_tax
+    - name: amount_including_tax_and
+      data_type: numeric
+      description: 源字段 amount_including_tax_and
+    - name: full_billing_name
+      data_type: text
+      description: 源字段 full_billing_name
+    - name: company_name
+      data_type: text
+      description: 源字段 company_name
+    - name: address
+      data_type: text
+      description: 源字段 address
+    - name: duty_paragraph
+      data_type: text
+      description: 源字段 duty_paragraph
+    - name: bank
+      data_type: text
+      description: 源字段 bank
+    - name: bank_card_no
+      data_type: text
+      description: 源字段 bank_card_no
+    - name: contact_number
+      data_type: text
+      description: 源字段 contact_number
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: invoicing_tax_rate
+      data_type: integer
+      description: 源字段 invoicing_tax_rate
+    - name: parent_id
+      data_type: bigint
+      description: 源字段 parent_id
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: settlement_start_date
+      data_type: text
+      description: 源字段 settlement_start_date
+    - name: verify_type
+      data_type: integer
+      description: 源字段 verify_type
+    - name: verify_day_number
+      data_type: integer
+      description: 源字段 verify_day_number
+    - name: settlement_type
+      data_type: integer
+      description: 源字段 settlement_type
+    - name: month_settlement_money
+      data_type: numeric
+      description: 源字段 month_settlement_money
+    - name: discount_ratio
+      data_type: double precision
+      description: 源字段 discount_ratio
+    - name: active_child
+      data_type: bigint
+      description: 源字段 active_child
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsp_customer
+    identifier: ods_prsp_customer
+    description: 花卉租赁源表 p_customer
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: name
+      data_type: text
+      description: 源字段 name
+    - name: abbreviation
+      data_type: text
+      description: 源字段 abbreviation
+    - name: contacts_name
+      data_type: text
+      description: 源字段 contacts_name
+    - name: contacts_phone
+      data_type: text
+      description: 源字段 contacts_phone
+    - name: contacts_post
+      data_type: text
+      description: 源字段 contacts_post
+    - name: type
+      data_type: text
+      description: 源字段 type
+    - name: status
+      data_type: text
+      description: 源字段 status
+    - name: source
+      data_type: text
+      description: 源字段 source
+    - name: address
+      data_type: text
+      description: 源字段 address
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsp_position
+    identifier: ods_prsp_position
+    description: 花卉租赁源表 p_position
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: type
+      data_type: integer
+      description: 源字段 type
+    - name: floor_number_id
+      data_type: bigint
+      description: 源字段 floor_number_id
+    - name: floor_number_name
+      data_type: text
+      description: 源字段 floor_number_name
+    - name: floor_layer_id
+      data_type: bigint
+      description: 源字段 floor_layer_id
+    - name: floor_layer_name
+      data_type: text
+      description: 源字段 floor_layer_name
+    - name: region
+      data_type: text
+      description: 源字段 region
+    - name: region_full
+      data_type: text
+      description: 源字段 region_full
+    - name: curing_period
+      data_type: text
+      description: 源字段 curing_period
+    - name: follow_type
+      data_type: text
+      description: 源字段 follow_type
+    - name: matters_needing_attention
+      data_type: text
+      description: 源字段 matters_needing_attention
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: contract_dept_id
+      data_type: bigint
+      description: 源字段 contract_dept_id
+    - name: contract_dept_name
+      data_type: text
+      description: 源字段 contract_dept_name
+    - name: curing_user_id
+      data_type: bigint
+      description: 源字段 curing_user_id
+    - name: curing_user_name
+      data_type: text
+      description: 源字段 curing_user_name
+    - name: alias_name
+      data_type: text
+      description: 源字段 alias_name
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsp_project
+    identifier: ods_prsp_project
+    description: 花卉租赁源表 p_project
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: contract_id
+      data_type: bigint
+      description: 源字段 contract_id
+    - name: name
+      data_type: text
+      description: 源字段 name
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: abbreviation
+      data_type: text
+      description: 源字段 abbreviation
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: area
+      data_type: text
+      description: 源字段 area
+    - name: type
+      data_type: integer
+      description: 源字段 type
+    - name: address
+      data_type: text
+      description: 源字段 address
+    - name: longitude
+      data_type: numeric
+      description: 源字段 longitude
+    - name: dimension
+      data_type: numeric
+      description: 源字段 dimension
+    - name: building_number_rules
+      data_type: text
+      description: 源字段 building_number_rules
+    - name: floor_rules
+      data_type: text
+      description: 源字段 floor_rules
+    - name: start_time
+      data_type: timestamp
+      description: 源字段 start_time
+    - name: end_time
+      data_type: timestamp
+      description: 源字段 end_time
+    - name: budget_amount
+      data_type: numeric
+      description: 源字段 budget_amount
+    - name: biz_user_id
+      data_type: bigint
+      description: 源字段 biz_user_id
+    - name: manager_id
+      data_type: bigint
+      description: 源字段 manager_id
+    - name: supervisor_id
+      data_type: bigint
+      description: 源字段 supervisor_id
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: customer_type
+      data_type: text
+      description: 源字段 customer_type
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: last_month_total_rent
+      data_type: numeric
+      description: 源字段 last_month_total_rent
+    - name: curing_director
+      data_type: bigint
+      description: 源字段 curing_director
+    - name: curing_director_name
+      data_type: text
+      description: 源字段 curing_director_name
+    - name: settle_start_time
+      data_type: timestamp
+      description: 源字段 settle_start_time
+    - name: settle_end_time
+      data_type: timestamp
+      description: 源字段 settle_end_time
+    - name: check_cycle
+      data_type: integer
+      description: 源字段 check_cycle
+    - name: deliver_time_str
+      data_type: text
+      description: 源字段 deliver_time_str
+    - name: deliver_reasons
+      data_type: text
+      description: 源字段 deliver_reasons
+    - name: cow_num
+      data_type: integer
+      description: 源字段 cow_num
+    - name: column_num
+      data_type: integer
+      description: 源字段 column_num
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prsp_project_green
+    identifier: ods_prsp_project_green
+    description: 花卉租赁源表 p_project_green
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: position_id
+      data_type: bigint
+      description: 源字段 position_id
+    - name: position_name
+      data_type: text
+      description: 源字段 position_name
+    - name: position_full_name
+      data_type: text
+      description: 源字段 position_full_name
+    - name: green_type
+      data_type: integer
+      description: 源字段 green_type
+    - name: good_name
+      data_type: text
+      description: 源字段 good_name
+    - name: good_price_id
+      data_type: bigint
+      description: 源字段 good_price_id
+    - name: good_type
+      data_type: integer
+      description: 源字段 good_type
+    - name: good_norms
+      data_type: text
+      description: 源字段 good_norms
+    - name: good_specs
+      data_type: text
+      description: 源字段 good_specs
+    - name: good_unit
+      data_type: text
+      description: 源字段 good_unit
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: rent_mode
+      data_type: integer
+      description: 源字段 rent_mode
+    - name: rent
+      data_type: numeric
+      description: 源字段 rent
+    - name: cost
+      data_type: numeric
+      description: 源字段 cost
+    - name: pose_time
+      data_type: timestamp
+      description: 源字段 pose_time
+    - name: parent_id
+      data_type: bigint
+      description: 源字段 parent_id
+    - name: good_number
+      data_type: integer
+      description: 源字段 good_number
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: import_status
+      data_type: integer
+      description: 源字段 import_status
+    - name: total_number
+      data_type: integer
+      description: 源字段 total_number
+    - name: lock_change_number
+      data_type: integer
+      description: 源字段 lock_change_number
+    - name: lock_cut_number
+      data_type: integer
+      description: 源字段 lock_cut_number
+    - name: lock_transfer_number
+      data_type: integer
+      description: 源字段 lock_transfer_number
+    - name: lock_bad_number
+      data_type: integer
+      description: 源字段 lock_bad_number
+    - name: lock_adjustment_number
+      data_type: integer
+      description: 源字段 lock_adjustment_number
+    - name: last_cost
+      data_type: numeric
+      description: 源字段 last_cost
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_change_info
+    identifier: ods_prst_change_info
+    description: 花卉租赁源表 t_change_info
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: title
+      data_type: text
+      description: 源字段 title
+    - name: apply_user_id
+      data_type: bigint
+      description: 源字段 apply_user_id
+    - name: apply_user_name
+      data_type: text
+      description: 源字段 apply_user_name
+    - name: apply_time
+      data_type: timestamp
+      description: 源字段 apply_time
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: change_type
+      data_type: integer
+      description: 源字段 change_type
+    - name: biz_id
+      data_type: bigint
+      description: 源字段 biz_id
+    - name: change_number
+      data_type: integer
+      description: 源字段 change_number
+    - name: before_total_amount
+      data_type: numeric
+      description: 源字段 before_total_amount
+    - name: after_total_amount
+      data_type: numeric
+      description: 源字段 after_total_amount
+    - name: before_settlement_time
+      data_type: timestamp
+      description: 源字段 before_settlement_time
+    - name: after_settlement_time
+      data_type: timestamp
+      description: 源字段 after_settlement_time
+    - name: before_good_price_id
+      data_type: bigint
+      description: 源字段 before_good_price_id
+    - name: before_good_name
+      data_type: text
+      description: 源字段 before_good_name
+    - name: before_good_type
+      data_type: integer
+      description: 源字段 before_good_type
+    - name: before_good_norms
+      data_type: text
+      description: 源字段 before_good_norms
+    - name: before_good_specs
+      data_type: text
+      description: 源字段 before_good_specs
+    - name: before_good_unit
+      data_type: text
+      description: 源字段 before_good_unit
+    - name: after_good_price_id
+      data_type: bigint
+      description: 源字段 after_good_price_id
+    - name: after_good_name
+      data_type: text
+      description: 源字段 after_good_name
+    - name: after_good_type
+      data_type: integer
+      description: 源字段 after_good_type
+    - name: after_good_norms
+      data_type: text
+      description: 源字段 after_good_norms
+    - name: after_good_specs
+      data_type: text
+      description: 源字段 after_good_specs
+    - name: after_good_unit
+      data_type: text
+      description: 源字段 after_good_unit
+    - name: confirmed_user_id
+      data_type: bigint
+      description: 源字段 confirmed_user_id
+    - name: confirmed_user_name
+      data_type: text
+      description: 源字段 confirmed_user_name
+    - name: confirmed_time
+      data_type: timestamp
+      description: 源字段 confirmed_time
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_curing_record
+    identifier: ods_prst_curing_record
+    description: 花卉租赁源表 t_curing_record
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: curing_user_id
+      data_type: bigint
+      description: 源字段 curing_user_id
+    - name: curing_user_name
+      data_type: text
+      description: 源字段 curing_user_name
+    - name: curing_time
+      data_type: timestamp
+      description: 源字段 curing_time
+    - name: total_position_number
+      data_type: integer
+      description: 源字段 total_position_number
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: content
+      data_type: text
+      description: 源字段 content
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: record_type
+      data_type: integer
+      description: 源字段 record_type
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_curing_record_item
+    identifier: ods_prst_curing_record_item
+    description: 花卉租赁源表 t_curing_record_item
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: floor_layer_id
+      data_type: bigint
+      description: 源字段 floor_layer_id
+    - name: floor_layer_name
+      data_type: text
+      description: 源字段 floor_layer_name
+    - name: floor_layer_full_name
+      data_type: text
+      description: 源字段 floor_layer_full_name
+    - name: bz_des
+      data_type: text
+      description: 源字段 bz_des
+    - name: bchclfs
+      data_type: text
+      description: 源字段 bchclfs
+    - name: scbchtp
+      data_type: text
+      description: 源字段 scbchtp
+    - name: thwz
+      data_type: text
+      description: 源字段 thwz
+    - name: zchhsm
+      data_type: text
+      description: 源字段 zchhsm
+    - name: zjlvsm
+      data_type: text
+      description: 源字段 zjlvsm
+    - name: jslzsm
+      data_type: text
+      description: 源字段 jslzsm
+    - name: thpzsm
+      data_type: text
+      description: 源字段 thpzsm
+    - name: pjtzsm
+      data_type: text
+      description: 源字段 pjtzsm
+    - name: bswpsm
+      data_type: text
+      description: 源字段 bswpsm
+    - name: xjjwtsm
+      data_type: text
+      description: 源字段 xjjwtsm
+    - name: xjjwtxglxr
+      data_type: text
+      description: 源字段 xjjwtxglxr
+    - name: remarks
+      data_type: text
+      description: 源字段 remarks
+    - name: curing_record_id
+      data_type: bigint
+      description: 源字段 curing_record_id
+    - name: curing_content
+      data_type: text
+      description: 源字段 curing_content
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_flower_biz_info
+    identifier: ods_prst_flower_biz_info
+    description: 花卉租赁源表 t_flower_biz_info
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: code
+      data_type: text
+      description: 源字段 code
+    - name: title
+      data_type: text
+      description: 源字段 title
+    - name: biz_type
+      data_type: integer
+      description: 源字段 biz_type
+    - name: apply_use_id
+      data_type: bigint
+      description: 源字段 apply_use_id
+    - name: apply_use_name
+      data_type: text
+      description: 源字段 apply_use_name
+    - name: apply_time
+      data_type: timestamp
+      description: 源字段 apply_time
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: urgent
+      data_type: integer
+      description: 源字段 urgent
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: rent_update_type
+      data_type: integer
+      description: 源字段 rent_update_type
+    - name: change_flower_type
+      data_type: integer
+      description: 源字段 change_flower_type
+    - name: change_flower_project_type
+      data_type: integer
+      description: 源字段 change_flower_project_type
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: lease_term
+      data_type: integer
+      description: 源字段 lease_term
+    - name: curing_user_id
+      data_type: bigint
+      description: 源字段 curing_user_id
+    - name: curing_user_name
+      data_type: text
+      description: 源字段 curing_user_name
+    - name: changer_type
+      data_type: integer
+      description: 源字段 changer_type
+    - name: finish_time
+      data_type: timestamp
+      description: 源字段 finish_time
+    - name: project_manage_id
+      data_type: bigint
+      description: 源字段 project_manage_id
+    - name: project_manage_name
+      data_type: text
+      description: 源字段 project_manage_name
+    - name: biz_manage_id
+      data_type: bigint
+      description: 源字段 biz_manage_id
+    - name: biz_manage_name
+      data_type: text
+      description: 源字段 biz_manage_name
+    - name: draft_item_json
+      data_type: text
+      description: 源字段 draft_item_json
+    - name: reject_reason
+      data_type: text
+      description: 源字段 reject_reason
+    - name: reject_time
+      data_type: timestamp
+      description: 源字段 reject_time
+    - name: reject_user_id
+      data_type: bigint
+      description: 源字段 reject_user_id
+    - name: reject_user_name
+      data_type: text
+      description: 源字段 reject_user_name
+    - name: bad_debt_type
+      data_type: integer
+      description: 源字段 bad_debt_type
+    - name: sign_time
+      data_type: timestamp
+      description: 源字段 sign_time
+    - name: sign_user_id
+      data_type: bigint
+      description: 源字段 sign_user_id
+    - name: sign_user_name
+      data_type: text
+      description: 源字段 sign_user_name
+    - name: give_describe
+      data_type: text
+      description: 源字段 give_describe
+    - name: sale_describe
+      data_type: text
+      description: 源字段 sale_describe
+    - name: customer_name
+      data_type: text
+      description: 源字段 customer_name
+    - name: phone_number
+      data_type: text
+      description: 源字段 phone_number
+    - name: address
+      data_type: text
+      description: 源字段 address
+    - name: transfer_type
+      data_type: integer
+      description: 源字段 transfer_type
+    - name: source_type
+      data_type: integer
+      description: 源字段 source_type
+    - name: print_status
+      data_type: integer
+      description: 源字段 print_status
+    - name: print_time
+      data_type: timestamp
+      description: 源字段 print_time
+    - name: print_user_id
+      data_type: bigint
+      description: 源字段 print_user_id
+    - name: print_user_name
+      data_type: text
+      description: 源字段 print_user_name
+    - name: fare
+      data_type: numeric
+      description: 源字段 fare
+    - name: tax_rate
+      data_type: double precision
+      description: 源字段 tax_rate
+    - name: plan_finish_time
+      data_type: date
+      description: 源字段 plan_finish_time
+    - name: back_reason
+      data_type: text
+      description: 源字段 back_reason
+    - name: examine_user_id
+      data_type: bigint
+      description: 源字段 examine_user_id
+    - name: examine_user_name
+      data_type: text
+      description: 源字段 examine_user_name
+    - name: examine_time
+      data_type: timestamp
+      description: 源字段 examine_time
+    - name: rent_discount_ratio
+      data_type: double precision
+      description: 源字段 rent_discount_ratio
+    - name: labor_cost
+      data_type: numeric
+      description: 源字段 labor_cost
+    - name: cleaning_fee
+      data_type: numeric
+      description: 源字段 cleaning_fee
+    - name: total_amount
+      data_type: numeric
+      description: 源字段 total_amount
+    - name: accounting_status
+      data_type: integer
+      description: 源字段 accounting_status
+    - name: biz_total_rent
+      data_type: numeric
+      description: 源字段 biz_total_rent
+    - name: biz_total_cost
+      data_type: numeric
+      description: 源字段 biz_total_cost
+    - name: task_info_id
+      data_type: bigint
+      description: 源字段 task_info_id
+    - name: start_lease_time
+      data_type: timestamp
+      description: 源字段 start_lease_time
+    - name: custom_hide
+      data_type: integer
+      description: 源字段 custom_hide
+    - name: cut_confirm_status
+      data_type: integer
+      description: 源字段 cut_confirm_status
+    - name: cut_confitm_time
+      data_type: timestamp
+      description: 源字段 cut_confitm_time
+    - name: total_extra_cost
+      data_type: numeric
+      description: 源字段 total_extra_cost
+    - name: total_extra_price
+      data_type: numeric
+      description: 源字段 total_extra_price
+    - name: review_user_id
+      data_type: bigint
+      description: 源字段 review_user_id
+    - name: review_user_name
+      data_type: text
+      description: 源字段 review_user_name
+    - name: review_time
+      data_type: timestamp
+      description: 源字段 review_time
+    - name: bear_cost_type
+      data_type: integer
+      description: 源字段 bear_cost_type
+    - name: settlement_time
+      data_type: timestamp
+      description: 源字段 settlement_time
+    - name: sales_payment_type
+      data_type: integer
+      description: 源字段 sales_payment_type
+    - name: document_finish_time
+      data_type: timestamp
+      description: 源字段 document_finish_time
+    - name: batch_code
+      data_type: text
+      description: 源字段 batch_code
+    - name: expense_id
+      data_type: bigint
+      description: 源字段 expense_id
+    - name: expense_code
+      data_type: text
+      description: 源字段 expense_code
+    - name: task_code
+      data_type: text
+      description: 源字段 task_code
+    - name: task_item_id
+      data_type: bigint
+      description: 源字段 task_item_id
+    - name: settle_id
+      data_type: bigint
+      description: 源字段 settle_id
+    - name: settle_code
+      data_type: text
+      description: 源字段 settle_code
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_flower_biz_item
+    identifier: ods_prst_flower_biz_item
+    description: 花卉租赁源表 t_flower_biz_item
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: flower_biz_id
+      data_type: bigint
+      description: 源字段 flower_biz_id
+    - name: position_id
+      data_type: bigint
+      description: 源字段 position_id
+    - name: position_name
+      data_type: text
+      description: 源字段 position_name
+    - name: position_full_name
+      data_type: text
+      description: 源字段 position_full_name
+    - name: biz_type
+      data_type: integer
+      description: 源字段 biz_type
+    - name: plant_type
+      data_type: integer
+      description: 源字段 plant_type
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: green_name
+      data_type: text
+      description: 源字段 green_name
+    - name: good_price_id
+      data_type: bigint
+      description: 源字段 good_price_id
+    - name: good_norms
+      data_type: text
+      description: 源字段 good_norms
+    - name: good_specs
+      data_type: text
+      description: 源字段 good_specs
+    - name: good_unit
+      data_type: text
+      description: 源字段 good_unit
+    - name: good_type
+      data_type: integer
+      description: 源字段 good_type
+    - name: project_green_id
+      data_type: bigint
+      description: 源字段 project_green_id
+    - name: plant_number
+      data_type: integer
+      description: 源字段 plant_number
+    - name: rent
+      data_type: numeric
+      description: 源字段 rent
+    - name: cost
+      data_type: numeric
+      description: 源字段 cost
+    - name: put_time
+      data_type: timestamp
+      description: 源字段 put_time
+    - name: parent_id
+      data_type: bigint
+      description: 源字段 parent_id
+    - name: combination_to_scene
+      data_type: integer
+      description: 源字段 combination_to_scene
+    - name: force_change_flowers
+      data_type: integer
+      description: 源字段 force_change_flowers
+    - name: source
+      data_type: text
+      description: 源字段 source
+    - name: reduction_flower_way
+      data_type: integer
+      description: 源字段 reduction_flower_way
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: frm_loss_number
+      data_type: integer
+      description: 源字段 frm_loss_number
+    - name: buyback_number
+      data_type: integer
+      description: 源字段 buyback_number
+    - name: keep_number
+      data_type: integer
+      description: 源字段 keep_number
+    - name: confirm_put_user_id
+      data_type: bigint
+      description: 源字段 confirm_put_user_id
+    - name: confirm_put_time
+      data_type: timestamp
+      description: 源字段 confirm_put_time
+    - name: net_receipts_number
+      data_type: integer
+      description: 源字段 net_receipts_number
+    - name: total_number
+      data_type: integer
+      description: 源字段 total_number
+    - name: reject_number
+      data_type: integer
+      description: 源字段 reject_number
+    - name: transfer_cut_green_id
+      data_type: bigint
+      description: 源字段 transfer_cut_green_id
+    - name: transfer_type
+      data_type: integer
+      description: 源字段 transfer_type
+    - name: transfer_number
+      data_type: integer
+      description: 源字段 transfer_number
+    - name: distribute_purchase_number
+      data_type: integer
+      description: 源字段 distribute_purchase_number
+    - name: distribute_base_number
+      data_type: integer
+      description: 源字段 distribute_base_number
+    - name: real_purchase_number
+      data_type: integer
+      description: 源字段 real_purchase_number
+    - name: real_purchase_price
+      data_type: numeric
+      description: 源字段 real_purchase_price
+    - name: real_out_number
+      data_type: integer
+      description: 源字段 real_out_number
+    - name: distribute_store_house_id
+      data_type: bigint
+      description: 源字段 distribute_store_house_id
+    - name: real_out_price
+      data_type: numeric
+      description: 源字段 real_out_price
+    - name: start_time
+      data_type: timestamp
+      description: 源字段 start_time
+    - name: end_time
+      data_type: timestamp
+      description: 源字段 end_time
+    - name: old_green_id
+      data_type: bigint
+      description: 源字段 old_green_id
+    - name: distribute_slow_number
+      data_type: integer
+      description: 源字段 distribute_slow_number
+    - name: distribute_slow_house_id
+      data_type: bigint
+      description: 源字段 distribute_slow_house_id
+    - name: real_slow_price
+      data_type: numeric
+      description: 源字段 real_slow_price
+    - name: good_number
+      data_type: integer
+      description: 源字段 good_number
+    - name: back_storehouse_id
+      data_type: bigint
+      description: 源字段 back_storehouse_id
+    - name: rent_des
+      data_type: text
+      description: 源字段 rent_des
+    - name: bad_debt_reason
+      data_type: text
+      description: 源字段 bad_debt_reason
+    - name: expense_status
+      data_type: integer
+      description: 源字段 expense_status
+    - name: sort
+      data_type: bigint
+      description: 源字段 sort
+    - name: finish_number
+      data_type: integer
+      description: 源字段 finish_number
+    - name: finish_distribute_number
+      data_type: integer
+      description: 源字段 finish_distribute_number
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_flower_extra_cost
+    identifier: ods_prst_flower_extra_cost
+    description: 花卉租赁源表 t_flower_extra_cost
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: biz_id
+      data_type: bigint
+      description: 源字段 biz_id
+    - name: biz_type
+      data_type: integer
+      description: 源字段 biz_type
+    - name: cost_type
+      data_type: integer
+      description: 源字段 cost_type
+    - name: title
+      data_type: text
+      description: 源字段 title
+    - name: free_amount
+      data_type: numeric
+      description: 源字段 free_amount
+    - name: price_amount
+      data_type: numeric
+      description: 源字段 price_amount
+    - name: tax_rate
+      data_type: double precision
+      description: 源字段 tax_rate
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: del_flag
+      data_type: text
+      description: 源字段 del_flag
+    - name: pay_user_id
+      data_type: bigint
+      description: 源字段 pay_user_id
+    - name: pay_user_name
+      data_type: text
+      description: 源字段 pay_user_name
+    - name: pay_time
+      data_type: timestamp
+      description: 源字段 pay_time
+    - name: expense_id
+      data_type: bigint
+      description: 源字段 expense_id
+    - name: expense_code
+      data_type: text
+      description: 源字段 expense_code
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_recovery_info
+    identifier: ods_prst_recovery_info
+    description: 花卉租赁源表 t_recovery_info
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: biz_info_id
+      data_type: bigint
+      description: 源字段 biz_info_id
+    - name: project_id
+      data_type: bigint
+      description: 源字段 project_id
+    - name: project_name
+      data_type: text
+      description: 源字段 project_name
+    - name: distribution_user_id
+      data_type: bigint
+      description: 源字段 distribution_user_id
+    - name: distribution_user_name
+      data_type: text
+      description: 源字段 distribution_user_name
+    - name: distribution_time
+      data_type: timestamp
+      description: 源字段 distribution_time
+    - name: recovery_user_id
+      data_type: bigint
+      description: 源字段 recovery_user_id
+    - name: recovery_user_name
+      data_type: text
+      description: 源字段 recovery_user_name
+    - name: recovery_time
+      data_type: timestamp
+      description: 源字段 recovery_time
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: store_house_name
+      data_type: text
+      description: 源字段 store_house_name
+    - name: store_house_id
+      data_type: bigint
+      description: 源字段 store_house_id
+    - name: create_by
+      data_type: bigint
+      description: 源字段 create_by
+    - name: create_time
+      data_type: timestamp
+      description: 源字段 create_time
+    - name: update_by
+      data_type: bigint
+      description: 源字段 update_by
+    - name: update_time
+      data_type: timestamp
+      description: 源字段 update_time
+    - name: remark
+      data_type: text
+      description: 源字段 remark
+    - name: tenant_id
+      data_type: bigint
+      description: 源字段 tenant_id
+    - name: plan_recovery_time
+      data_type: timestamp
+      description: 源字段 plan_recovery_time
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号
+  - name: ods_prst_recovery_info_item
+    identifier: ods_prst_recovery_info_item
+    description: 花卉租赁源表 t_recovery_info_item
+    columns:
+    - name: id
+      data_type: bigint
+      description: 源字段 id
+    - name: recovery_info_id
+      data_type: bigint
+      description: 源字段 recovery_info_id
+    - name: biz_item_id
+      data_type: bigint
+      description: 源字段 biz_item_id
+    - name: goods_price_id
+      data_type: bigint
+      description: 源字段 goods_price_id
+    - name: good_name
+      data_type: text
+      description: 源字段 good_name
+    - name: good_norms
+      data_type: text
+      description: 源字段 good_norms
+    - name: good_specs
+      data_type: text
+      description: 源字段 good_specs
+    - name: good_unit
+      data_type: text
+      description: 源字段 good_unit
+    - name: good_type
+      data_type: integer
+      description: 源字段 good_type
+    - name: recovery_type
+      data_type: integer
+      description: 源字段 recovery_type
+    - name: recovery_number
+      data_type: integer
+      description: 源字段 recovery_number
+    - name: real_recovery_number
+      data_type: integer
+      description: 源字段 real_recovery_number
+    - name: good_cost
+      data_type: numeric
+      description: 源字段 good_cost
+    - name: status
+      data_type: integer
+      description: 源字段 status
+    - name: recovery_time
+      data_type: timestamp
+      description: 源字段 recovery_time
+    - name: _dts_source_system
+      data_type: text
+      description: 来源系统
+    - name: _dts_source_table
+      data_type: text
+      description: 来源表
+    - name: _dts_import_time
+      data_type: timestamp
+      description: 接入时间
+    - name: _dts_batch_id
+      data_type: text
+      description: 接入批次
+    - name: _dts_execution_id
+      data_type: text
+      description: 接入执行编号
+    - name: _dts_task_id
+      data_type: text
+      description: 接入任务编号

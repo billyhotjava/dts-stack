@@ -1,0 +1,45 @@
+version: 2
+sources:
+  - name: "pm_ods_v2"
+    schema: "public"
+    description: "项目管理 ODS v2 源表。ODS 只承载原始接入与追溯，业务语义统一经 STG 收敛。"
+    tables:
+      - name: "project_subject_domain_v2"
+        identifier: "ods_project_subject_domain_v2"
+        description: "进度信息汇总表 — 项目节点/里程碑事实（33个业务字段）"
+
+      - name: "progress_measure_v2"
+        identifier: "ods_progress_measure_v2"
+        description: "进度跟进措施表 — 当前仅注册 source，待后续纳入 STG/DWD 语义链路"
+
+      - name: "quality_issue_v2"
+        identifier: "ods_quality_issue_v2"
+        description: "质量信息汇总表 — 质量问题事实（21个业务字段）"
+
+      - name: "quality_measure_v2"
+        identifier: "ods_quality_measure_v2"
+        description: "质量跟进措施表 — 当前仅注册 source，待后续纳入 STG/DWD 语义链路"
+
+      - name: "tech_state_v2"
+        identifier: "ods_tech_state_v2"
+        description: "技术状态信息汇总表 — 技术状态变更事实（33个业务字段）"
+
+      - name: "tech_state_measure_v2"
+        identifier: "ods_tech_state_measure_v2"
+        description: "技术状态跟进措施表 — 当前仅注册 source，待后续纳入 STG/DWD 语义链路"
+
+      - name: "risk_info_v2"
+        identifier: "ods_risk_info_v2"
+        description: "风险信息汇总表 — 风险台账事实（31个业务字段）"
+
+      - name: "risk_measure_v2"
+        identifier: "ods_risk_measure_v2"
+        description: "风险跟进措施表 — 当前仅注册 source，待后续纳入 STG/DWD 语义链路"
+
+      - name: "material_info_v2"
+        identifier: "ods_material_info_v2"
+        description: "重要物料信息表 — 当前仅注册 source，待后续纳入 STG/DWD 语义链路"
+
+      - name: "budget_v2"
+        identifier: "ods_budget_v2"
+        description: "预算执行台账表 — 科研经费三本账快照（8个业务字段：预算/预付/账面成本/应付）"

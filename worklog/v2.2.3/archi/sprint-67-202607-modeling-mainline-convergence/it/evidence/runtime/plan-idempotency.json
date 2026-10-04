@@ -1,0 +1,36 @@
+{
+  "verifiedAt": "2026-07-19T02:16:23+08:00",
+  "task": "Sprint-67 F2-T01",
+  "database": "PostgreSQL 17.4 via Testcontainers",
+  "result": "PASS",
+  "scenarios": {
+    "sameTenantSameKeySameRequest": {
+      "expected": "immutable version-1 plan and initial source bindings, replayed=true, including after later header/source edits",
+      "result": "PASS"
+    },
+    "sameTenantSameKeyDifferentRequest": {
+      "expected": "409 WAREHOUSE_PLAN_IDEMPOTENCY_CONFLICT",
+      "result": "PASS"
+    },
+    "differentTenantSameKey": {
+      "expected": "independent plans",
+      "result": "PASS"
+    },
+    "concurrentSameKey": {
+      "expected": "two overlapping PostgreSQL transactions converge to one plan row and one initial-source set",
+      "testPoolMaximum": 4,
+      "observedActiveConnectionsAtLeast": 2,
+      "observedDistinctBackendPids": 2,
+      "observedDistinctTransactionIds": 2,
+      "probeCleanup": "PASS",
+      "result": "PASS"
+    },
+    "initialSourcePersistenceFailure": {
+      "failure": "a test-only real PostgreSQL CHECK constraint rejects the initial source after plan-header insert",
+      "expected": "transaction rolls back plan header and source rows",
+      "observedPlanRows": 0,
+      "observedSourceRows": 0,
+      "result": "PASS"
+    }
+  }
+}

@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260719-05-warehouse-plan-source-inventory" author="codex">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_warehouse_plan_source"/>
+            <tableExists tableName="modeling_warehouse_plan_policy"/>
+            <columnExists tableName="modeling_warehouse_plan_source" columnName="source_id"/>
+            <columnExists tableName="modeling_warehouse_plan_source" columnName="source_version"/>
+            <not>
+                <columnExists tableName="modeling_warehouse_plan_source" columnName="locator_json"/>
+            </not>
+            <not>
+                <columnExists tableName="modeling_warehouse_plan_policy" columnName="conceptual_design_allowed"/>
+            </not>
+        </preConditions>
+        <comment>
+            Add structured source locators and server-owned resolution evidence. Keep legacy source identity,
+            source version and source-business-mapping structures intact for compatibility.
+        </comment>
+
+        <addColumn tableName="modeling_warehouse_plan_source">
+            <column name="locator_json" type="jsonb"/>
+            <column name="resolution_status" type="varchar(32)"/>
+            <column name="last_validated_at" type="timestamp"/>
+        </addColumn>
+        <addColumn tableName="modeling_warehouse_plan_policy">
+            <column name="conceptual_design_allowed" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    IF EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan_source
+                         WHERE locator_json IS NOT NULL
+                            OR resolution_status IS NOT NULL
+                            OR last_validated_at IS NOT NULL
+                    ) OR EXISTS (
+                        SELECT 1
+                          FROM modeling_warehouse_plan_policy
+                         WHERE conceptual_design_allowed = true
+                    ) THEN
+                        RAISE EXCEPTION 'ROLLBACK_BLOCKED_WAREHOUSE_SOURCE_INVENTORY_DATA_EXISTS';
+                    END IF;
+                END $$;
+            ]]></sql>
+            <dropColumn tableName="modeling_warehouse_plan_policy" columnName="conceptual_design_allowed"/>
+            <dropColumn tableName="modeling_warehouse_plan_source" columnName="last_validated_at"/>
+            <dropColumn tableName="modeling_warehouse_plan_source" columnName="resolution_status"/>
+            <dropColumn tableName="modeling_warehouse_plan_source" columnName="locator_json"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

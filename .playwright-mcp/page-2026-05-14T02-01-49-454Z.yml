@@ -1,0 +1,81 @@
+- generic [ref=e1]:
+  - generic [ref=e4]:
+    - complementary [ref=e5]:
+      - menu [ref=e7]:
+        - menuitem "总览图表" [ref=e8] [cursor=pointer]:
+          - generic [ref=e9]: 总览图表
+        - menuitem "流水线进度" [ref=e10] [cursor=pointer]:
+          - generic [ref=e11]: 流水线进度
+        - menuitem "一键重跑" [ref=e12] [cursor=pointer]:
+          - generic [ref=e13]: 一键重跑
+        - menuitem "最近运行" [ref=e14] [cursor=pointer]:
+          - generic [ref=e15]: 最近运行
+        - menuitem "演进路线" [ref=e16] [cursor=pointer]:
+          - generic [ref=e17]: 演进路线
+        - menuitem "批次重算" [ref=e18] [cursor=pointer]:
+          - generic [ref=e19]: 批次重算
+        - menuitem "批次结果" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]: 批次结果
+    - main [ref=e22]:
+      - generic [ref=e23]:
+        - generic [ref=e27]:
+          - generic [ref=e28]:
+            - heading "Metro AppPack · 算法运行面板" [level=3] [ref=e30]
+            - generic [ref=e31]: LSTM-AE 异常检测 · 阈值调优 · 反馈驱动评估（一键重跑 + 数据上传）
+            - generic [ref=e33]:
+              - generic [ref=e35]: 包标识：metro-pack
+              - generic [ref=e37]: 版本：3.0.1
+              - generic [ref=e39]: 行业：地铁
+          - button "reload 刷新" [ref=e40] [cursor=pointer]:
+            - img "reload" [ref=e612]:
+              - img [ref=e613]
+            - generic [ref=e45]: 刷新
+        - generic [ref=e47]:
+          - generic [ref=e51]:
+            - generic [ref=e52]: 目标分（target_score）
+            - generic [ref=e54]: 67.7%
+          - generic [ref=e57]:
+            - generic [ref=e58]:
+              - generic [ref=e60]:
+                - generic [ref=e62]: 当前最佳代理F1
+                - img "info-circle" [ref=e64]:
+                  - img [ref=e65]
+              - generic [ref=e69]: 100.0%
+            - generic [ref=e70]: 差距：0.3230
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - generic [ref=e75]: 最新离线事件数
+              - generic [ref=e77]: "2"
+            - generic [ref=e78]: 训练阈值：3.030
+          - generic [ref=e81]:
+            - generic [ref=e82]:
+              - generic [ref=e83]: 训练验证损失
+              - generic [ref=e85]: "0.299009"
+            - generic [ref=e86]: 最佳候选：trial-01
+        - generic [ref=e576]:
+          - generic [ref=e580]:
+            - strong [ref=e583]: 选择批次：
+            - generic [ref=e585] [cursor=pointer]:
+              - generic [ref=e587]:
+                - combobox [expanded] [active] [ref=e589]:
+                  - listbox:
+                    - option "20260514T015006Z-9220d9 · 成功 · 文件 1 · 6/7 成功": 20260514T015006Z-9220d9
+                    - option "20260514T005847Z-081e72 · 待运行 · 文件 1 · 0/7 成功": 20260514T005847Z-081e72
+                - generic: 选择一个批次查看详细结果
+              - generic:
+                - img:
+                  - img
+          - generic [ref=e591]:
+            - generic [ref=e594]: 批次结果
+            - generic [ref=e596]:
+              - img "No data" [ref=e598]
+              - generic [ref=e610]: 请从上方选择一个批次（没有则先到「批次重算」新建）
+  - generic [ref=e620]:
+    - generic "20260514T015006Z-9220d9 · 成功 · 文件 1 · 6/7 成功" [ref=e621] [cursor=pointer]:
+      - generic [ref=e622]: 20260514T015006Z-9220d9 · 成功 · 文件 1 · 6/7 成功
+    - generic "20260514T005847Z-081e72 · 待运行 · 文件 1 · 0/7 成功" [ref=e623] [cursor=pointer]:
+      - generic [ref=e624]: 20260514T005847Z-081e72 · 待运行 · 文件 1 · 0/7 成功
+    - generic "20260413T120623Z-b0773d · 成功 · 文件 6 · 7/7 成功" [ref=e625] [cursor=pointer]:
+      - generic [ref=e626]: 20260413T120623Z-b0773d · 成功 · 文件 6 · 7/7 成功
+    - generic "20260413T114659Z-60afaa · 失败 · 文件 6 · 0/7 成功" [ref=e627] [cursor=pointer]:
+      - generic [ref=e628]: 20260413T114659Z-60afaa · 失败 · 文件 6 · 0/7 成功

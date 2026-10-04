@@ -1,0 +1,22 @@
+{
+  "package": "/opt/prod/s10/deploy/data/sprint104-release/remediation-5215f1ab0.tar.gz",
+  "sha256": "a3bbb090f5db698dc43c510fa75bff82b5c4312295636b7574ab853b785319a3",
+  "sourceCommit": "5215f1ab070e637cab4da94d157f914e7bfc3d2f",
+  "archiveChecksumsVerified": {
+    "dts-platform-webapp_s104-5215f1ab0-20260908-163808.tar": "83e73983b00b13663bba5fdaf588533e31ec9f894daa4926a36503b22d1d7c05"
+  },
+  "images": [
+    {
+      "tag": "dts-platform-webapp:s104-5215f1ab0",
+      "localImageId": "sha256:2d73807b246cb95c3144dd6e0ec296c0f7cb971892c8c2495336e4551b17f109",
+      "configImageId": "sha256:2d73807b246cb95c3144dd6e0ec296c0f7cb971892c8c2495336e4551b17f109",
+      "sourceRevision": "5215f1ab070e637cab4da94d157f914e7bfc3d2f"
+    }
+  ],
+  "runtime": {
+    "container": "/deploy-dts-platform-webapp-1",
+    "image": "dts-platform-webapp:s104-5215f1ab0",
+    "imageId": "sha256:2d73807b246cb95c3144dd6e0ec296c0f7cb971892c8c2495336e4551b17f109",
+    "status": "running"
+  }
+}

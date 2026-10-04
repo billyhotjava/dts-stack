@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260802_06_model_spec_import_json_contract_hardening" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_model_spec_import_apply_attempt"/>
+            <tableExists tableName="modeling_model_spec_import_apply_result"/>
+            <columnExists tableName="modeling_model_spec_import_apply_attempt" columnName="summary_json"/>
+            <columnExists tableName="modeling_model_spec_import_apply_attempt" columnName="selected_closure_json"/>
+            <columnExists tableName="modeling_model_spec_import_apply_result" columnName="merge_checkpoint_json"/>
+            <columnExists tableName="modeling_model_spec_import_apply_result" columnName="pre_attempt_pins_json"/>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_attempt
+                 WHERE (
+                           summary_json IS NOT NULL
+                           AND pg_catalog.jsonb_typeof(summary_json) = 'object'
+                           AND pg_catalog.jsonb_exists_all(summary_json, ARRAY[
+                               'selected', 'pending', 'succeeded', 'created',
+                               'updated', 'skipped', 'failed', 'blocked'
+                           ])
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'selected') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'pending') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'succeeded') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'created') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'updated') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'skipped') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'failed') = 'number'
+                           AND pg_catalog.jsonb_typeof(summary_json -> 'blocked') = 'number'
+                       ) IS NOT TRUE
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_result
+                 WHERE (
+                           (
+                               merge_checkpoint_json IS NULL
+                               AND accepted_external_checksum IS NULL
+                               AND accepted_implementation_revision IS NULL
+                               AND accepted_implementation_checksum IS NULL
+                               AND mapped_model_spec_revision IS NULL
+                               AND mapped_model_spec_etag IS NULL
+                           )
+                           OR (
+                           merge_checkpoint_json IS NOT NULL
+                           AND (
+                           pg_catalog.jsonb_typeof(merge_checkpoint_json) = 'object'
+                           AND pg_catalog.jsonb_exists_all(merge_checkpoint_json, ARRAY[
+                               'tenantId', 'projectKey', 'dbtUniqueId',
+                               'acceptedExternalChecksum', 'acceptedImplementationRevision',
+                               'acceptedImplementationChecksum', 'mappedModelSpecRevision',
+                               'mappedModelSpecEtag'
+                           ])
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'tenantId') = 'string'
+                           AND pg_catalog.btrim(merge_checkpoint_json ->> 'tenantId') <> ''
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'projectKey') = 'string'
+                           AND pg_catalog.btrim(merge_checkpoint_json ->> 'projectKey') <> ''
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'dbtUniqueId') = 'string'
+                           AND pg_catalog.btrim(merge_checkpoint_json ->> 'dbtUniqueId') <> ''
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'acceptedExternalChecksum') = 'string'
+                           AND (merge_checkpoint_json ->> 'acceptedExternalChecksum') ~ '^[0-9a-f]{64}$'
+                           AND pg_catalog.jsonb_typeof(
+                               merge_checkpoint_json -> 'acceptedImplementationRevision'
+                           ) = 'number'
+                           AND (merge_checkpoint_json ->> 'acceptedImplementationRevision') ~ '^[1-9][0-9]*$'
+                           AND pg_catalog.jsonb_typeof(
+                               merge_checkpoint_json -> 'acceptedImplementationChecksum'
+                           ) = 'string'
+                           AND (merge_checkpoint_json ->> 'acceptedImplementationChecksum') ~ '^[0-9a-f]{64}$'
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'mappedModelSpecRevision') = 'number'
+                           AND (merge_checkpoint_json ->> 'mappedModelSpecRevision') ~ '^[1-9][0-9]*$'
+                           AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'mappedModelSpecEtag') = 'string'
+                           AND (merge_checkpoint_json ->> 'mappedModelSpecEtag') ~ '^[0-9a-f]{64}$'
+                           AND project_key IS NOT NULL
+                           AND pg_catalog.btrim(project_key) <> ''
+                           AND accepted_external_checksum ~ '^[0-9a-f]{64}$'
+                           AND accepted_implementation_revision > 0
+                           AND accepted_implementation_checksum ~ '^[0-9a-f]{64}$'
+                           AND mapped_model_spec_revision > 0
+                           AND mapped_model_spec_etag ~ '^[0-9a-f]{64}$'
+                           AND status IN ('CREATED', 'UPDATED', 'SKIPPED')
+                           )
+                           )
+                       ) IS NOT TRUE
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_result
+                 WHERE pre_attempt_pins_json IS NOT NULL
+                   AND (
+                           pg_catalog.jsonb_typeof(pre_attempt_pins_json) = 'object'
+                           AND pg_catalog.jsonb_exists_all(pre_attempt_pins_json, ARRAY[
+                               'modelRevision', 'modelChecksum',
+                               'implementationRevision', 'implementationChecksum'
+                           ])
+                           AND pg_catalog.jsonb_typeof(pre_attempt_pins_json -> 'modelRevision') = 'number'
+                           AND (pre_attempt_pins_json ->> 'modelRevision') ~ '^[1-9][0-9]*$'
+                           AND pg_catalog.jsonb_typeof(pre_attempt_pins_json -> 'modelChecksum') = 'string'
+                           AND (pre_attempt_pins_json ->> 'modelChecksum') ~ '^[0-9a-f]{64}$'
+                           AND pg_catalog.jsonb_typeof(
+                               pre_attempt_pins_json -> 'implementationRevision'
+                           ) = 'number'
+                           AND (pre_attempt_pins_json ->> 'implementationRevision') ~ '^[1-9][0-9]*$'
+                           AND pg_catalog.jsonb_typeof(
+                               pre_attempt_pins_json -> 'implementationChecksum'
+                           ) = 'string'
+                           AND (pre_attempt_pins_json ->> 'implementationChecksum') ~ '^[0-9a-f]{64}$'
+                       ) IS NOT TRUE
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM modeling_model_spec_import_apply_attempt
+                 WHERE CASE
+                           WHEN pg_catalog.jsonb_typeof(selected_closure_json) IS DISTINCT FROM 'array'
+                               THEN true
+                           ELSE (
+                               SELECT pg_catalog.count(*) <> pg_catalog.count(DISTINCT closure.member)
+                                 FROM pg_catalog.jsonb_array_elements_text(selected_closure_json)
+                                      AS closure(member)
+                           )
+                       END
+            ]]></sqlCheck>
+            <sqlCheck expectedResult="0"><![CDATA[
+                SELECT count(*)
+                  FROM pg_catalog.pg_proc function
+                  JOIN pg_catalog.pg_namespace namespace
+                    ON namespace.oid = function.pronamespace
+                 WHERE namespace.nspname = pg_catalog.current_schema()
+                   AND function.proname = 'modeling_jsonb_text_array_unique_v20260802'
+            ]]></sqlCheck>
+        </preConditions>
+
+        <comment>
+            Fail closed before DDL when canonical import JSON is incomplete or a selected closure
+            contains duplicate members, then add forward-only constraints for future writes.
+        </comment>
+
+        <sql splitStatements="false"><![CDATA[
+            DO $migration$
+            DECLARE
+                target_schema text := pg_catalog.current_schema();
+            BEGIN
+                IF target_schema IS NULL
+                    OR target_schema IN ('pg_catalog', 'information_schema')
+                THEN
+                    RAISE EXCEPTION
+                        'MODEL_SPEC_IMPORT_JSON_HARDENING_UNSAFE_SCHEMA: %',
+                        coalesce(target_schema, '<null>');
+                END IF;
+
+                EXECUTE pg_catalog.format(
+                    $function_ddl$
+                    CREATE FUNCTION %I.modeling_jsonb_text_array_unique_v20260802(items jsonb)
+                    RETURNS boolean
+                    LANGUAGE sql
+                    IMMUTABLE
+                    STRICT
+                    PARALLEL SAFE
+                    SET search_path = pg_catalog
+                    AS $function_body$
+                        SELECT CASE
+                            WHEN pg_catalog.jsonb_typeof(items) IS DISTINCT FROM 'array' THEN false
+                            ELSE (
+                                SELECT pg_catalog.count(*) = pg_catalog.count(DISTINCT closure.member)
+                                  FROM pg_catalog.jsonb_array_elements_text(items) AS closure(member)
+                            )
+                        END
+                    $function_body$
+                    $function_ddl$,
+                    target_schema
+                );
+
+                EXECUTE pg_catalog.format(
+                    $attempt_ddl$
+                    ALTER TABLE %I.modeling_model_spec_import_apply_attempt
+                        ADD CONSTRAINT ck_model_spec_import_apply_summary_complete
+                        CHECK ((
+                            summary_json IS NOT NULL
+                            AND pg_catalog.jsonb_typeof(summary_json) = 'object'
+                            AND pg_catalog.jsonb_exists_all(summary_json, ARRAY[
+                                'selected', 'pending', 'succeeded', 'created',
+                                'updated', 'skipped', 'failed', 'blocked'
+                            ])
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'selected') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'pending') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'succeeded') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'created') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'updated') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'skipped') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'failed') = 'number'
+                            AND pg_catalog.jsonb_typeof(summary_json -> 'blocked') = 'number'
+                        ) IS TRUE),
+                        ADD CONSTRAINT ck_model_spec_import_apply_closure_unique
+                        CHECK (%I.modeling_jsonb_text_array_unique_v20260802(selected_closure_json) IS TRUE)
+                    $attempt_ddl$,
+                    target_schema,
+                    target_schema
+                );
+
+                EXECUTE pg_catalog.format(
+                    $result_ddl$
+                    ALTER TABLE %I.modeling_model_spec_import_apply_result
+                        ADD CONSTRAINT ck_model_spec_import_result_checkpoint_complete
+                        CHECK ((
+                            (
+                                merge_checkpoint_json IS NULL
+                                AND accepted_external_checksum IS NULL
+                                AND accepted_implementation_revision IS NULL
+                                AND accepted_implementation_checksum IS NULL
+                                AND mapped_model_spec_revision IS NULL
+                                AND mapped_model_spec_etag IS NULL
+                            )
+                            OR (
+                                merge_checkpoint_json IS NOT NULL
+                                AND (
+                                pg_catalog.jsonb_typeof(merge_checkpoint_json) = 'object'
+                                AND pg_catalog.jsonb_exists_all(merge_checkpoint_json, ARRAY[
+                                    'tenantId', 'projectKey', 'dbtUniqueId',
+                                    'acceptedExternalChecksum', 'acceptedImplementationRevision',
+                                    'acceptedImplementationChecksum', 'mappedModelSpecRevision',
+                                    'mappedModelSpecEtag'
+                                ])
+                                AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'tenantId') = 'string'
+                                AND pg_catalog.btrim(merge_checkpoint_json ->> 'tenantId') <> ''
+                                AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'projectKey') = 'string'
+                                AND pg_catalog.btrim(merge_checkpoint_json ->> 'projectKey') <> ''
+                                AND pg_catalog.jsonb_typeof(merge_checkpoint_json -> 'dbtUniqueId') = 'string'
+                                AND pg_catalog.btrim(merge_checkpoint_json ->> 'dbtUniqueId') <> ''
+                                AND pg_catalog.jsonb_typeof(
+                                    merge_checkpoint_json -> 'acceptedExternalChecksum'
+                                ) = 'string'
+                                AND (merge_checkpoint_json ->> 'acceptedExternalChecksum') ~ '^[0-9a-f]{64}$'
+                                AND pg_catalog.jsonb_typeof(
+                                    merge_checkpoint_json -> 'acceptedImplementationRevision'
+                                ) = 'number'
+                                AND (merge_checkpoint_json ->> 'acceptedImplementationRevision') ~ '^[1-9][0-9]*$'
+                                AND pg_catalog.jsonb_typeof(
+                                    merge_checkpoint_json -> 'acceptedImplementationChecksum'
+                                ) = 'string'
+                                AND (merge_checkpoint_json ->> 'acceptedImplementationChecksum') ~ '^[0-9a-f]{64}$'
+                                AND pg_catalog.jsonb_typeof(
+                                    merge_checkpoint_json -> 'mappedModelSpecRevision'
+                                ) = 'number'
+                                AND (merge_checkpoint_json ->> 'mappedModelSpecRevision') ~ '^[1-9][0-9]*$'
+                                AND pg_catalog.jsonb_typeof(
+                                    merge_checkpoint_json -> 'mappedModelSpecEtag'
+                                ) = 'string'
+                                AND (merge_checkpoint_json ->> 'mappedModelSpecEtag') ~ '^[0-9a-f]{64}$'
+                                AND project_key IS NOT NULL
+                                AND pg_catalog.btrim(project_key) <> ''
+                                AND accepted_external_checksum ~ '^[0-9a-f]{64}$'
+                                AND accepted_implementation_revision > 0
+                                AND accepted_implementation_checksum ~ '^[0-9a-f]{64}$'
+                                AND mapped_model_spec_revision > 0
+                                AND mapped_model_spec_etag ~ '^[0-9a-f]{64}$'
+                                AND status IN ('CREATED', 'UPDATED', 'SKIPPED')
+                                )
+                            )
+                        ) IS TRUE),
+                        ADD CONSTRAINT ck_model_spec_import_result_pre_pins_complete
+                        CHECK ((
+                            pre_attempt_pins_json IS NULL
+                            OR (
+                                pg_catalog.jsonb_typeof(pre_attempt_pins_json) = 'object'
+                                AND pg_catalog.jsonb_exists_all(pre_attempt_pins_json, ARRAY[
+                                    'modelRevision', 'modelChecksum',
+                                    'implementationRevision', 'implementationChecksum'
+                                ])
+                                AND pg_catalog.jsonb_typeof(
+                                    pre_attempt_pins_json -> 'modelRevision'
+                                ) = 'number'
+                                AND (pre_attempt_pins_json ->> 'modelRevision') ~ '^[1-9][0-9]*$'
+                                AND pg_catalog.jsonb_typeof(
+                                    pre_attempt_pins_json -> 'modelChecksum'
+                                ) = 'string'
+                                AND (pre_attempt_pins_json ->> 'modelChecksum') ~ '^[0-9a-f]{64}$'
+                                AND pg_catalog.jsonb_typeof(
+                                    pre_attempt_pins_json -> 'implementationRevision'
+                                ) = 'number'
+                                AND (pre_attempt_pins_json ->> 'implementationRevision') ~ '^[1-9][0-9]*$'
+                                AND pg_catalog.jsonb_typeof(
+                                    pre_attempt_pins_json -> 'implementationChecksum'
+                                ) = 'string'
+                                AND (pre_attempt_pins_json ->> 'implementationChecksum') ~ '^[0-9a-f]{64}$'
+                            )
+                        ) IS TRUE)
+                    $result_ddl$,
+                    target_schema
+                );
+            END
+            $migration$;
+        ]]></sql>
+
+        <rollback>
+            <sql splitStatements="false"><![CDATA[
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_SPEC_IMPORT_JSON_HARDENING_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            ]]></sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

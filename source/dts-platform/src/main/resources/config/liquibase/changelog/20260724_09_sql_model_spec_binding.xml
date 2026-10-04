@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.22.xsd">
+
+    <changeSet id="20260724-09-sql-model-spec-binding" author="codex" dbms="postgresql">
+        <preConditions onFail="HALT">
+            <tableExists tableName="modeling_sql_model"/>
+            <tableExists tableName="modeling_model_spec"/>
+            <tableExists tableName="modeling_model_implementation"/>
+        </preConditions>
+        <comment>Bind an advanced SQL workspace model to one canonical DBT-managed ModelSpec without reusing either primary key.</comment>
+
+        <addColumn tableName="modeling_sql_model">
+            <column name="model_spec_id" type="${uuidType}"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="modeling_sql_model"
+            baseColumnNames="model_spec_id"
+            constraintName="fk_modeling_sql_model_spec"
+            referencedTableName="modeling_model_spec"
+            referencedColumnNames="id"/>
+        <addUniqueConstraint
+            tableName="modeling_sql_model"
+            columnNames="model_spec_id"
+            constraintName="uk_modeling_sql_model_spec"/>
+
+        <sql splitStatements="false"><![CDATA[
+            CREATE FUNCTION modeling_sql_model_spec_binding_valid()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            DECLARE canonical_plan uuid;
+            DECLARE canonical_tenant varchar;
+            DECLARE canonical_mode varchar;
+            DECLARE implementation_mode varchar;
+            DECLARE implementation_dbt_unique_id varchar;
+            DECLARE implementation_revision int;
+            DECLARE implementation_checksum varchar;
+            DECLARE implementation_model_revision int;
+            DECLARE implementation_model_checksum varchar;
+            BEGIN
+                IF NEW.model_spec_id IS NULL THEN
+                    RETURN NEW;
+                END IF;
+                SELECT s.plan_id, s.tenant_id, s.implementation_mode, i.ownership, i.dbt_unique_id,
+                       i.implementation_revision, i.current_implementation_checksum, i.model_revision, i.model_checksum
+                  INTO canonical_plan, canonical_tenant, canonical_mode, implementation_mode, implementation_dbt_unique_id,
+                       implementation_revision, implementation_checksum, implementation_model_revision, implementation_model_checksum
+                  FROM modeling_model_spec s
+                  JOIN modeling_model_implementation i
+                    ON i.tenant_id = s.tenant_id
+                   AND i.model_spec_id = s.id
+                   AND i.status = 'ACTIVE'
+                 WHERE s.id = NEW.model_spec_id;
+                IF NOT FOUND
+                   OR canonical_mode <> 'DBT_MANAGED'
+                   OR implementation_mode <> 'DBT_MANAGED'
+                   OR NEW.plan_id IS DISTINCT FROM canonical_plan
+                   OR NEW.owner_dept IS DISTINCT FROM canonical_tenant
+                   OR lower(NEW.name) <> lower(regexp_replace(implementation_dbt_unique_id, '^.*\.', '')) THEN
+                    RAISE EXCEPTION 'MODEL_SQL_WORKSPACE_BINDING_INVALID: SQL model must match the active DBT-managed ModelSpec tenant, plan and dbt node';
+                END IF;
+                IF TG_OP = 'UPDATE'
+                   AND (
+                       NEW.sql_text IS DISTINCT FROM OLD.sql_text
+                       OR NEW.model_path IS DISTINCT FROM OLD.model_path
+                       OR NEW.materialized IS DISTINCT FROM OLD.materialized
+                       OR NEW.schema_name IS DISTINCT FROM OLD.schema_name
+                       OR NEW.source_data_source_id IS DISTINCT FROM OLD.source_data_source_id
+                       OR NEW.tags IS DISTINCT FROM OLD.tags
+                   )
+                   AND (
+                       EXISTS (
+                           SELECT 1
+                             FROM modeling_dbt_artifact a
+                            WHERE a.model_spec_id = NEW.model_spec_id
+                              AND a.revision = implementation_model_revision
+                              AND a.model_checksum = implementation_model_checksum
+                              AND a.implementation_revision = implementation_revision
+                       )
+                       OR EXISTS (
+                           SELECT 1
+                             FROM modeling_model_lifecycle_event e
+                            WHERE e.model_spec_id = NEW.model_spec_id
+                              AND e.model_revision = implementation_model_revision
+                              AND e.details_json ->> 'implementationRevision' = implementation_revision::text
+                              AND e.details_json ->> 'implementationChecksum' = implementation_checksum
+                       )
+                   ) THEN
+                    RAISE EXCEPTION 'MODEL_SQL_WORKSPACE_REVISION_REQUIRED: create a new implementation revision before changing compiled SQL';
+                END IF;
+                RETURN NEW;
+            END;
+            $$;
+
+            CREATE TRIGGER trg_modeling_sql_model_spec_binding
+                BEFORE INSERT OR UPDATE OF model_spec_id, plan_id, owner_dept, name, sql_text, model_path, materialized, schema_name, source_data_source_id, tags
+                ON modeling_sql_model
+                FOR EACH ROW
+                EXECUTE FUNCTION modeling_sql_model_spec_binding_valid();
+
+            CREATE FUNCTION modeling_sql_model_spec_delete_guard()
+            RETURNS trigger
+            LANGUAGE plpgsql
+            AS $$
+            BEGIN
+                IF OLD.model_spec_id IS NOT NULL THEN
+                    RAISE EXCEPTION 'MODEL_SQL_WORKSPACE_RETIREMENT_REQUIRED: bound SQL workspaces require the ModelSpec retirement flow';
+                END IF;
+                RETURN OLD;
+            END;
+            $$;
+
+            CREATE TRIGGER trg_modeling_sql_model_spec_delete_guard
+                BEFORE DELETE ON modeling_sql_model
+                FOR EACH ROW
+                EXECUTE FUNCTION modeling_sql_model_spec_delete_guard();
+        ]]></sql>
+
+        <rollback>
+            <sql>DROP TRIGGER IF EXISTS trg_modeling_sql_model_spec_delete_guard ON modeling_sql_model;</sql>
+            <sql>DROP FUNCTION IF EXISTS modeling_sql_model_spec_delete_guard();</sql>
+            <sql>DROP TRIGGER IF EXISTS trg_modeling_sql_model_spec_binding ON modeling_sql_model;</sql>
+            <sql>DROP FUNCTION IF EXISTS modeling_sql_model_spec_binding_valid();</sql>
+            <dropUniqueConstraint tableName="modeling_sql_model" constraintName="uk_modeling_sql_model_spec"/>
+            <dropForeignKeyConstraint baseTableName="modeling_sql_model" constraintName="fk_modeling_sql_model_spec"/>
+            <dropColumn tableName="modeling_sql_model" columnName="model_spec_id"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

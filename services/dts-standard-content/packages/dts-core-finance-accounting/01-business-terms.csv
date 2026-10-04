@@ -1,0 +1,6 @@
+term_code,term_name,aliases,definition,domain,owner_dept,owner,tags,version,status,version_notes
+FIN_ACCOUNTING_PERIOD,会计期间,核算期间,单位分期结算账目和编制财务报告所归属的期间,财务会计,,,财务|期间,1.0.0,DRAFT,依据财政部规则形成DTS参考表达
+FIN_ACCOUNTING_VOUCHER,会计凭证,记账凭证,记录经济业务并作为会计核算依据的受控凭证,财务会计,,,财务|凭证,1.0.0,DRAFT,DTS参考表达
+FIN_ACCOUNT,会计科目,核算科目,按照统一分类和编码规则组织会计核算内容的科目,财务会计,,,财务|科目,1.0.0,DRAFT,DTS参考表达
+FIN_DEBIT_CREDIT,借贷方向,借方贷方,借贷记账法下会计分录金额的方向属性,财务会计,,,财务|方向,1.0.0,DRAFT,DTS参考表达
+FIN_MONETARY_AMOUNT,货币金额,金额,以指定币种计量的数值金额,财务会计,,,财务|金额,1.0.0,DRAFT,DTS参考表达

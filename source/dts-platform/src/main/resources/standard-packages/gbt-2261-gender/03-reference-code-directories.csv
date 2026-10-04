@@ -1,0 +1,2 @@
+code_type_id,code_type_code,code_type_name,std_level,biz_catalog,data_type,status,owner_dept,version
+,GENDER_GBT2261,性别代码,NATIONAL,人口基础,VARCHAR,1,,GB/T 2261.1-2003

@@ -1,0 +1,93 @@
+{
+  "baseUrl": "http://127.0.0.1:3001",
+  "routes": [
+    {
+      "name": "semantic-overview",
+      "path": "/metrics/semantic",
+      "text": "语义建模流程",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-overview.png"
+    },
+    {
+      "name": "semantic-subjects",
+      "path": "/metrics/semantic/subjects",
+      "text": "主题域映射",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic/subjects",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-subjects.png"
+    },
+    {
+      "name": "semantic-objects",
+      "path": "/metrics/semantic/objects",
+      "text": "业务对象 Join",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic/objects",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-objects.png"
+    },
+    {
+      "name": "semantic-metrics",
+      "path": "/metrics/semantic/metrics",
+      "text": "指标可视化配置",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic/metrics",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-metrics.png"
+    },
+    {
+      "name": "semantic-models",
+      "path": "/metrics/semantic/models",
+      "text": "DWS/ADS 数据集",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic/models",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-models.png"
+    },
+    {
+      "name": "semantic-publish",
+      "path": "/metrics/semantic/publish",
+      "text": "审核发布与血缘",
+      "url": "http://127.0.0.1:3001/#/metrics/semantic/publish",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/semantic-publish.png"
+    },
+    {
+      "name": "lineage-impact",
+      "path": "/catalog/lineage/impact",
+      "text": "影响分析",
+      "url": "http://127.0.0.1:3001/#/catalog/lineage/impact",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/lineage-impact.png"
+    },
+    {
+      "name": "lineage-graph",
+      "path": "/catalog/lineage/graph",
+      "text": "血缘图谱",
+      "url": "http://127.0.0.1:3001/#/catalog/lineage/graph",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/lineage-graph.png"
+    },
+    {
+      "name": "lineage-columns",
+      "path": "/catalog/lineage/columns",
+      "text": "字段血缘",
+      "url": "http://127.0.0.1:3001/#/catalog/lineage/columns",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/lineage-columns.png"
+    },
+    {
+      "name": "lineage-import",
+      "path": "/catalog/lineage/import",
+      "text": "血缘导入",
+      "url": "http://127.0.0.1:3001/#/catalog/lineage/import",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/lineage-import.png"
+    },
+    {
+      "name": "lineage-diff",
+      "path": "/catalog/lineage/diff",
+      "text": "快照对比",
+      "url": "http://127.0.0.1:3001/#/catalog/lineage/diff",
+      "matched": true,
+      "screenshot": "/opt/prod/s10/v2.2.3/worklog/v2.2.3/sprint-25-202605/it/evidence/20260501-local/ui-screenshots/lineage-diff.png"
+    }
+  ]
+}

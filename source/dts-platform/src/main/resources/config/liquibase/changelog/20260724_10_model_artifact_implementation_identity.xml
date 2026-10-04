@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.24.xsd">
+
+    <changeSet id="20260724-10-model-artifact-implementation-identity" author="codex">
+        <preConditions onFail="HALT" onError="HALT">
+            <tableExists tableName="modeling_dbt_artifact"/>
+            <columnExists tableName="modeling_dbt_artifact" columnName="implementation_revision"/>
+            <columnExists tableName="modeling_dbt_artifact" columnName="artifact_key"/>
+            <uniqueConstraintExists
+                tableName="modeling_dbt_artifact"
+                constraintName="uk_modeling_dbt_artifact_revision_key"/>
+            <sqlCheck expectedResult="0">
+                SELECT count(*)
+                  FROM (
+                      SELECT model_spec_id, revision, implementation_revision, node_kind, artifact_type
+                        FROM modeling_dbt_artifact
+                       WHERE ownership = 'DBT_MANAGED'
+                       GROUP BY model_spec_id, revision, implementation_revision, node_kind, artifact_type
+                      HAVING count(*) &gt; 1
+                  ) duplicate_dbt_slots
+            </sqlCheck>
+        </preConditions>
+
+        <dropUniqueConstraint
+            tableName="modeling_dbt_artifact"
+            constraintName="uk_modeling_dbt_artifact_revision_key"/>
+        <addUniqueConstraint
+            tableName="modeling_dbt_artifact"
+            columnNames="model_spec_id,revision,implementation_revision,artifact_key"
+            constraintName="uk_modeling_dbt_artifact_revision_key"/>
+        <sql>
+            CREATE UNIQUE INDEX uk_modeling_dbt_artifact_dbt_slot
+                ON modeling_dbt_artifact (
+                    model_spec_id,
+                    revision,
+                    implementation_revision,
+                    node_kind,
+                    artifact_type
+                )
+             WHERE ownership = 'DBT_MANAGED';
+        </sql>
+
+        <rollback>
+            <sql splitStatements="false">
+                DO $$
+                BEGIN
+                    RAISE EXCEPTION 'ROLLBACK_BLOCKED_MODEL_ARTIFACT_IMPLEMENTATION_IDENTITY_FORWARD_ONLY: Recovery requires a new forward changeset';
+                END $$;
+            </sql>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>
